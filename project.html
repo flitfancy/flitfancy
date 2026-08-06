@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>项目 — 云萤 · flitfancy</title>
+  <meta name="description" content="小流萤项目的现状与地图。">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <canvas id="sky" aria-hidden="true"></canvas>
+
+  <header class="nav">
+    <a class="brand" href="index.html">云萤 · flitfancy</a>
+    <nav>
+      <a href="index.html">首页</a>
+      <a href="project.html" class="active">项目</a>
+      <a href="journal.html">日志</a>
+      <a href="console.html">控制台</a>
+      <a href="about.html">关于</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="page-hero">
+      <p class="kicker">PROJECTS</p>
+      <h1>把她造出来的地图</h1>
+      <p class="sub">最终目标是给 AI 角色“小流萤”造一具身体——<br>本地人格当大脑，感知板当感官，音频板当声音，软体与机甲当她自己。</p>
+    </section>
+
+    <section class="section project" id="brain">
+      <div class="project-head">
+        <span class="badge done">已跑通</span>
+        <h2>大脑</h2>
+      </div>
+      <p>Character Knowledge Studio：从公开资料里抽取角色知识，生成人格提示词和 RAG 规则，再通过 AstrBot + 本地 Ollama（qwen3:14b）接入 QQ。她已经会说话了，接下来是让她记得住。</p>
+      <ul>
+        <li>本地角色知识流水线已跑通</li>
+        <li>人格提示词、台词风格、RAG 规则已生成</li>
+        <li>下一步：把感知数据接进来，让她“知道”房间里的样子</li>
+      </ul>
+    </section>
+
+    <section class="section project" id="sense">
+      <div class="project-head">
+        <span class="badge done">全部通过</span>
+        <h2>感官 · FIREFLY REAL-WORLD SENSE R1.1</h2>
+      </div>
+      <p>一块 90×55mm 的环境感知板，六路传感器全部实测可用。ESP32-S3 固件支持 WiFi 数据上行，上电自动巡检，数据落电脑 CSV 和板载 Flash。</p>
+      <ul>
+        <li>CH0 SHT41 温湿度 / CH1 BMP580 气压</li>
+        <li>CH2 AS7341 多光谱 / CH3 LTR390 紫外与光照</li>
+        <li>CH4 SGP41 VOC/NOx / CH5 SCD40 CO₂</li>
+        <li>WiFi 上行实测 10/10 行一致</li>
+      </ul>
+    </section>
+
+    <section class="section project" id="voice">
+      <div class="project-head">
+        <span class="badge doing">进行中</span>
+        <h2>声音 · FIREFLY AUDIO</h2>
+      </div>
+      <p>双麦克风 + ESP32-S3 + 数字功放 + 扬声器。目标是本地唤醒词“小流萤”、Wi-Fi 双向音频、播放时也能打断。当前原理图 v0.1 与 EasyEDA 脚本已就绪，BOM 采购清单已分离。</p>
+      <ul>
+        <li>双 IM69D130 数字麦，预留四麦升级</li>
+        <li>ESP-SR 本地唤醒（WakeNet + VAD）</li>
+        <li>下一步：EasyEDA 实跑脚本 → ERC → 模块级验证</li>
+      </ul>
+    </section>
+
+    <section class="section project" id="body">
+      <div class="project-head">
+        <span class="badge dream">展望</span>
+        <h2>身体 · 软体与机甲</h2>
+      </div>
+      <p>她的本体是一个柔软的女孩子，机甲是穿在外面的另一层皮肤。这条路很长：打印骨架、布料与硅胶、表情舵机，然后是分片式装甲外衣。核心不变——所有形态共用同一颗大脑、同一套感官、同一个声音。</p>
+      <ul>
+        <li>软体：打印骨架 + 布料/绒布 + 硅胶脸</li>
+        <li>机甲：分片装甲外衣 + LED + 可动面板</li>
+        <li>代号备用：flame（她的铠甲形态）</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer>
+    <p>云萤 · flitfancy · 献给正在发光的小东西</p>
+  </footer>
+
+  <script src="assets/firefly.js"></script>
+</body>
+</html>

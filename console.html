@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>控制台 — 云萤 · flitfancy</title>
+  <meta name="description" content="小流萤的控制台：实时数据、命令与记忆。">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <canvas id="sky" aria-hidden="true"></canvas>
+
+  <header class="nav">
+    <a class="brand" href="index.html">云萤 · flitfancy</a>
+    <nav>
+      <a href="index.html">首页</a>
+      <a href="project.html">项目</a>
+      <a href="journal.html">日志</a>
+      <a href="console.html" class="active">控制台</a>
+      <a href="about.html">关于</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="page-hero">
+      <p class="kicker">HER CONSOLE</p>
+      <h1>控制台</h1>
+      <p class="sub">她的感官数据、她收到的命令、她记住的事——都在这里。<br>（公开网页上为离线展示；本地运行 <code>python server.py</code> 才能连接实时数据）</p>
+    </section>
+
+    <section class="section">
+      <div class="console-status">
+        <span class="dot" data-role="dot"></span>
+        <span data-role="status">正在连接服务…</span>
+      </div>
+
+      <div class="console-grid" data-role="gauges">
+        <div class="gauge"><h3>CH0 温湿度</h3><div class="val" data-ch="CH0">—</div><div class="hint" data-extra="CH0"></div></div>
+        <div class="gauge"><h3>CH1 气压</h3><div class="val" data-ch="CH1">—</div><div class="hint" data-extra="CH1"></div></div>
+        <div class="gauge"><h3>CH2 光谱</h3><div class="val" data-ch="CH2">—</div><div class="hint" data-extra="CH2"></div></div>
+        <div class="gauge"><h3>CH3 紫外 / 光照</h3><div class="val" data-ch="CH3">—</div><div class="hint" data-extra="CH3"></div></div>
+        <div class="gauge"><h3>CH4 VOC / NOx</h3><div class="val" data-ch="CH4">—</div><div class="hint" data-extra="CH4"></div></div>
+        <div class="gauge"><h3>CH5 CO₂</h3><div class="val" data-ch="CH5">—</div><div class="hint" data-extra="CH5"></div></div>
+      </div>
+
+      <div class="console-panel">
+        <h2>命令</h2>
+        <div class="buttons">
+          <button class="btn" data-cmd="STREAM">开始巡检</button>
+          <button class="btn" data-cmd="RUNALL">六路全测</button>
+          <button class="btn" data-cmd="STOP">停止</button>
+          <button class="btn" data-cmd="LEDALL">全亮 LED</button>
+        </div>
+        <p class="hint" data-role="cmd-result" style="margin-top:10px"></p>
+      </div>
+
+      <div class="console-panel">
+        <h2>记忆</h2>
+        <div class="note-form">
+          <textarea rows="2" placeholder="写下一件她应该记住的事…" data-role="note-input"></textarea>
+          <button class="btn" data-role="note-save">记住</button>
+        </div>
+        <ul class="notes" data-role="notes"></ul>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>云萤 · flitfancy · 献给正在发光的小东西</p>
+  </footer>
+
+  <script src="assets/firefly.js"></script>
+  <script src="assets/console.js"></script>
+</body>
+</html>

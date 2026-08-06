@@ -1,0 +1,10 @@
+# 本地数据与记忆（绝不推送）
+data/
+
+# Python 缓存
+__pycache__/
+*.pyc
+
+# 系统文件
+.DS_Store
+Thumbs.db
