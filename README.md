@@ -12,7 +12,7 @@ cd S:\FlitFancy\site\backend
 python server.py
 ```
 
-然后打开 http://localhost:8137/
+然后打开 http://localhost:2671/
 
 ## GitHub Pages 发布设置
 

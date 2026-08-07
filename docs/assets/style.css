@@ -53,7 +53,6 @@ body {
   padding: 18px clamp(18px, 5vw, 48px);
   background: rgba(11, 14, 23, 0.78);
   backdrop-filter: blur(10px);
-  border-bottom: 1px solid var(--border);
 }
 
 .brand {
@@ -341,7 +340,6 @@ footer {
   color: var(--muted);
   font-size: 19.5px;
   letter-spacing: 0.08em;
-  border-top: 1px solid var(--border);
 }
 
 footer p {
@@ -397,7 +395,7 @@ footer p {
     align-items: center;
     gap: 2px;
   }
-  footer p .dot {
+  footer p .sep {
     display: none;
   }
   .mini-card p {

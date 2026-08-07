@@ -9,7 +9,7 @@ import urllib.request
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 DB = os.path.join(ROOT, "data", "flitfancy.db")
-BASE = "http://127.0.0.1:8137"
+BASE = "http://127.0.0.1:2671"
 
 
 def request(path, method="GET", body=None):

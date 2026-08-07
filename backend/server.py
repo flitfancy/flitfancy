@@ -2,7 +2,7 @@
 
 运行（在 backend 目录下）：
     python server.py
-然后打开 http://localhost:8137/
+然后打开 http://localhost:2671/
 
 职责：
 - 提供前端静态站点（../docs：首页/项目/日志/控制台，docs 即 GitHub Pages 发布目录）
@@ -14,7 +14,6 @@
 import json
 import os
 import sqlite3
-import time
 import urllib.parse
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -24,7 +23,7 @@ SITE_ROOT = os.path.normpath(os.path.join(BASE, "..", "docs"))
 DATA_DIR = os.path.join(BASE, "data")
 DB_PATH = os.path.join(DATA_DIR, "flitfancy.db")
 HOST = "0.0.0.0"
-PORT = 8137
+PORT = 2671
 CST = timezone(timedelta(hours=8))
 
 MIME = {
