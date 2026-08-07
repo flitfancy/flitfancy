@@ -355,7 +355,68 @@ footer p {
 }
 
 @media (max-width: 640px) {
-  .nav { flex-direction: column; gap: 12px; }
+  .nav {
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 16px;
+  }
+  .nav .brand {
+    font-size: 18px;
+  }
+  .nav nav {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px 14px;
+  }
+  .nav nav a {
+    font-size: 16px;
+    letter-spacing: 0.05em;
+  }
+  .page-hero {
+    padding: 34px 20px 12px;
+  }
+  .page-hero h1 {
+    font-size: clamp(24px, 8vw, 34px);
+  }
+  .page-hero .sub {
+    font-size: 15px;
+  }
+  .section {
+    padding: 22px 18px 34px;
+  }
+  .prose p {
+    font-size: 16px;
+  }
+  footer {
+    padding: 26px 16px 32px;
+    font-size: 16px;
+  }
+  .mini-card p {
+    font-size: 13px;
+  }
+  .console-grid {
+    grid-template-columns: 1fr;
+  }
+  .note-form textarea {
+    min-width: 100%;
+  }
+  .buttons {
+    width: 100%;
+  }
+  .btn {
+    flex: 1 1 44%;
+    text-align: center;
+  }
+  .gauge .val {
+    font-size: 24px;
+  }
+  .tri-grid {
+    gap: 10px;
+    padding: 4px 12px 16px;
+  }
+  .project {
+    padding: 12px 14px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

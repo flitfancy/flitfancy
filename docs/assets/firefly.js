@@ -71,6 +71,7 @@
   };
 
   const ctx = canvas.getContext("2d");
+  const MOBILE = window.innerWidth < 640;
   let w, h, dpr;
   let flies = [];
   let meteors = [];
@@ -153,7 +154,10 @@
 
   function init() {
     resize();
-    const count = Math.min(CFG.flies.maxCount, Math.max(CFG.flies.minCount, Math.floor(w / CFG.flies.countPer90)));
+    const count = Math.min(
+      CFG.flies.maxCount,
+      Math.max(MOBILE ? 16 : CFG.flies.minCount, Math.floor(w / (MOBILE ? 60 : CFG.flies.countPer90)))
+    );
     flies = [];
     for (let i = 0; i < count; i++) flies.push(spawnFly(true));
     meteors = [];
@@ -249,9 +253,10 @@
       flashY: flashY,
       fade: 1
     });
-    nextMeteor = now + (bursting
+    const base = bursting
       ? CFG.meteor.burstSpawnMin + Math.random() * CFG.meteor.burstSpawnRange
-      : CFG.meteor.spawnMin + Math.random() * CFG.meteor.spawnRange);
+      : CFG.meteor.spawnMin + Math.random() * CFG.meteor.spawnRange;
+    nextMeteor = now + (MOBILE ? base * 0.6 : base);
   }
 
   function drawMeteor(m, t) {
