@@ -51,16 +51,22 @@ h1 {
 }
 
 @media (max-width: 640px) {
+  body {
+    height: 100vh;
+    overflow: hidden;
+  }
   h1 {
-    font-size: clamp(34px, 11vw, 52px);
+    font-size: clamp(30px, 9.5vw, 46px);
   }
   .hero {
-    padding: 24vh 7vw 32px;
+    padding: 12vh 7vw 20px;
   }
   .sub {
-    font-size: 15px;
+    font-size: 14px;
+    margin-top: 16px;
   }
   .burst-preview {
     font-size: 11px;
+    margin-top: 14px;
   }
 }
