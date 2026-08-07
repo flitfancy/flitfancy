@@ -391,6 +391,15 @@ footer p {
     padding: 14px 16px 18px;
     font-size: 15px;
   }
+  footer p {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+  footer p .dot {
+    display: none;
+  }
   .mini-card p {
     font-size: 13px;
   }

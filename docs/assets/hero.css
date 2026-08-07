@@ -51,10 +51,6 @@ h1 {
 }
 
 @media (max-width: 640px) {
-  body {
-    height: 100vh;
-    overflow: hidden;
-  }
   h1 {
     font-size: clamp(30px, 9.5vw, 46px);
   }
