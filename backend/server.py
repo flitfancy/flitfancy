@@ -1,10 +1,11 @@
 """flitfancy 控制台服务（仅用 Python 标准库）。
 
-运行：python server.py
+运行（在 backend 目录下）：
+    python server.py
 然后打开 http://localhost:8137/
 
 职责：
-- 提供 flitfancy 静态站点（首页/项目/日志/控制台）
+- 提供前端静态站点（../frontend：首页/项目/日志/控制台）
 - 接收感知板 STREAM/WiFi 数据（POST /api/ingest，支持 CSV 行或 JSON）
 - 保存传感器读数与记忆（SQLite: data/flitfancy.db）
 - 给控制台和小流萤的大脑（AstrBot）提供查询 API
@@ -18,8 +19,9 @@ import urllib.parse
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-ROOT = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(ROOT, "data")
+BASE = os.path.dirname(os.path.abspath(__file__))
+SITE_ROOT = os.path.normpath(os.path.join(BASE, "..", "frontend"))
+DATA_DIR = os.path.join(BASE, "data")
 DB_PATH = os.path.join(DATA_DIR, "flitfancy.db")
 HOST = "0.0.0.0"
 PORT = 8137
@@ -116,6 +118,7 @@ def ingest_csv_line(line):
             break
     if header is None:
         return False
+
     def col(name, default=None):
         j = idx.get(name)
         if j is None or j >= len(parts):
@@ -127,6 +130,7 @@ def ingest_csv_line(line):
             return float(v)
         except ValueError:
             return default
+
     sensor = parts[idx.get("sensor", 0)].strip() if "sensor" in idx else ""
     channel = sensor.split()[0] if sensor and " " in sensor else sensor
     row = {
@@ -194,8 +198,8 @@ class Handler(BaseHTTPRequestHandler):
         if path in ("", "/"):
             path = "/index.html"
         rel = path.lstrip("/")
-        target = os.path.normpath(os.path.join(ROOT, rel))
-        if not target.startswith(ROOT) or not os.path.isfile(target):
+        target = os.path.normpath(os.path.join(SITE_ROOT, rel))
+        if not target.startswith(SITE_ROOT) or not os.path.isfile(target):
             self._send(404, {"error": "not found"}, "application/json; charset=utf-8")
             return
         ext = os.path.splitext(target)[1].lower()
@@ -320,6 +324,7 @@ def main():
     db_init()
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     print("flitfancy 控制台服务已启动: http://localhost:%d/" % PORT)
+    print("前端目录: %s" % SITE_ROOT)
     print("数据文件: %s" % DB_PATH)
     try:
         server.serve_forever()
