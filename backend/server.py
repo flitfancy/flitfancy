@@ -5,7 +5,7 @@
 然后打开 http://localhost:8137/
 
 职责：
-- 提供前端静态站点（../frontend：首页/项目/日志/控制台）
+- 提供前端静态站点（../docs：首页/项目/日志/控制台，docs 即 GitHub Pages 发布目录）
 - 接收感知板 STREAM/WiFi 数据（POST /api/ingest，支持 CSV 行或 JSON）
 - 保存传感器读数与记忆（SQLite: data/flitfancy.db）
 - 给控制台和小流萤的大脑（AstrBot）提供查询 API
@@ -20,7 +20,7 @@ from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 BASE = os.path.dirname(os.path.abspath(__file__))
-SITE_ROOT = os.path.normpath(os.path.join(BASE, "..", "frontend"))
+SITE_ROOT = os.path.normpath(os.path.join(BASE, "..", "docs"))
 DATA_DIR = os.path.join(BASE, "data")
 DB_PATH = os.path.join(DATA_DIR, "flitfancy.db")
 HOST = "0.0.0.0"

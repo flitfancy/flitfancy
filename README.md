@@ -2,7 +2,7 @@
 
 小流萤的家 + 控制台。前后端分离：
 
-- `frontend/`：公开网站（首页 / 项目 / 日志 / 控制台 / 关于），GitHub Pages 从**这个目录**发布
+- `docs/`：公开网站（首页 / 项目 / 日志 / 控制台 / 关于），GitHub Pages 从**这个目录**发布（命名为 docs 是因为 GitHub Pages 的目录下拉框只认 `/` 和 `/docs`）
 - `backend/`：本地控制台服务（server.py + SQLite），只在你的电脑上跑，不发布
 
 ## 本地运行
@@ -17,7 +17,7 @@ python server.py
 ## GitHub Pages 发布设置
 
 - Settings → Pages → Source: **Deploy from a branch**
-- Branch: **main**，目录选 **/frontend**
+- Branch: **main**，目录选 **/docs**
 - 自定义域名与 HTTPS 已配置，无需改动
 
 ## 后端 API
@@ -34,7 +34,7 @@ python server.py
 
 ```text
 site/
-├── frontend/             ← GitHub Pages 发布根
+├── docs/                 ← GitHub Pages 发布根
 │   ├── index.html        首页
 │   ├── project.html      项目现状
 │   ├── journal.html      造物日志
