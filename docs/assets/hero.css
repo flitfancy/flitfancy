@@ -1,0 +1,63 @@
+/* 首页专用：大字 + 位置 + 页脚沉底 + 彩蛋词 + 双行预览 */
+h1 {
+  font-size: clamp(69px, 12.7vw, 139px);
+  width: -webkit-fit-content;
+  width: fit-content;
+  background: var(--flame-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: none;
+  filter: drop-shadow(0 0 20px rgba(255, 90, 0, 0.45));
+}
+
+.hero {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 27vh calc(28vw + 16px) 40px;
+  max-width: none;
+  margin: 0;
+}
+
+.glyph {
+  cursor: pointer;
+  border-radius: 8px;
+  padding: 0 2px;
+  user-select: none;
+  -webkit-user-select: none;
+  background: var(--small-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  transition: filter 0.2s;
+}
+
+.glyph:hover {
+  filter: brightness(1.25) drop-shadow(0 0 8px rgba(255, 90, 0, 0.35));
+}
+
+.glyph.lit {
+  filter: brightness(1.4) drop-shadow(0 0 12px rgba(255, 90, 0, 0.55));
+}
+
+.burst-preview {
+  margin-top: 30px;
+  font-size: 13px;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+  opacity: 0.75;
+  line-height: 1.9;
+}
+
+@media (max-width: 640px) {
+  h1 {
+    font-size: clamp(40px, 12vw, 60px);
+  }
+  .hero {
+    padding: 32vh 7vw 40px;
+  }
+  .burst-preview {
+    font-size: 12px;
+  }
+}

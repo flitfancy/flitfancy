@@ -3,18 +3,18 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>项目 — 云萤 · flitfancy</title>
-  <meta name="description" content="小流萤项目的现状与地图。">
+  <title>技术栈 — 云萤 · FlitFancy</title>
+  <meta name="description" content="小流萤的技术栈：内核、天工、流明。">
   <link rel="stylesheet" href="assets/style.css">
 </head>
-<body>
+<body class="project-page">
   <canvas id="sky" aria-hidden="true"></canvas>
 
   <header class="nav">
-    <a class="brand" href="index.html">云萤 · flitfancy</a>
+    <a class="brand" href="index.html">云萤 · FlitFancy</a>
     <nav>
       <a href="index.html">首页</a>
-      <a href="project.html" class="active">项目</a>
+      <a href="project.html" class="active">技术栈</a>
       <a href="journal.html">日志</a>
       <a href="console.html">控制台</a>
       <a href="about.html">关于</a>
@@ -23,67 +23,89 @@
 
   <main>
     <section class="page-hero">
-      <p class="kicker">PROJECTS</p>
-      <h1>把她造出来的地图</h1>
-      <p class="sub">最终目标是给 AI 角色“小流萤”造一具身体——<br>本地人格当大脑，感知板当感官，音频板当声音，软体与机甲当她自己。</p>
+      <h1>她的存在</h1>
     </section>
 
-    <section class="section project" id="brain">
-      <div class="project-head">
-        <span class="badge done">已跑通</span>
-        <h2>大脑</h2>
-      </div>
-      <p>Character Knowledge Studio：从公开资料里抽取角色知识，生成人格提示词和 RAG 规则，再通过 AstrBot + 本地 Ollama（qwen3:14b）接入 QQ。她已经会说话了，接下来是让她记得住。</p>
-      <ul>
-        <li>本地角色知识流水线已跑通</li>
-        <li>人格提示词、台词风格、RAG 规则已生成</li>
-        <li>下一步：把感知数据接进来，让她“知道”房间里的样子</li>
-      </ul>
-    </section>
+    <div class="tri-grid">
+      <section class="project tri-col" id="firefly">
+        <div class="project-head">
+          <span class="badge dream">内核</span>
+          <h2>Firefly · 内核</h2>
+        </div>
+        <p class="how">如何存在</p>
+        <div class="mini-grid">
+          <div class="mini-card">
+            <span class="badge done">已跑通</span>
+            <h3>大脑</h3>
+            <p>Character Knowledge Studio + AstrBot + Ollama：本地角色知识流水线，人格提示词与 RAG 已生成，QQ 接入会说话。</p>
+          </div>
+          <div class="mini-card">
+            <span class="badge dream">规划</span>
+            <h3>记忆</h3>
+            <p>流明的记忆层将作为她的外置记忆——感知数据、便签、日志，她都能读得到。</p>
+          </div>
+        </div>
+      </section>
 
-    <section class="section project" id="sense">
-      <div class="project-head">
-        <span class="badge done">全部通过</span>
-        <h2>感官 · FIREFLY REAL-WORLD SENSE R1.1</h2>
-      </div>
-      <p>一块 90×55mm 的环境感知板，六路传感器全部实测可用。ESP32-S3 固件支持 WiFi 数据上行，上电自动巡检，数据落电脑 CSV 和板载 Flash。</p>
-      <ul>
-        <li>CH0 SHT41 温湿度 / CH1 BMP580 气压</li>
-        <li>CH2 AS7341 多光谱 / CH3 LTR390 紫外与光照</li>
-        <li>CH4 SGP41 VOC/NOx / CH5 SCD40 CO₂</li>
-        <li>WiFi 上行实测 10/10 行一致</li>
-      </ul>
-    </section>
+      <section class="project tri-col" id="skywork">
+        <div class="project-head">
+          <span class="badge doing">身体</span>
+          <h2>SkyWork · 天工</h2>
+        </div>
+        <p class="how">如何感受</p>
+        <div class="mini-grid">
+          <div class="mini-card">
+            <span class="badge done">已实测</span>
+            <h3>FIREFLY 感知板 R1.1</h3>
+            <p>六路环境传感器全部通过，WiFi 数据上行，上电自动巡检。</p>
+          </div>
+          <div class="mini-card">
+            <span class="badge doing">进行中</span>
+            <h3>FIREFLY 音频板</h3>
+            <p>双麦本地唤醒 + Wi-Fi 双向音频，原理图与 EasyEDA 脚本就绪。</p>
+          </div>
+          <div class="mini-card">
+            <span class="badge dream">展望</span>
+            <h3>运动控制板</h3>
+            <p>电机与舵机运动控制，让她能真正动起来。</p>
+          </div>
+        </div>
+      </section>
 
-    <section class="section project" id="voice">
-      <div class="project-head">
-        <span class="badge doing">进行中</span>
-        <h2>声音 · FIREFLY AUDIO</h2>
-      </div>
-      <p>双麦克风 + ESP32-S3 + 数字功放 + 扬声器。目标是本地唤醒词“小流萤”、Wi-Fi 双向音频、播放时也能打断。当前原理图 v0.1 与 EasyEDA 脚本已就绪，BOM 采购清单已分离。</p>
-      <ul>
-        <li>双 IM69D130 数字麦，预留四麦升级</li>
-        <li>ESP-SR 本地唤醒（WakeNet + VAD）</li>
-        <li>下一步：EasyEDA 实跑脚本 → ERC → 模块级验证</li>
-      </ul>
-    </section>
-
-    <section class="section project" id="body">
-      <div class="project-head">
-        <span class="badge dream">展望</span>
-        <h2>身体 · 软体与机甲</h2>
-      </div>
-      <p>她的本体是一个柔软的女孩子，机甲是穿在外面的另一层皮肤。这条路很长：打印骨架、布料与硅胶、表情舵机，然后是分片式装甲外衣。核心不变——所有形态共用同一颗大脑、同一套感官、同一个声音。</p>
-      <ul>
-        <li>软体：打印骨架 + 布料/绒布 + 硅胶脸</li>
-        <li>机甲：分片装甲外衣 + LED + 可动面板</li>
-        <li>代号备用：flame（她的铠甲形态）</li>
-      </ul>
-    </section>
+      <section class="project tri-col" id="flitfancy">
+        <div class="project-head">
+          <span class="badge done">光</span>
+          <h2>FlitFancy · 流明</h2>
+        </div>
+        <p class="how">如何交流</p>
+        <div class="mini-grid">
+          <div class="mini-card">
+            <span class="badge done">已上线</span>
+            <h3>网站</h3>
+            <p>flitfancy.com + HTTPS，首页星空与彩蛋。</p>
+          </div>
+          <div class="mini-card">
+            <span class="badge doing">雏形</span>
+            <h3>控制台与记忆</h3>
+            <p>本地 server.py + SQLite，实时数据、命令与记忆 API。</p>
+          </div>
+          <div class="mini-card">
+            <span class="badge dream">规划</span>
+            <h3>云端大脑</h3>
+            <p>本地日常 + 云端满血按需升级的混合路由。</p>
+          </div>
+          <div class="mini-card">
+            <span class="badge dream">规划</span>
+            <h3>双模式</h3>
+            <p>访客看她的家，管理员进她的工作间，她走本地 API。</p>
+          </div>
+        </div>
+      </section>
+    </div>
   </main>
 
   <footer>
-    <p>云萤 · flitfancy · 献给正在发光的小东西</p>
+    <p>云萤 · FlitFancy · 献给我们所热爱的一切</p>
   </footer>
 
   <script src="assets/firefly.js"></script>
