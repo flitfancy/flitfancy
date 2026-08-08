@@ -401,21 +401,13 @@ footer p {
   .mini-card p {
     font-size: 13px;
   }
-  .console-grid {
-    grid-template-columns: 1fr;
-  }
-  .note-form textarea {
-    min-width: 100%;
-  }
-  .buttons {
-    width: 100%;
+  .live-strip {
+    white-space: normal;
+    font-size: 15px;
   }
   .btn {
     flex: 1 1 44%;
     text-align: center;
-  }
-  .gauge .val {
-    font-size: 24px;
   }
   .tri-grid {
     gap: 10px;
@@ -431,6 +423,10 @@ footer p {
 }
 
 /* console */
+body.console-page .section {
+  padding-top: 54px;
+}
+
 .console-status {
   display: flex;
   align-items: center;
@@ -454,36 +450,20 @@ footer p {
   50% { opacity: 1; }
 }
 
-.console-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
-  gap: 14px;
-}
-
-.gauge {
+.live-strip {
+  margin: 0 0 22px;
+  padding: 14px 18px;
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 14px;
-  padding: 18px 18px 16px;
-}
-
-.gauge h3 {
-  margin: 0 0 4px;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--muted);
-  letter-spacing: 0.04em;
-}
-
-.gauge .val {
   font-family: Georgia, "Noto Serif SC", serif;
-  font-size: 30px;
+  font-size: 17px;
   color: var(--amber-soft);
-  text-shadow: 0 0 22px rgba(245, 184, 75, 0.2);
+  letter-spacing: 0.04em;
+  text-shadow: 0 0 18px rgba(245, 184, 75, 0.15);
+  white-space: nowrap;
+  overflow-x: auto;
 }
-
-.gauge .unit { font-size: 14px; color: var(--muted); margin-left: 4px; }
-.gauge .hint { margin-top: 6px; font-size: 12px; color: var(--muted); min-height: 1.2em; }
 
 .console-panel {
   margin-top: 22px;
@@ -501,8 +481,6 @@ footer p {
   font-weight: 400;
 }
 
-.buttons { display: flex; gap: 10px; flex-wrap: wrap; }
-
 .btn {
   padding: 8px 16px;
   border-radius: 999px;
@@ -517,35 +495,87 @@ footer p {
 
 .btn:hover { background: rgba(245, 184, 75, 0.18); border-color: rgba(245, 184, 75, 0.6); }
 
-.note-form {
+/* 控制台：对话 */
+.chat-log {
   display: flex;
-  gap: 10px;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 2px 2px 14px;
 }
 
-.note-form textarea {
+.chat-empty {
+  margin: 10px 0;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+  letter-spacing: 0.08em;
+}
+
+.chat-msg {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-width: 84%;
+}
+
+.chat-msg.user { align-self: flex-end; align-items: flex-end; }
+.chat-msg.ai { align-self: flex-start; align-items: flex-start; }
+
+.chat-who {
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: 0.14em;
+}
+
+.chat-msg p {
+  margin: 0;
+  padding: 9px 13px;
+  border-radius: 14px;
+  font-size: 14px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.chat-msg.user p {
+  background: rgba(245, 184, 75, 0.12);
+  border: 1px solid rgba(245, 184, 75, 0.28);
+  color: var(--amber-soft);
+  border-bottom-right-radius: 4px;
+}
+
+.chat-msg.ai p {
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-bottom-left-radius: 4px;
+}
+
+.chat-form {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.chat-form textarea {
   flex: 1;
-  min-width: 240px;
+  min-width: 0;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--border);
   border-radius: 10px;
   color: var(--text);
   padding: 10px 12px;
   font: inherit;
-  resize: vertical;
+  resize: none;
 }
 
-.note-form textarea:focus { outline: none; border-color: rgba(245, 184, 75, 0.5); }
+.chat-form textarea:focus { outline: none; border-color: rgba(245, 184, 75, 0.5); }
 
-.notes { list-style: none; margin: 0; padding: 0; }
-.notes li {
-  padding: 10px 2px;
-  border-bottom: 1px solid var(--border);
-  color: var(--muted);
-  font-size: 14px;
+@media (max-width: 640px) {
+  .chat-msg { max-width: 92%; }
 }
-.notes time { color: var(--amber); font-size: 12px; margin-right: 10px; }
 
 /* 日志页：渐变大标题 + 桌面左右交替时间线 */
 body.journal-page .page-hero h1 {

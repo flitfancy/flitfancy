@@ -14,7 +14,9 @@
 import json
 import os
 import sqlite3
+import urllib.error
 import urllib.parse
+import urllib.request
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -25,6 +27,11 @@ DB_PATH = os.path.join(DATA_DIR, "flitfancy.db")
 HOST = "0.0.0.0"
 PORT = 2671
 CST = timezone(timedelta(hours=8))
+
+AI_CONFIG_PATH = os.path.join(BASE, "ai_local.json")
+
+# 直连 AI 服务，不走系统/环境代理（本机 git 代理是给 GitHub 用的）
+AI_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 MIME = {
     ".html": "text/html; charset=utf-8",
@@ -70,6 +77,29 @@ def db_init():
     )
     con.commit()
     con.close()
+
+
+def ai_config():
+    """读取 AI 服务配置：环境变量优先，回退到本地 ai_local.json（不推送）。"""
+    cfg = {}
+    if os.path.isfile(AI_CONFIG_PATH):
+        try:
+            with open(AI_CONFIG_PATH, "r", encoding="utf-8") as f:
+                cfg = json.load(f) or {}
+        except (OSError, ValueError):
+            cfg = {}
+    return {
+        "base_url": (
+            os.environ.get("FLITFANCY_AI_BASE_URL")
+            or cfg.get("base_url")
+            or "https://api.deepseek.com"
+        ).rstrip("/"),
+        "api_key": os.environ.get("FLITFANCY_AI_KEY") or cfg.get("api_key") or "",
+        "model": os.environ.get("FLITFANCY_AI_MODEL") or cfg.get("model") or "deepseek-chat",
+        "system": (
+            os.environ.get("FLITFANCY_AI_SYSTEM") or cfg.get("system") or ""
+        ).strip(),
+    }
 
 
 def ingest_json(row):
@@ -190,6 +220,8 @@ class Handler(BaseHTTPRequestHandler):
             self._api_command()
         elif parsed.path == "/api/notes":
             self._api_note_create()
+        elif parsed.path == "/api/chat":
+            self._api_chat()
         else:
             self._send(404, {"error": "not found"})
 
@@ -317,6 +349,83 @@ class Handler(BaseHTTPRequestHandler):
         con.commit()
         con.close()
         self._send(200, {"ok": True})
+
+    def _api_chat(self):
+        body = self._read_body()
+        if not body:
+            self._send(400, {"error": "empty body"})
+            return
+        try:
+            data = json.loads(body.decode("utf-8"))
+        except ValueError:
+            self._send(400, {"error": "bad json"})
+            return
+        if not isinstance(data, dict):
+            self._send(400, {"error": "bad json"})
+            return
+        messages = data.get("messages") or []
+        messages = [
+            m for m in messages
+            if isinstance(m, dict)
+            and m.get("role") in ("user", "assistant")
+            and isinstance(m.get("content"), str)
+            and m["content"].strip()
+        ][-20:]
+        if not messages:
+            self._send(400, {"error": "messages required"})
+            return
+        cfg = ai_config()
+        if not cfg["api_key"]:
+            self._send(503, {
+                "ok": False,
+                "error": "AI 尚未配置：请在 backend/ai_local.json 填入 api_key（或设置环境变量 FLITFANCY_AI_KEY）",
+            })
+            return
+        messages_payload = list(messages)
+        if cfg["system"]:
+            messages_payload.insert(0, {"role": "system", "content": cfg["system"]})
+        payload = {
+            "model": cfg["model"],
+            "messages": messages_payload,
+            "stream": False,
+        }
+        url = cfg["base_url"] + "/chat/completions"
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + cfg["api_key"],
+            },
+        )
+        try:
+            with AI_OPENER.open(req, timeout=90) as resp:
+                result = json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode("utf-8", errors="replace")[:300]
+            self._send(502, {
+                "ok": False,
+                "error": "AI 服务返回错误（检查 api_key / model / 余额）",
+                "detail": detail,
+            })
+            return
+        except urllib.error.URLError as e:
+            self._send(502, {
+                "ok": False,
+                "error": "无法连接 AI 服务（检查 base_url 与网络）",
+                "detail": str(e.reason),
+            })
+            return
+        try:
+            reply = result["choices"][0]["message"]["content"].strip()
+        except (KeyError, IndexError, TypeError):
+            self._send(502, {
+                "ok": False,
+                "error": "AI 服务返回格式异常",
+                "detail": str(result)[:300],
+            })
+            return
+        self._send(200, {"ok": True, "reply": reply})
 
 
 def main():
