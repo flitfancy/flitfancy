@@ -546,3 +546,76 @@ footer p {
   font-size: 14px;
 }
 .notes time { color: var(--amber); font-size: 12px; margin-right: 10px; }
+
+/* 日志页：渐变大标题 + 桌面左右交替时间线 */
+body.journal-page .page-hero h1 {
+  width: fit-content;
+  background: var(--flame-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: none;
+}
+
+@media (min-width: 900px) {
+  body.journal-page .timeline {
+    max-width: 1200px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+  body.journal-page .timeline::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: linear-gradient(180deg, rgba(245, 184, 75, 0.55), rgba(63, 208, 232, 0.55), rgba(245, 184, 75, 0.2));
+  }
+  body.journal-page .entry {
+    width: 48%;
+    margin: 0 0 34px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--card);
+    padding: 22px 26px;
+  }
+  body.journal-page .entry:nth-child(odd) {
+    align-self: flex-start;
+  }
+  body.journal-page .entry:nth-child(even) {
+    align-self: flex-end;
+  }
+  body.journal-page .entry::before {
+    left: auto;
+    right: -5px;
+    top: 22px;
+  }
+  body.journal-page .entry:nth-child(even)::before {
+    right: auto;
+    left: -5px;
+  }
+  body.journal-page .entry h2 {
+    font-size: 26px;
+    white-space: nowrap;
+  }
+  body.journal-page .entry p {
+    font-size: 17px;
+    line-height: 1.8;
+    min-height: 3.6em;
+    white-space: nowrap;
+  }
+  body.journal-page .entry time {
+    font-size: 14px;
+  }
+}
+
+/* 大屏整体放大 100%：只放大内容区（main），导航页脚保持一致 */
+@media (min-width: 1300px) {
+  body.journal-page main {
+    zoom: 2;
+    width: 50%;
+    margin: 0 auto;
+  }
+}
