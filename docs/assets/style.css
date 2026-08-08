@@ -405,10 +405,6 @@ footer p {
     white-space: normal;
     font-size: 15px;
   }
-  .btn {
-    flex: 1 1 44%;
-    text-align: center;
-  }
   .tri-grid {
     gap: 10px;
     padding: 4px 12px 16px;
@@ -425,6 +421,13 @@ footer p {
 /* console */
 body.console-page .section {
   padding-top: 54px;
+}
+
+.hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .console-status {
@@ -554,27 +557,254 @@ body.console-page .section {
 }
 
 .chat-form {
-  display: flex;
-  gap: 10px;
   margin-top: 4px;
 }
 
 .chat-form textarea {
-  flex: 1;
-  min-width: 0;
+  width: 100%;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--border);
   border-radius: 10px;
   color: var(--text);
-  padding: 10px 12px;
+  padding: 10px 58px 10px 12px;
   font: inherit;
   resize: none;
 }
 
 .chat-form textarea:focus { outline: none; border-color: rgba(245, 184, 75, 0.5); }
 
+.chat-field {
+  position: relative;
+}
+
+.chat-send {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 4px 12px;
+  border: none;
+  background: none;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--amber-soft);
+  transition: color 0.2s;
+}
+
+.chat-send:hover {
+  color: var(--amber);
+}
+
 @media (max-width: 640px) {
   .chat-msg { max-width: 92%; }
+}
+
+/* 控制台：管理入口与管理层 */
+body.console-page .nav nav a[href="console.html"] {
+  background: var(--flame-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  filter: drop-shadow(0 0 10px rgba(255, 90, 0, 0.45));
+}
+
+body.console-page .nav nav a[href="console.html"]:hover {
+  filter: brightness(1.3) drop-shadow(0 0 12px rgba(63, 208, 232, 0.5));
+}
+
+.admin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 22px;
+}
+
+.admin-grid h3 {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+}
+
+.admin-grid label {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.admin-grid input,
+.admin-grid textarea {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  padding: 9px 12px;
+  font: inherit;
+}
+
+.admin-grid input:focus,
+.admin-grid textarea:focus {
+  outline: none;
+  border-color: rgba(245, 184, 75, 0.5);
+}
+
+.admin-grid select {
+  display: block;
+  width: 100%;
+  margin-bottom: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  padding: 9px 12px;
+  font: inherit;
+}
+
+.admin-grid select:focus {
+  outline: none;
+  border-color: rgba(245, 184, 75, 0.5);
+}
+
+.switch-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.switch-line input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--amber);
+}
+
+.quick-add {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.quick-add input {
+  flex: 1;
+  min-width: 110px;
+}
+
+.link-del {
+  margin-left: 10px;
+  background: none;
+  border: none;
+  color: var(--pink);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.link-del:hover { text-decoration: underline; }
+
+.admin-links {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.admin-links li {
+  margin: 8px 0;
+}
+
+.admin-links a {
+  color: var(--amber-soft);
+  text-decoration: none;
+  border-bottom: 1px dashed rgba(245, 184, 75, 0.4);
+}
+
+.admin-links a:hover {
+  color: var(--amber);
+}
+
+.btn-ghost {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--muted);
+}
+
+.btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.admin-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(5, 8, 15, 0.72);
+  backdrop-filter: blur(6px);
+  padding: 20px;
+}
+
+.admin-overlay[hidden] { display: none; }
+
+.admin-card {
+  width: min(420px, 100%);
+  background: #121826;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 26px 28px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+}
+
+.admin-card h2 {
+  font-family: Georgia, "Noto Serif SC", serif;
+  font-size: 20px;
+  font-weight: 400;
+  color: var(--amber-soft);
+  margin: 0 0 8px;
+}
+
+.admin-card input {
+  display: block;
+  width: 100%;
+  margin: 14px 0 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  padding: 11px 13px;
+  font: inherit;
+}
+
+.admin-card input:focus {
+  outline: none;
+  border-color: rgba(245, 184, 75, 0.5);
+}
+
+.admin-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.js-error {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 60;
+  max-width: min(520px, calc(100vw - 32px));
+  background: rgba(90, 20, 25, 0.92);
+  border: 1px solid rgba(255, 120, 120, 0.45);
+  color: #ffd7d7;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 /* 日志页：渐变大标题 + 桌面左右交替时间线 */

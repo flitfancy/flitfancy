@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>控制台 — 云萤 · flitfancy</title>
   <meta name="description" content="小流萤的控制台：实时数据与对话。">
-  <link rel="stylesheet" href="assets/style.css">
+  <link rel="stylesheet" href="assets/style.css?v=3">
 </head>
 <body class="console-page">
   <canvas id="sky" aria-hidden="true"></canvas>
@@ -33,13 +33,51 @@
       <div class="console-panel">
         <h2>对话</h2>
         <div class="chat-log" data-role="chat-log">
-          <p class="chat-empty" data-role="chat-empty">说点什么吧，AI 会回复。</p>
+          <p class="chat-empty" data-role="chat-empty">有求必应</p>
         </div>
         <div class="chat-form">
-          <textarea rows="1" placeholder="说点什么…（Enter 发送，Shift+Enter 换行）" data-role="chat-input"></textarea>
-          <button class="btn" data-role="chat-send" title="发送">说</button>
+          <div class="chat-field">
+            <textarea rows="1" placeholder="你会如何问出你的问题" data-role="chat-input"></textarea>
+            <button class="btn chat-send" data-role="chat-send" title="发送">发送</button>
+          </div>
         </div>
         <p class="hint" data-role="chat-status" style="margin-top:10px"></p>
+      </div>
+
+      <div class="console-panel admin-panel" data-role="admin-panel" hidden>
+        <h2>管理</h2>
+        <div class="admin-grid">
+          <div>
+            <h3>模型选择</h3>
+            <select data-role="cfg-model">
+              <option value="deepseek-chat">DeepSeek Chat</option>
+              <option value="mimo-v2.5">小米 MiMo</option>
+              <option value="__custom__">自定义…</option>
+            </select>
+            <input data-role="cfg-model-custom" placeholder="输入自定义模型名" hidden>
+            <button class="btn" data-role="cfg-save">保存</button>
+            <p class="hint" data-role="cfg-status" style="margin-top:8px"></p>
+          </div>
+          <div>
+            <h3>AI 请求权限</h3>
+            <label class="switch-line">
+              <input type="checkbox" data-role="cfg-chat-toggle">
+              <span>允许对话请求 AI（关闭后本地与公网都停止调用）</span>
+            </label>
+            <p class="hint" data-role="chat-toggle-status" style="margin-top:8px"></p>
+          </div>
+          <div>
+            <h3>快捷入口（小弹窗打开）</h3>
+            <ul class="admin-links" data-role="quick-links"></ul>
+            <div class="quick-add">
+              <input data-role="ql-name" placeholder="名称">
+              <input data-role="ql-url" placeholder="https://…">
+              <button class="btn" data-role="ql-add">添加</button>
+            </div>
+            <p class="hint" data-role="ql-status" style="margin-top:8px"></p>
+          </div>
+        </div>
+        <button class="btn btn-ghost" data-role="admin-logout" style="margin-top:16px">退出管理</button>
       </div>
     </section>
   </main>
@@ -48,7 +86,23 @@
 <p><span>云萤 · FlitFancy</span><span class="sep"> · </span><span>献给我们所热爱的一切</span></p>
   </footer>
 
-  <script src="assets/firefly.js"></script>
-  <script src="assets/console.js"></script>
+  <div class="admin-overlay" data-role="admin-overlay" hidden>
+    <div class="admin-card">
+      <h2>管理员登录</h2>
+      <p class="hint">Who are you</p>
+      <input type="text" data-role="admin-username" placeholder="用户名" autocomplete="username">
+      <input type="password" data-role="admin-password" placeholder="管理密码" autocomplete="current-password">
+      <div class="admin-actions">
+        <button class="btn" data-role="admin-login">登录</button>
+        <button class="btn btn-ghost" data-role="admin-cancel">取消</button>
+      </div>
+      <p class="hint" data-role="admin-login-status" style="margin-top:8px"></p>
+    </div>
+  </div>
+
+  <div class="js-error" data-role="js-error" hidden></div>
+
+  <script src="assets/firefly.js?v=3"></script>
+  <script src="assets/console.js?v=3"></script>
 </body>
 </html>

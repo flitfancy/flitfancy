@@ -18,11 +18,23 @@ const DEFAULTS = {
 
 export default {
   async fetch(request, env) {
-    if (request.method === "OPTIONS") {
-      return new Response(null, { headers: cors() });
+    if (request.method === "OPTIONS") return new Response(null, { headers: cors() });
+    const url = new URL(request.url);
+    if (url.pathname === "/admin/toggle" && request.method === "POST") {
+      return handleToggle(request, env);
+    }
+    if (url.pathname === "/config" && request.method === "GET") {
+      return handleConfig(env);
     }
     if (request.method !== "POST") {
       return json({ ok: false, error: "method not allowed" }, 405);
+    }
+
+    if (!env.CONFIG) {
+      return json({ ok: false, error: "公网开关未配置（请绑定 KV: CONFIG）" }, 503);
+    }
+    if (!(await chatEnabled(env))) {
+      return json({ ok: false, error: "AI 对话已由管理员关闭" }, 403);
     }
 
     let body;
@@ -98,6 +110,39 @@ export default {
     return json({ ok: true, reply });
   },
 };
+
+async function chatEnabled(env) {
+  if (!env.CONFIG) return false;
+  const value = await env.CONFIG.get("chat_enabled");
+  return value !== "false";
+}
+
+async function handleConfig(env) {
+  return json({
+    ok: true,
+    chat_enabled: env.CONFIG ? await chatEnabled(env) : false,
+    config_ready: !!env.CONFIG,
+  });
+}
+
+async function handleToggle(request, env) {
+  const auth = request.headers.get("Authorization") || "";
+  if (auth !== "Bearer " + (env.ADMIN_TOKEN || "")) {
+    return json({ ok: false, error: "unauthorized" }, 401);
+  }
+  let body;
+  try {
+    body = await request.json();
+  } catch (e) {
+    return json({ ok: false, error: "bad json" }, 400);
+  }
+  if (!env.CONFIG) {
+    return json({ ok: false, error: "KV 未绑定（绑定名为 CONFIG）" }, 500);
+  }
+  const enabled = !!body.chat_enabled;
+  await env.CONFIG.put("chat_enabled", enabled ? "true" : "false");
+  return json({ ok: true, chat_enabled: enabled });
+}
 
 function cors() {
   return {

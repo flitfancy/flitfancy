@@ -1,6 +1,17 @@
 (function () {
   const $ = (sel) => document.querySelector(sel);
 
+  /* 页面级错误提示：任何脚本错误都会显示在左下角红条 */
+  window.addEventListener("error", function (e) {
+    const el = $('[data-role="js-error"]');
+    if (el) {
+      el.textContent = "脚本错误：" + (e.message || "unknown") +
+        (e.filename ? " @" + e.filename.split("/").pop() + ":" + e.lineno : "");
+      el.hidden = false;
+    }
+  });
+
+  /* ---------- 请求工具 ---------- */
   async function getJSON(url) {
     const r = await fetch(url, { headers: { "Accept": "application/json" } });
     if (!r.ok) throw new Error("HTTP " + r.status);
@@ -23,22 +34,25 @@
     return data || {};
   }
 
-  function fmt(v, d) {
-    if (v == null || isNaN(Number(v))) return "—";
-    return Number(v).toFixed(d == null ? 1 : d);
-  }
-
+  /* ---------- 状态与数据行 ---------- */
   function setStatus(text, ok) {
     $('[data-role="status"]').textContent = text;
     $('[data-role="dot"]').style.background = ok ? "" : "#8b94a8";
   }
 
+  function setChatStatus(text) {
+    $('[data-role="chat-status"]').textContent = text || "";
+  }
+
+  function fmt(v, d) {
+    if (v == null || isNaN(Number(v))) return "—";
+    return Number(v).toFixed(d == null ? 1 : d);
+  }
+
   function renderLiveStrip(rows) {
-    const el = document.querySelector('[data-role="live-strip"]');
+    const el = $('[data-role="live-strip"]');
     const byChannel = {};
-    (rows || []).forEach(function (r) {
-      byChannel[r.channel] = r;
-    });
+    (rows || []).forEach(function (r) { byChannel[r.channel] = r; });
     const parts = [];
 
     const ch0 = byChannel["CH0"];
@@ -71,23 +85,14 @@
     el.textContent = parts.length ? parts.join("  ·  ") : "暂无感知数据";
   }
 
-  async function refresh() {
-    try {
-      const status = await getJSON("/api/status");
-      setStatus(status.msg, true);
-      const latest = await getJSON("/api/sensors/latest");
-      renderLiveStrip(latest.rows);
-    } catch (e) {
-      setStatus("控制台服务未连接——请运行 python server.py", false);
-    }
-  }
-
-  /* 对话 */
+  /* ---------- 对话 ---------- */
   const CHAT_KEY = "flitfancy.chat.v1";
-  // 部署 Cloudflare Worker 后，把公网地址填到这里；留空则只用本地服务
-  const PUBLIC_AI_URL = "https://api.flitfancy.com/";
+  const PUBLIC_API = "https://api.flitfancy.com/";
+  const PUBLIC_BASE = PUBLIC_API.replace(/\/+$/, "");
+
   let chatHistory = loadChat();
   let chatBusy = false;
+  let chatEnabled = true;
 
   function loadChat() {
     try {
@@ -106,8 +111,8 @@
   }
 
   function addChatMsg(role, text) {
-    const log = document.querySelector('[data-role="chat-log"]');
-    const empty = document.querySelector('[data-role="chat-empty"]');
+    const log = $('[data-role="chat-log"]');
+    const empty = $('[data-role="chat-empty"]');
     if (empty) empty.remove();
     const div = document.createElement("div");
     div.className = "chat-msg " + (role === "user" ? "user" : "ai");
@@ -145,26 +150,53 @@
     })();
   }
 
-  function setChatStatus(text) {
-    document.querySelector('[data-role="chat-status"]').textContent = text || "";
+  function applyChatGate() {
+    const locked = !chatEnabled || chatBusy;
+    $('[data-role="chat-input"]').disabled = locked;
+    $('[data-role="chat-send"]').disabled = locked;
+    if (!chatEnabled) {
+      setChatStatus("AI 对话已由管理员关闭（可在管理层开启）");
+    }
+  }
+
+  async function refresh() {
+    try {
+      const status = await getJSON("/api/status");
+      setStatus(status.msg, true);
+      chatEnabled = status.chat_enabled !== false;
+      applyChatGate();
+      const latest = await getJSON("/api/sensors/latest");
+      renderLiveStrip(latest.rows);
+    } catch (e) {
+      setStatus("控制台服务未连接——请运行 python server.py", false);
+      try {
+        const r = await fetch(PUBLIC_BASE + "/config");
+        const data = await r.json();
+        if (data && data.chat_enabled === false) {
+          chatEnabled = false;
+          applyChatGate();
+        }
+      } catch (e2) { /* 公网配置不可达则保持默认 */ }
+    }
   }
 
   async function sendChat() {
-    const input = document.querySelector('[data-role="chat-input"]');
-    const sendBtn = document.querySelector('[data-role="chat-send"]');
+    const input = $('[data-role="chat-input"]');
     const text = input.value.trim();
     if (!text || chatBusy) return;
+    if (!chatEnabled) {
+      setChatStatus("AI 对话已由管理员关闭");
+      return;
+    }
     chatBusy = true;
-    sendBtn.disabled = true;
-    input.disabled = true;
+    applyChatGate();
     setChatStatus("正在思考…");
     chatHistory.push({ role: "user", content: text });
     input.value = "";
     saveChat();
     addChatMsg("user", text);
     try {
-      const urls = ["/api/chat"];
-      if (PUBLIC_AI_URL) urls.push(PUBLIC_AI_URL);
+      const urls = ["/api/chat", PUBLIC_API];
       let r = null;
       let lastErr = null;
       for (const url of urls) {
@@ -189,26 +221,333 @@
       setChatStatus((e && e.message) || "出错了，稍后再试试。");
     } finally {
       chatBusy = false;
-      sendBtn.disabled = false;
-      input.disabled = false;
+      applyChatGate();
       input.focus();
     }
   }
 
-  const chatInput = document.querySelector('[data-role="chat-input"]');
-  const chatSend = document.querySelector('[data-role="chat-send"]');
-  chatSend.addEventListener("click", sendChat);
-  chatInput.addEventListener("keydown", function (e) {
+  /* ---------- 管理层 ---------- */
+  const ADMIN_KEY = "flitfancy.admin.token";
+
+  function adminToken() {
+    try { return sessionStorage.getItem(ADMIN_KEY) || ""; } catch (e) { return ""; }
+  }
+  function setAdminToken(t) {
+    try { sessionStorage.setItem(ADMIN_KEY, t); } catch (e) { /* ignore */ }
+  }
+  function clearAdminToken() {
+    try { sessionStorage.removeItem(ADMIN_KEY); } catch (e) { /* ignore */ }
+  }
+
+  async function adminFetch(url, options) {
+    const headers = Object.assign({}, (options && options.headers) || {});
+    const token = adminToken();
+    if (token) headers["Authorization"] = "Bearer " + token;
+    if (options && options.body) headers["Content-Type"] = "application/json";
+    return fetch(url, Object.assign({}, options, { headers }));
+  }
+
+  function adminStatus(el, text) {
+    if (el) el.textContent = text || "";
+  }
+
+  function openLogin() {
+    const uname = $('[data-role="admin-username"]');
+    const input = $('[data-role="admin-password"]');
+    adminStatus($('[data-role="admin-login-status"]'), "");
+    $('[data-role="admin-overlay"]').hidden = false;
+    input.value = "";
+    if (!uname.value) {
+      uname.focus();
+    } else {
+      input.focus();
+    }
+  }
+
+  function closeLogin() {
+    $('[data-role="admin-overlay"]').hidden = true;
+  }
+
+  function showAdminPanel(show) {
+    $('[data-role="admin-panel"]').hidden = !show;
+  }
+
+  let quickLinks = [];
+  let quickLinkEditing = -1;
+
+  function modelSelectValue() {
+    const sel = $('[data-role="cfg-model"]');
+    return sel.value === "__custom__"
+      ? $('[data-role="cfg-model-custom"]').value.trim()
+      : sel.value;
+  }
+
+  function setModelSelect(model) {
+    const sel = $('[data-role="cfg-model"]');
+    const custom = $('[data-role="cfg-model-custom"]');
+    const known = Array.prototype.some.call(sel.options, function (o) {
+      return o.value === model;
+    });
+    if (known && model) {
+      sel.value = model;
+      custom.hidden = true;
+      custom.value = "";
+    } else {
+      sel.value = "__custom__";
+      custom.hidden = false;
+      custom.value = model || "";
+    }
+  }
+
+  function openPopup(name, url) {
+    const w = window.open(url, name, "width=980,height=680");
+    if (!w) window.open(url, "_blank");
+  }
+
+  function renderQuickLinks() {
+    const ul = $('[data-role="quick-links"]');
+    ul.innerHTML = "";
+    quickLinks.forEach(function (link, idx) {
+      const li = document.createElement("li");
+      const a = document.createElement("a");
+      a.href = link.url;
+      a.textContent = link.name;
+      a.addEventListener("click", function (e) {
+        e.preventDefault();
+        openPopup(link.name, link.url);
+      });
+      const edit = document.createElement("button");
+      edit.className = "link-del";
+      edit.textContent = "编辑";
+      edit.addEventListener("click", function () { editQuickLink(idx); });
+      const del = document.createElement("button");
+      del.className = "link-del";
+      del.textContent = "删除";
+      del.addEventListener("click", function () { removeQuickLink(idx); });
+      li.appendChild(a);
+      li.appendChild(edit);
+      li.appendChild(del);
+      ul.appendChild(li);
+    });
+  }
+
+  async function loadAdminConfig() {
+    try {
+      const r = await adminFetch("/api/admin/config", { method: "GET" });
+      const data = await r.json();
+      if (!r.ok) {
+        if (r.status === 401) {
+          clearAdminToken();
+          showAdminPanel(false);
+        }
+        return;
+      }
+      setModelSelect(data.model || "");
+      $('[data-role="cfg-chat-toggle"]').checked = !!data.chat_enabled;
+      quickLinks = Array.isArray(data.quick_links) ? data.quick_links : [];
+      quickLinkEditing = -1;
+      $('[data-role="ql-add"]').textContent = "添加";
+      renderQuickLinks();
+      showAdminPanel(true);
+    } catch (e) {
+      clearAdminToken();
+      showAdminPanel(false);
+    }
+  }
+
+  async function doLogin() {
+    const uname = $('[data-role="admin-username"]');
+    const input = $('[data-role="admin-password"]');
+    const status = $('[data-role="admin-login-status"]');
+    const btn = $('[data-role="admin-login"]');
+    const username = uname.value.trim();
+    const password = input.value;
+    if (!username || !password) {
+      adminStatus(status, "请输入用户名和密码");
+      return;
+    }
+    adminStatus(status, "正在验证…");
+    btn.textContent = "验证中…";
+    btn.disabled = true;
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(function () { ctrl.abort(); }, 8000);
+      const r = await fetch("/api/admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: username, password: password }),
+        signal: ctrl.signal
+      });
+      clearTimeout(timer);
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || "HTTP " + r.status);
+      setAdminToken(data.token);
+      closeLogin();
+      await loadAdminConfig();
+    } catch (e) {
+      adminStatus(status, (e && e.message) || "登录失败");
+    }
+    btn.textContent = "登录";
+    btn.disabled = false;
+  }
+
+  async function saveModelConfig() {
+    const status = $('[data-role="cfg-status"]');
+    const model = modelSelectValue();
+    if (!model) {
+      adminStatus(status, "请选择或输入模型");
+      return;
+    }
+    adminStatus(status, "保存中…");
+    try {
+      const r = await adminFetch("/api/admin/config", {
+        method: "POST",
+        body: JSON.stringify({ model: model })
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || "HTTP " + r.status);
+      setModelSelect(data.model || model);
+      adminStatus(status, "已保存");
+    } catch (e) {
+      if (e && e.message === "未登录或登录已过期") {
+        clearAdminToken();
+        showAdminPanel(false);
+      }
+      adminStatus(status, (e && e.message) || "保存失败");
+    }
+  }
+
+  async function saveChatToggle() {
+    const status = $('[data-role="chat-toggle-status"]');
+    const on = $('[data-role="cfg-chat-toggle"]').checked;
+    adminStatus(status, "保存中…");
+    try {
+      const r = await adminFetch("/api/admin/config", {
+        method: "POST",
+        body: JSON.stringify({ chat_enabled: on })
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || "HTTP " + r.status);
+      const syncNote = data.public_sync === false
+        ? "（公网同步失败：" + (data.public_sync_note || "未知") + "）"
+        : "（已同步公网）";
+      adminStatus(status, (on ? "已开启" : "已关闭") + syncNote);
+    } catch (e) {
+      adminStatus(status, (e && e.message) || "保存失败");
+    }
+  }
+
+  async function saveQuickLinks() {
+    const r = await adminFetch("/api/admin/config", {
+      method: "POST",
+      body: JSON.stringify({ quick_links: quickLinks })
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || "HTTP " + r.status);
+    quickLinks = Array.isArray(data.quick_links) ? data.quick_links : [];
+    renderQuickLinks();
+  }
+
+  async function saveQuickLink() {
+    const status = $('[data-role="ql-status"]');
+    const name = $('[data-role="ql-name"]').value.trim();
+    const url = $('[data-role="ql-url"]').value.trim();
+    if (!name || !url) {
+      adminStatus(status, "名称和地址都要填");
+      return;
+    }
+    try {
+      if (quickLinkEditing >= 0) {
+        quickLinks[quickLinkEditing] = { name: name, url: url };
+      } else {
+        quickLinks = quickLinks.concat([{ name: name, url: url }]);
+      }
+      await saveQuickLinks();
+      $('[data-role="ql-name"]').value = "";
+      $('[data-role="ql-url"]').value = "";
+      quickLinkEditing = -1;
+      $('[data-role="ql-add"]').textContent = "添加";
+      adminStatus(status, "已保存");
+    } catch (e) {
+      adminStatus(status, (e && e.message) || "保存失败");
+    }
+  }
+
+  function editQuickLink(idx) {
+    const link = quickLinks[idx];
+    if (!link) return;
+    $('[data-role="ql-name"]').value = link.name;
+    $('[data-role="ql-url"]').value = link.url;
+    quickLinkEditing = idx;
+    $('[data-role="ql-add"]').textContent = "保存修改";
+    adminStatus($('[data-role="ql-status"]'), "");
+    $('[data-role="ql-name"]').focus();
+  }
+
+  async function removeQuickLink(idx) {
+    const status = $('[data-role="ql-status"]');
+    try {
+      quickLinks = quickLinks.filter(function (_, i) { return i !== idx; });
+      await saveQuickLinks();
+      quickLinkEditing = -1;
+      $('[data-role="ql-add"]').textContent = "添加";
+      adminStatus(status, "已删除");
+    } catch (e) {
+      adminStatus(status, (e && e.message) || "删除失败");
+    }
+  }
+
+  async function doLogout() {
+    try {
+      await adminFetch("/api/admin/logout", { method: "POST" });
+    } catch (e) { /* ignore */ }
+    clearAdminToken();
+    showAdminPanel(false);
+  }
+
+  /* ---------- 事件绑定 ---------- */
+  $('.nav nav a[href="console.html"]').addEventListener("click", function (e) {
+    e.preventDefault();
+    if (adminToken()) {
+      showAdminPanel(true);
+      $('[data-role="admin-panel"]').scrollIntoView({ behavior: "smooth", block: "start" });
+    } else {
+      openLogin();
+    }
+  });
+
+  $('[data-role="chat-send"]').addEventListener("click", sendChat);
+  $('[data-role="chat-input"]').addEventListener("keydown", function (e) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       sendChat();
     }
   });
 
+  $('[data-role="admin-login"]').addEventListener("click", doLogin);
+  $('[data-role="admin-cancel"]').addEventListener("click", closeLogin);
+  $('[data-role="admin-password"]').addEventListener("keydown", function (e) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      doLogin();
+    }
+  });
+  $('[data-role="cfg-save"]').addEventListener("click", saveModelConfig);
+  $('[data-role="cfg-model"]').addEventListener("change", function () {
+    const sel = $('[data-role="cfg-model"]');
+    const custom = $('[data-role="cfg-model-custom"]');
+    custom.hidden = sel.value !== "__custom__";
+    if (sel.value !== "__custom__") custom.value = "";
+  });
+  $('[data-role="cfg-chat-toggle"]').addEventListener("change", saveChatToggle);
+  $('[data-role="ql-add"]').addEventListener("click", saveQuickLink);
+  $('[data-role="admin-logout"]').addEventListener("click", doLogout);
+
+  /* ---------- 启动 ---------- */
   chatHistory.forEach(function (m) {
     addChatMsg(m.role, m.content);
   });
-
+  if (adminToken()) loadAdminConfig();
   refresh();
   setInterval(refresh, 5000);
 })();
