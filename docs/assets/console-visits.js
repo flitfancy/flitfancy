@@ -26,16 +26,10 @@
   }
 
   function renderIpCell(cell, address, metaText) {
-    const value = document.createElement("span");
-    value.className = "visit-ip-value";
-    value.textContent = address || "—";
-    cell.replaceChildren(value);
-    if (metaText) {
-      const meta = document.createElement("span");
-      meta.className = "visit-ip-meta";
-      meta.textContent = metaText;
-      cell.appendChild(meta);
-    }
+    const content = document.createElement("span");
+    content.className = "visit-ip-content";
+    content.textContent = (address || "—") + (metaText ? " · " + metaText : "");
+    cell.replaceChildren(content);
   }
 
   function create(options) {

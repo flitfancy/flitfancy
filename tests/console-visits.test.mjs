@@ -107,9 +107,9 @@ assert.equal(elements['[data-role="visits-empty"]'].hidden, true);
 assert.equal(elements['[data-role="visits-status"]'].textContent, "共 3 条记录");
 assert.equal(
   elements['[data-role="visits-list"]'].children[0].children[1]
-    .querySelector(".visit-ip-value").textContent,
+    .querySelector(".visit-ip-content").textContent,
   "A",
-  "IP 地址必须使用独立语义元素，才能单独限制长 IPv6 的宽度"
+  "IP 内容必须使用单一布局边界"
 );
 assert.equal(
   elements['[data-role="visits-list"]'].children[0].children[3].textContent,
@@ -121,16 +121,20 @@ visits.toggleGrouping(toggle);
 assert.equal(toggle.textContent, "展开全部");
 assert.equal(elements['[data-role="visits-list"]'].children.length, 2);
 const collapsed = elements['[data-role="visits-list"]'].children[0];
-assert.equal(collapsed.querySelector(".visit-ip").querySelector(".visit-ip-value").textContent, "A");
+assert.equal(
+  collapsed.querySelector(".visit-ip").querySelector(".visit-ip-content").textContent,
+  "A · 共 2 次 ▸",
+  "IP 与汇总信息应像旧版一样保持在同一段文本流内"
+);
 assert.match(
-  collapsed.querySelector(".visit-ip").querySelector(".visit-ip-meta").textContent,
+  collapsed.querySelector(".visit-ip").querySelector(".visit-ip-content").textContent,
   /共 2 次 ▸$/
 );
 collapsed.click();
 assert.equal(elements['[data-role="visits-list"]'].children.length, 3);
 assert.match(
   elements['[data-role="visits-list"]'].children[0]
-    .querySelector(".visit-ip").querySelector(".visit-ip-meta").textContent,
+    .querySelector(".visit-ip").querySelector(".visit-ip-content").textContent,
   /共 2 次 ▾$/
 );
 

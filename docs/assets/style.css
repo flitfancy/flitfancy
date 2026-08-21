@@ -1259,20 +1259,14 @@ body.console-page .section {
 .visits-table td.visit-ip {
   vertical-align: top;
 }
-.visit-ip-value {
-  /* IPv4 按内容占宽；IPv6 只在约 24 字符后换行，不挤压其余列。 */
+.visit-ip-content {
+  /* 沿用原本的连续文本流；短 IP 不提前折行，IPv6 到上限后再换行。 */
   display: inline-block;
   inline-size: max-content;
-  max-inline-size: 24ch;
+  max-inline-size: 32ch;
   white-space: normal;
   overflow-wrap: anywhere;
   word-break: normal;
-}
-.visit-ip-meta {
-  display: block;
-  margin-top: 2px;
-  white-space: nowrap;
-  font-size: var(--fs-fine);
 }
 
 .visits-table th,
