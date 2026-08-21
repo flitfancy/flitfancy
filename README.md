@@ -228,7 +228,7 @@ site/
   完全一致（激活类允许页间差异）；`tests/version-consistency.test.mjs` 断言
   全库 `?v=` 与 `cloudflare/package.json` 的语义化版本一致。改导航或版本漏改
   任何一页都会在 check 里立即失败。发布版本统一使用：
-  `pnpm run version:set -- 1.0.1`（在 `cloudflare` 目录执行）。
+  `pnpm run version:set -- 1.2.3`（示例，在 `cloudflare` 目录执行）。
 - **stylelint 防线**：no-duplicate-selectors / block-no-empty /
   no-duplicate-properties 三条规则挂进 check，同名选择器提交即报错。
 - **纯函数单一出处**：传感器衍生计算在 `sensor-state.js`（带单测），
@@ -236,10 +236,10 @@ site/
   formatUnixTime），页面只做委托。
 - **控制台职责拆分**：访问统计的加载、连续 IP 折叠和表格渲染集中在
   `console-visits.js`；`console.js` 只注入管理鉴权与状态显示依赖。
-- **兼容层只进不出**：当前前端和后端同步只发送 `time/precision/content`
-  等现行字段；后端与 Worker 暂时继续接受旧插件的 `date/title` 输入，进入后
-  立即归一为现行结构。跨运行时的随笔归一规则共用 `tests/contracts` 测试数据，
-  防止 Python 与 Worker 各自演化。
+- **日记结构单轨**：前端、后端与 Worker 统一使用 `time/precision/content`
+  等现行字段；写入请求出现已停用的 `date/title` 会明确返回 400，避免静默丢字段。
+  跨运行时的随笔归一规则共用 `tests/contracts` 测试数据，防止 Python 与 Worker
+  各自演化。
 
 ## 权限模型（三把钥匙，各管一域）
 
@@ -270,6 +270,6 @@ Content-Type: application/json
 {"perspective":"her","time":"2026-08-13T21:35:07","content":"这一刻想留下的内容。"}
 ```
 
-`time` 精确到秒；未写时区时按北京时间处理。本机调用会沿用现有的本地信任边界；
-从公网调用则必须先登录并携带管理员 Bearer 令牌。旧版 `date/title/source` 请求仍兼容，
-其中旧标题会自动合并进内容。
+`time` 可只写日期、到分钟或精确到秒；未写时区时按北京时间处理。本机调用会沿用
+现有的本地信任边界；从公网调用则必须先登录并携带管理员 Bearer 令牌。旧版
+`date/title` 请求不再接受；`source` 仍是现行数据模型字段，缺省为 `manual`。

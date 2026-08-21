@@ -554,12 +554,6 @@ async function ensureMemoriesTableOnce(env) {
   return true;
 }
 
-function validMemoryDate(value) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const parsed = new Date(value + "T00:00:00Z");
-  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
-}
-
 async function handleMemories(env) {
   if (!env.DB) {
     return json({ ok: false, error: "日记未配置（请绑定 D1，绑定名为 DB）" }, 503);
@@ -659,17 +653,15 @@ async function handleMemoryCreate(request, env) {
   if (pre.error) return pre.error;
   const body = pre.body;
   const uid = pre.uid;
-  const legacyDate = String(body.date || "").trim();
+  if (Object.prototype.hasOwnProperty.call(body, "date") ||
+      Object.prototype.hasOwnProperty.call(body, "title")) {
+    return json({ ok: false, error: "date/title are no longer supported; use time/content" }, 400);
+  }
   const perspective = String(body.perspective || "").trim();
   const source = String(body.source || "manual").trim();
-  const legacyTitle = String(body.title || "").trim();
-  let content = String(body.content || "").trim();
+  const content = String(body.content || "").trim();
   let memoryTime = String(body.time || "").trim();
-  let timePrecision = body.precision === "date" ? "date" : "second";
-  if (!memoryTime && validMemoryDate(legacyDate)) {
-    memoryTime = legacyDate + "T00:00:00+08:00";
-    timePrecision = "date";
-  }
+  const timePrecision = body.precision === "date" ? "date" : "second";
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})?$/.test(memoryTime)) {
     return json({ ok: false, error: "time must include seconds" }, 400);
   }
@@ -685,9 +677,6 @@ async function handleMemoryCreate(request, env) {
   }
   if (source !== "manual" && source !== "firefly") {
     return json({ ok: false, error: "invalid source" }, 400);
-  }
-  if (legacyTitle && legacyTitle !== ".") {
-    content = legacyTitle + (content ? "\n" + content : "");
   }
   if (!content || content.length > 4000) {
     return json({ ok: false, error: "invalid content" }, 400);

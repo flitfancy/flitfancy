@@ -1352,23 +1352,19 @@ class Handler(BaseHTTPRequestHandler):
         data = self._json_body()
         if data is None:
             return
+        if "date" in data or "title" in data:
+            self._send(400, {
+                "ok": False,
+                "error": "date/title 已停止支持，请使用 time/content",
+            })
+            return
         perspective = (data.get("perspective") or "").strip()
         source = (data.get("source") or "manual").strip()
         memory_time_text = (data.get("time") or "").strip()
-        legacy_date = (data.get("date") or "").strip()
-        legacy_title = (data.get("title") or "").strip()
         content = (data.get("content") or "").strip()
         time_precision = "second"
-        if not memory_time_text and legacy_date:
-            try:
-                datetime.strptime(legacy_date, "%Y-%m-%d")
-            except (TypeError, ValueError):
-                self._send(400, {"ok": False, "error": "date 必须是 YYYY-MM-DD"})
-                return
-            memory_time_text = legacy_date + "T00:00:00+08:00"
-            time_precision = "date"
         # 时间宽松归一：接受"仅日期""到分钟""完整"三种粒度，
-        # 缺省部分补齐（输入框本应给完整秒，此处理兜底手输与旧数据）。
+        # 缺省部分补齐（输入框本应给完整秒，此处理兜底手输）。
         try:
             if len(memory_time_text) == 10:
                 datetime.strptime(memory_time_text, "%Y-%m-%d")
@@ -1393,9 +1389,6 @@ class Handler(BaseHTTPRequestHandler):
         if source not in ("manual", "firefly"):
             self._send(400, {"ok": False, "error": "source 必须是 manual 或 firefly"})
             return
-        # 兼容旧插件的 title + content，请求进入后统一折叠为一个 content。
-        if legacy_title and legacy_title != ".":
-            content = legacy_title + (("\n" + content) if content else "")
         if not content or len(content) > 4000:
             self._send(400, {"ok": False, "error": "内容不能为空，且不能超过 4000 字"})
             return

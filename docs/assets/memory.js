@@ -9,22 +9,18 @@
   const stream = document.querySelector('[data-role="memory-stream"]');
 
   function recordTime(memory) {
-    if (memory.time) return memory.time;
-    return memory.date ? memory.date + "T00:00:00+08:00" : "";
+    return String(memory.time || "");
   }
 
   function recordPrecision(memory) {
     if (memory.precision === "second" || memory.precision === "date") {
       return memory.precision;
     }
-    return memory.time ? "second" : "date";
+    return "second";
   }
 
   function recordContent(memory) {
-    const title = String(memory.title || "").trim();
-    const content = String(memory.content || "").trim();
-    if (title && title !== ".") return title + (content ? " · " + content : "");
-    return content;
+    return String(memory.content || "").trim();
   }
 
   function makeEntry(memory) {

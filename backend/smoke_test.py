@@ -229,16 +229,14 @@ def main():
             assert created["public_sync"] is False
             memories = request(base, "/api/memories")
             assert memories["rows"][0]["perspective"] == "me"
-            legacy = request(base, "/api/memories", "POST", {
+            legacy_rejected = request(base, "/api/memories", "POST", {
                 "date": "2026-08-11",
                 "perspective": "her",
                 "source": "firefly",
                 "title": "旧插件标题",
                 "content": "旧插件正文",
-            }, expected=201)
-            assert legacy["memory"]["content"] == "旧插件标题\n旧插件正文"
-            assert legacy["memory"]["time"] == "2026-08-11T00:00:00+08:00"
-            assert legacy["memory"]["precision"] == "date"
+            }, expected=400)
+            assert "停止支持" in legacy_rejected["error"]
             print("MEMORY: local save ok; offline public sync remains pending")
 
             anchor_created = request(base, "/api/anchors", "POST", {

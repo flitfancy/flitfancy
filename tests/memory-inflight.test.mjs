@@ -9,6 +9,8 @@ import vm from "node:vm";
 const source = fs.readFileSync(
   new URL("../docs/assets/memory.js", import.meta.url), "utf8"
 );
+assert.doesNotMatch(source, /memory\.(?:date|title)/,
+  "公开日记渲染不得重新引入旧 date/title 字段兜底");
 
 let fetchCalls = 0;
 const pending = [];

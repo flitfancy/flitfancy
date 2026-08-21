@@ -145,6 +145,27 @@ try {
   );
   assert.equal(unknownPost.status, 404, "未匹配 POST 不得再隐式进入聊天路由");
 
+  const legacyMemoryResponse = await worker.fetch(
+    new Request("https://api.flitfancy.com/admin/memories", {
+      method: "POST",
+      body: JSON.stringify({
+        uid: "legacy-memory-test-0001",
+        date: "2026-08-11",
+        title: "旧标题",
+        perspective: "me",
+        content: "旧正文",
+      }),
+      headers: {
+        "Authorization": "Bearer " + ADMIN_TOKEN,
+        "Content-Type": "application/json",
+      },
+    }),
+    { ADMIN_TOKEN, CONFIG: cachedConfig, DB: {} }
+  );
+  assert.equal(legacyMemoryResponse.status, 400,
+    "Worker 必须明确拒绝已停用的 date/title 日记请求");
+  assert.match((await legacyMemoryResponse.json()).error, /no longer supported/);
+
   const shortTokenResponse = await worker.fetch(
     new Request("https://api.flitfancy.com/admin/toggle", {
       method: "POST", body: JSON.stringify({ chat_enabled: false }),
