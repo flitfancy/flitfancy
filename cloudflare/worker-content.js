@@ -1,0 +1,157 @@
+import {
+  adminAuthError,
+  clearFails,
+  clientIp,
+  json,
+  readJsonBody,
+} from "./worker-core.js";
+import {
+  ensureMemoriesTable,
+  runDdlOnce,
+  TABLE_ANCHORS,
+} from "./worker-storage.js";
+
+export async function handleMemories(env) {
+  if (!env.DB) {
+    return json({ ok: false, error: "日记未配置（请绑定 D1，绑定名为 DB）" }, 503);
+  }
+  await ensureMemoriesTable(env);
+  const rows = await env.DB.prepare(
+    `SELECT uid, created_ts, memory_time AS time, time_precision AS precision,
+            perspective, content
+     FROM memories ORDER BY memory_time DESC, created_ts DESC, id DESC LIMIT 200`
+  ).all();
+  return json({ ok: true, rows: rows.results || [] }, 200, {
+    "Cache-Control": "no-store",
+  });
+}
+
+export async function handleAnchors(env) {
+  if (!env.DB) {
+    return json({ ok: false, error: "锚点未配置（请绑定 D1，绑定名为 DB）" }, 503);
+  }
+  await runDdlOnce(env, TABLE_ANCHORS);
+  const rows = await env.DB.prepare(
+    `SELECT uid, created_ts, anchor_time AS time, time_precision AS precision,
+            title, content
+     FROM anchors ORDER BY anchor_time DESC, id DESC LIMIT 200`
+  ).all();
+  return json({ ok: true, rows: rows.results || [] }, 200, {
+    "Cache-Control": "no-store",
+  });
+}
+
+// 管理写入端点公共前置：鉴权 -> D1 就绪 -> 读体 -> uid 校验。
+async function adminBody(request, env, resourceLabel) {
+  const authError = await adminAuthError(request, env);
+  if (authError) return { error: authError };
+  if (!env.DB) {
+    return {
+      error: json({ ok: false, error: resourceLabel + "未配置（请绑定 D1，绑定名为 DB）" }, 503),
+    };
+  }
+  const parsed = await readJsonBody(request);
+  if (parsed.error) return { error: parsed.error };
+  const body = parsed.body;
+  const uid = String(body.uid || "").trim();
+  if (!/^[a-zA-Z0-9_-]{16,80}$/.test(uid)) {
+    return { error: json({ ok: false, error: "invalid uid" }, 400) };
+  }
+  return { body, uid };
+}
+
+export async function handleAnchorCreate(request, env) {
+  const pre = await adminBody(request, env, "锚点");
+  if (pre.error) return pre.error;
+  const body = pre.body;
+  const uid = pre.uid;
+  const title = String(body.title || "").trim().slice(0, 120);
+  const content = String(body.content || "").trim().slice(0, 4000);
+  let anchorTime = String(body.time || "").trim();
+  const timePrecision = body.precision === "date" ? "date" : "second";
+  if (!anchorTime) anchorTime = new Date().toISOString();
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})?$/.test(anchorTime)) {
+    return json({ ok: false, error: "time must include seconds" }, 400);
+  }
+  if (!/(?:Z|[+-]\d{2}:\d{2})$/.test(anchorTime)) anchorTime += "+08:00";
+  if (!title || !content) {
+    return json({ ok: false, error: "title and content required" }, 400);
+  }
+  const createdDate = new Date(body.created_at || "");
+  const createdTs = Number.isNaN(createdDate.getTime())
+    ? Math.floor(Date.now() / 1000)
+    : Math.floor(createdDate.getTime() / 1000);
+  await runDdlOnce(env, TABLE_ANCHORS);
+  await env.DB.prepare(
+    `INSERT INTO anchors(
+       uid, created_ts, anchor_time, time_precision, title, content
+     ) VALUES(?,?,?,?,?,?)
+     ON CONFLICT(uid) DO UPDATE SET
+       anchor_time = excluded.anchor_time,
+       time_precision = excluded.time_precision,
+       title = excluded.title,
+       content = excluded.content`
+  )
+    .bind(uid, createdTs, anchorTime, timePrecision, title, content)
+    .run();
+  await clearFails(env, clientIp(request));
+  return json({ ok: true, uid });
+}
+
+export async function handleMemoryCreate(request, env) {
+  const pre = await adminBody(request, env, "日记");
+  if (pre.error) return pre.error;
+  const body = pre.body;
+  const uid = pre.uid;
+  if (Object.prototype.hasOwnProperty.call(body, "date") ||
+      Object.prototype.hasOwnProperty.call(body, "title")) {
+    return json({ ok: false, error: "date/title are no longer supported; use time/content" }, 400);
+  }
+  const perspective = String(body.perspective || "").trim();
+  const source = String(body.source || "manual").trim();
+  const content = String(body.content || "").trim();
+  let memoryTime = String(body.time || "").trim();
+  const timePrecision = body.precision === "date" ? "date" : "second";
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})?$/.test(memoryTime)) {
+    return json({ ok: false, error: "time must include seconds" }, 400);
+  }
+  if (!/(?:Z|[+-]\d{2}:\d{2})$/.test(memoryTime)) memoryTime += "+08:00";
+  const memoryInstant = new Date(memoryTime);
+  if (Number.isNaN(memoryInstant.getTime())) {
+    return json({ ok: false, error: "invalid time" }, 400);
+  }
+  if (perspective !== "me" && perspective !== "her") {
+    return json({ ok: false, error: "invalid perspective" }, 400);
+  }
+  if (source !== "manual" && source !== "firefly") {
+    return json({ ok: false, error: "invalid source" }, 400);
+  }
+  if (!content || content.length > 4000) {
+    return json({ ok: false, error: "invalid content" }, 400);
+  }
+  const createdDate = new Date(body.created_at || "");
+  const createdTs = Number.isNaN(createdDate.getTime())
+    ? Math.floor(Date.now() / 1000)
+    : Math.floor(createdDate.getTime() / 1000);
+  await ensureMemoriesTable(env);
+  await env.DB.prepare(
+    `INSERT INTO memories(
+       uid, created_ts, memory_time, time_precision, memory_date,
+       perspective, source, title, content
+     ) VALUES(?,?,?,?,?,?,?,?,?)
+     ON CONFLICT(uid) DO UPDATE SET
+       created_ts = excluded.created_ts,
+       memory_time = excluded.memory_time,
+       time_precision = excluded.time_precision,
+       memory_date = excluded.memory_date,
+       perspective = excluded.perspective,
+       content = excluded.content`
+  )
+    .bind(
+      uid, createdTs, memoryTime, timePrecision, memoryTime.slice(0, 10),
+      perspective, source, "", content
+    )
+    .run();
+  await clearFails(env, clientIp(request));
+  return json({ ok: true, uid });
+}

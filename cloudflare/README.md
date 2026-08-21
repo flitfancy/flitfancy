@@ -28,6 +28,10 @@ pnpm run check
 - Non-production deploy command：`pnpm run preview`
 - Include paths：`cloudflare/*`、`tests/worker-fail-closed.test.mjs`
 
+`worker.js` 只负责入口与路由；安全/HTTP、D1 迁移、访问统计、内容、传感器、
+配置缓存和 AI 转发分别位于同目录的 `worker-*.js` 模块中。不要绕过
+`worker-core.js` 直接在领域模块里另写鉴权或 CORS 规则。
+
 注意：`package.json` 声明了 `packageManager: pnpm@11.19.0`，请确认 Cloudflare
 后台的 Install/Build/Deploy 命令与上面一致（全部用 pnpm），避免 npm 与 pnpm 混用。
 

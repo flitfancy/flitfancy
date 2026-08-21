@@ -1,13 +1,10 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 
-const source = fs.readFileSync(new URL("../cloudflare/worker.js", import.meta.url), "utf8");
 const reflectionsContract = JSON.parse(fs.readFileSync(
   new URL("./contracts/reflections.json", import.meta.url), "utf8"
 ));
-const workerModule = await import(
-  "data:text/javascript;base64," + Buffer.from(source).toString("base64")
-);
+const workerModule = await import(new URL("../cloudflare/worker.js", import.meta.url));
 const worker = workerModule.default;
 const consoleSource = fs.readFileSync(
   new URL("../docs/assets/console.js", import.meta.url), "utf8"

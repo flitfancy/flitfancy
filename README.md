@@ -211,9 +211,16 @@ site/
 │   ├── smoke_test.py     自包含冒烟测试（隔离临时库 + 独立端口，已接入 pnpm check）
 │   └── data/             本地数据（gitignore）
 ├── cloudflare/           ← Cloudflare Worker（api.flitfancy.com）
-│   ├── worker.js         Worker 主体
+│   ├── worker.js         Worker 路由入口
+│   ├── worker-core.js    HTTP、CORS、鉴权与限流公共边界
+│   ├── worker-storage.js D1 建表与迁移记忆化
+│   ├── worker-visits.js  访问上报与统计
+│   ├── worker-content.js 日记与锚点
+│   ├── worker-sensors.js 传感器快照与历史
+│   ├── worker-config.js  公网配置与随笔缓存
+│   ├── worker-chat.js    AI 对话转发
 │   ├── wrangler.jsonc    Worker 配置（KV/D1 绑定）
-│   └── package.json      pnpm run check:all = stylelint + 20 个 JS 语法检查 + 14 个单测 + 冒烟 + dry-run
+│   └── package.json      pnpm run check:all = 语法/stylelint + 单测 + 冒烟 + dry-run
 ├── tests/                前端单测（vm 直接加载真实脚本，不是复制逻辑）
 ├── scripts/              Windows 脚本：start_flitfancy.bat/.ps1（服务启动，协议白名单入口）、
 │                         install_flitfancy_protocol.ps1（注册随机协议）、
