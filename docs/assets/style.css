@@ -1252,9 +1252,9 @@ body.console-page .section {
   font-size: var(--fs-meta);
   min-width: 560px;
 }
-.visits-col-time { width: 116px; }
+.visits-col-time { width: clamp(132px, 19%, 150px); }
 .visits-col-ip { width: clamp(15ch, 22%, 24ch); }
-.visits-col-device { width: 100px; }
+.visits-col-device { width: clamp(112px, 15%, 132px); }
 
 .visits-table td.visit-ip {
   vertical-align: top;

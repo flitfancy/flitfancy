@@ -32,9 +32,12 @@ assert.match(html, /<colgroup>[\s\S]*class="visits-col-time"[\s\S]*class="visits
 const ipColumnRule = ruleBody(".visits-col-ip");
 assert.match(ipColumnRule, /width:\s*clamp\(15ch,\s*22%,\s*24ch\)/,
   "IP 列应从完整 IPv4 宽度起，在有余量时适度扩张");
+const timeColumnRule = ruleBody(".visits-col-time");
+assert.match(timeColumnRule, /width:\s*clamp\(132px,\s*19%,\s*150px\)/,
+  "时间列必须计入单元格内边距并随可用空间适度扩张");
 const deviceColumnRule = ruleBody(".visits-col-device");
-assert.match(deviceColumnRule, /width:\s*100px/,
-  "设备列必须预留稳定空间，不能被前面的内容推出视口");
+assert.match(deviceColumnRule, /width:\s*clamp\(112px,\s*15%,\s*132px\)/,
+  "设备列必须完整容纳常见分辨率并随可用空间适度扩张");
 
 const contentRule = ruleBody(".visit-ip-content");
 assert.match(contentRule, /display:\s*block/);
