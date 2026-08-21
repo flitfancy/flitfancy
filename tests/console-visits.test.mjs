@@ -106,6 +106,12 @@ assert.equal(elements['[data-role="visits-list"]'].children.length, 3);
 assert.equal(elements['[data-role="visits-empty"]'].hidden, true);
 assert.equal(elements['[data-role="visits-status"]'].textContent, "共 3 条记录");
 assert.equal(
+  elements['[data-role="visits-list"]'].children[0].children[1]
+    .querySelector(".visit-ip-value").textContent,
+  "A",
+  "IP 地址必须使用独立语义元素，才能单独限制长 IPv6 的宽度"
+);
+assert.equal(
   elements['[data-role="visits-list"]'].children[0].children[3].textContent,
   "search.example"
 );
@@ -115,11 +121,16 @@ visits.toggleGrouping(toggle);
 assert.equal(toggle.textContent, "展开全部");
 assert.equal(elements['[data-role="visits-list"]'].children.length, 2);
 const collapsed = elements['[data-role="visits-list"]'].children[0];
-assert.match(collapsed.querySelector(".visit-ip").textContent, /共 2 次 ▸$/);
+assert.equal(collapsed.querySelector(".visit-ip").querySelector(".visit-ip-value").textContent, "A");
+assert.match(
+  collapsed.querySelector(".visit-ip").querySelector(".visit-ip-meta").textContent,
+  /共 2 次 ▸$/
+);
 collapsed.click();
 assert.equal(elements['[data-role="visits-list"]'].children.length, 3);
 assert.match(
-  elements['[data-role="visits-list"]'].children[0].querySelector(".visit-ip").textContent,
+  elements['[data-role="visits-list"]'].children[0]
+    .querySelector(".visit-ip").querySelector(".visit-ip-meta").textContent,
   /共 2 次 ▾$/
 );
 

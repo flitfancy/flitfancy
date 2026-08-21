@@ -25,6 +25,19 @@
     return groups;
   }
 
+  function renderIpCell(cell, address, metaText) {
+    const value = document.createElement("span");
+    value.className = "visit-ip-value";
+    value.textContent = address || "—";
+    cell.replaceChildren(value);
+    if (metaText) {
+      const meta = document.createElement("span");
+      meta.className = "visit-ip-meta";
+      meta.textContent = metaText;
+      cell.appendChild(meta);
+    }
+  }
+
   function create(options) {
     const opts = options || {};
     const query = opts.query;
@@ -51,7 +64,7 @@
 
       const tdIp = document.createElement("td");
       tdIp.className = "visit-ip";
-      tdIp.textContent = row.ip || "—";
+      renderIpCell(tdIp, row.ip || "—");
 
       const tdPage = document.createElement("td");
       tdPage.textContent = row.page || "/";
@@ -113,7 +126,10 @@
         const head = buildVisitRow(group.rows[0]);
         head.classList.add("visit-collapsed-row");
         if (expanded[group.ip]) {
-          head.querySelector(".visit-ip").textContent = group.ip + " · 共 " + group.rows.length + " 次 ▾";
+          renderIpCell(
+            head.querySelector(".visit-ip"), group.ip,
+            "共 " + group.rows.length + " 次 ▾"
+          );
           head.title = "点击折叠该 IP 的全部访问记录";
           head.addEventListener("click", function () {
             expanded[group.ip] = false;
@@ -126,7 +142,10 @@
           return;
         }
 
-        head.querySelector(".visit-ip").textContent = group.ip + " · 共 " + group.rows.length + " 次 ▸";
+        renderIpCell(
+          head.querySelector(".visit-ip"), group.ip,
+          "共 " + group.rows.length + " 次 ▸"
+        );
         head.title = "点击展开该 IP 的全部访问记录";
         head.addEventListener("click", function () {
           expanded[group.ip] = true;

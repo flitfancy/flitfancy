@@ -1257,9 +1257,22 @@ body.console-page .section {
   text-overflow: ellipsis;   /* 仅真放不下时截断 */
 }
 .visits-table td.visit-ip {
-  /* 侧边管理面板收窄时 IP 保持完整，由外层横向滚动承接宽度。 */
-  white-space: nowrap;
+  vertical-align: top;
+}
+.visit-ip-value {
+  /* IPv4 按内容占宽；IPv6 只在约 24 字符后换行，不挤压其余列。 */
+  display: inline-block;
+  inline-size: max-content;
+  max-inline-size: 24ch;
+  white-space: normal;
+  overflow-wrap: anywhere;
   word-break: normal;
+}
+.visit-ip-meta {
+  display: block;
+  margin-top: 2px;
+  white-space: nowrap;
+  font-size: var(--fs-fine);
 }
 
 .visits-table th,
