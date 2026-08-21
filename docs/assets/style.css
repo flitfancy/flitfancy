@@ -1257,8 +1257,9 @@ body.console-page .section {
   text-overflow: ellipsis;   /* 仅真放不下时截断 */
 }
 .visits-table td.visit-ip {
-  white-space: normal;        /* 长 IPv6 与"· 共 N 次"汇总文字自然折行 */
-  word-break: break-all;
+  /* 侧边管理面板收窄时 IP 保持完整，由外层横向滚动承接宽度。 */
+  white-space: nowrap;
+  word-break: normal;
 }
 
 .visits-table th,
@@ -1298,8 +1299,6 @@ body.console-page .section {
 }
 .visits-table tr.visit-collapsed-row td.visit-ip {
   color: var(--amber);
-  white-space: normal;
-  word-break: break-all;
 }
 
 /* 资源页：三大分区（FIREFLYS / SKYWORKS / FlitFancy）三竖排 */
