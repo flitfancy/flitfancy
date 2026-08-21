@@ -200,7 +200,14 @@ site/
 │   ├── CNAME             自定义域名（必须留在发布根）
 │   └── .nojekyll
 ├── backend/              ← 本地服务（不发布）
-│   ├── server.py         控制台服务（API + 静态托管 + 公网同步）
+│   ├── server.py         控制台服务入口、运行配置与领域编排
+│   ├── flitfancy_core.py 通用时间、配置、模型地址与文本归一
+│   ├── flitfancy_auth.py 管理员密码、失败锁定与会话令牌
+│   ├── flitfancy_sensors.py 传感器 CSV/JSON 解析与公开序列化
+│   ├── flitfancy_storage.py SQLite 迁移、历史聚合与保留策略
+│   ├── flitfancy_sync.py Worker 请求与最新快照同步队列
+│   ├── flitfancy_http.py HTTP 路由、安全边界与显式领域依赖
+│   ├── module_test.py    上述拆分模块的快速单元测试
 │   ├── smoke_test.py     自包含冒烟测试（隔离临时库 + 独立端口，已接入 pnpm check）
 │   └── data/             本地数据（gitignore）
 ├── cloudflare/           ← Cloudflare Worker（api.flitfancy.com）
@@ -240,6 +247,10 @@ site/
   传感器卡片、24 小时图表、AI 对话、管理面板、服务按钮和访问统计分别集中在
   `console-sensors.js`、`console-overview.js`、`console-chat.js`、
   `console-admin.js`、`console-services.js` 与 `console-visits.js`。
+- **后端职责拆分**：`server.py` 只保留运行配置、领域编排与服务启动；认证、
+  传感器归一、SQLite、Worker 同步和 HTTP 边界分别集中在 `flitfancy_auth.py`、
+  `flitfancy_sensors.py`、`flitfancy_storage.py`、`flitfancy_sync.py` 与
+  `flitfancy_http.py`。HTTP Handler 只能通过 `HttpDependencies` 使用显式注入能力。
 - **日记结构单轨**：前端、后端与 Worker 统一使用 `time/precision/content`
   等现行字段；写入请求出现已停用的 `date/title` 会明确返回 400，避免静默丢字段。
   跨运行时的随笔归一规则共用 `tests/contracts` 测试数据，防止 Python 与 Worker
