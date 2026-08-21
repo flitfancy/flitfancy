@@ -38,6 +38,11 @@ assert.match(timeColumnRule, /width:\s*clamp\(132px,\s*19%,\s*150px\)/,
 const deviceColumnRule = ruleBody(".visits-col-device");
 assert.match(deviceColumnRule, /width:\s*clamp\(112px,\s*15%,\s*132px\)/,
   "设备列必须完整容纳常见分辨率并随可用空间适度扩张");
+const pageColumnRule = ruleBody(".visits-col-page");
+assert.match(pageColumnRule, /width:\s*clamp\(72px,\s*12%,\s*96px\)/,
+  "较短的页面列应限制宽度，让来源列独占剩余空间");
+assert.doesNotMatch(css, /\.visits-col-ref\s*\{[^}]*width\s*:/,
+  "来源列必须保持为唯一未指定宽度的列，以接收表格剩余空间");
 
 const contentRule = ruleBody(".visit-ip-content");
 assert.match(contentRule, /display:\s*block/);

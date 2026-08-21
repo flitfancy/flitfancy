@@ -1254,6 +1254,7 @@ body.console-page .section {
 }
 .visits-col-time { width: clamp(132px, 19%, 150px); }
 .visits-col-ip { width: clamp(15ch, 22%, 24ch); }
+.visits-col-page { width: clamp(72px, 12%, 96px); }
 .visits-col-device { width: clamp(112px, 15%, 132px); }
 
 .visits-table td.visit-ip {
