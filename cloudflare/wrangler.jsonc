@@ -1,0 +1,63 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "flitfancy",
+  "main": "worker.js",
+  "compatibility_date": "2026-08-08",
+  "account_id": "99007f44dc64030aa39ddba200194c89",
+  "workers_dev": true,
+  "routes": [
+    {
+      "pattern": "api.flitfancy.com",
+      "custom_domain": true
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "CONFIG",
+      "id": "bf1f250106124b81bb566490714527d0"
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "flitfancy-visits",
+      "database_id": "3f1229dd-2fe7-4e05-b35f-3a027afd2ade"
+    }
+  ],
+  "ratelimits": [
+    {
+      "name": "ADMIN_FAILED_AUTH_LIMITER",
+      "namespace_id": "1001",
+      "simple": {
+        "limit": 5,
+        "period": 60
+      }
+    },
+    {
+      "name": "CHAT_RATE_LIMITER",
+      "namespace_id": "1002",
+      "simple": {
+        "limit": 15,
+        "period": 60
+      }
+    },
+    {
+      "name": "TRACK_RATE_LIMITER",
+      "namespace_id": "1003",
+      "simple": {
+        "limit": 120,
+        "period": 60
+      }
+    }
+  ],
+  "secrets": {
+    "required": [
+      "ADMIN_TOKEN",
+      "AI_API_KEY"
+    ]
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  }
+}

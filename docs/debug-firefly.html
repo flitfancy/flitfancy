@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex">
+  <title>萤火虫调试台 — 云萤 · FlitFancy</title>
+  <link rel="stylesheet" href="assets/style.css?v=124">
+  <style>
+    #dbg {
+      position: fixed; top: 8px; left: 8px; z-index: 9999;
+      background: rgba(4, 8, 16, 0.82); color: #9fdcff;
+      font: 12px/1.7 Consolas, "Courier New", monospace;
+      padding: 10px 14px; border: 1px solid rgba(63, 208, 232, 0.45);
+      border-radius: 8px; white-space: pre; pointer-events: none;
+    }
+    #dbglog {
+      position: fixed; top: 8px; right: 8px; z-index: 9999;
+      background: rgba(4, 8, 16, 0.82); color: #ffd9a0;
+      font: 12px/1.7 Consolas, monospace; padding: 10px 14px;
+      border: 1px solid rgba(245, 184, 75, 0.45); border-radius: 8px;
+      white-space: pre; max-width: 380px;
+    }
+    #dbg-btn {
+      position: fixed; left: 10px; bottom: 10px; z-index: 9999;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="sky" aria-hidden="true"></canvas>
+  <div id="dbg">正在等待引擎…</div>
+  <div id="dbglog">事件日志（光标圈内萤火虫数量的变化）</div>
+  <button id="dbg-btn" class="btn">触发萤火爆发</button>
+
+  <script src="assets/firefly.js?v=124"></script>
+  <script src="assets/sitefx.js?v=124"></script>
+  <script>
+  (function () {
+    var overlay = document.createElement("canvas");
+    overlay.id = "dbg-overlay";
+    overlay.style.cssText = "position:fixed;inset:0;z-index:9997;pointer-events:none;";
+    document.body.appendChild(overlay);
+    var octx = overlay.getContext("2d");
+    function resizeOverlay() {
+      overlay.style.width = innerWidth + "px";
+      overlay.style.height = innerHeight + "px";
+      overlay.width = innerWidth * devicePixelRatio;
+      overlay.height = innerHeight * devicePixelRatio;
+      octx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+    }
+    addEventListener("resize", resizeOverlay);
+    resizeOverlay();
+
+    var dbgEl = document.getElementById("dbg");
+    var logEl = document.getElementById("dbglog");
+    /* 与 firefly.js CFG 的发光/避让半径保持同值（本页自绘 overlay，
+       不共享其内部 CFG；改 firefly.js 时记得同步这里）。 */
+    var GLOW = 100, REPEL = 60;
+    var lastInGlow = -1, lastInRepel = -1, logLines = [];
+    var fpsFrames = 0, fpsT0 = performance.now(), fps = 0;
+
+    function addLog(msg) {
+      logLines.push(msg);
+      if (logLines.length > 10) logLines.shift();
+      logEl.textContent = "事件日志\n" + logLines.join("\n");
+    }
+
+    function frame(now) {
+      fpsFrames++;
+      if (now - fpsT0 >= 1000) {
+        fps = Math.round(fpsFrames * 1000 / (now - fpsT0));
+        fpsFrames = 0; fpsT0 = now;
+      }
+      var d = window.__ffDebug;
+      if (!d) { requestAnimationFrame(frame); return; }
+      var env = d.env, flies = d.flies, ptr = d.pointer;
+
+      octx.clearRect(0, 0, innerWidth, innerHeight);
+      if (ptr && ptr.active) {
+        octx.beginPath(); octx.arc(ptr.x, ptr.y, GLOW, 0, Math.PI * 2);
+        octx.strokeStyle = "rgba(63, 208, 232, 0.55)"; octx.lineWidth = 1; octx.stroke();
+        octx.beginPath(); octx.arc(ptr.x, ptr.y, REPEL, 0, Math.PI * 2);
+        octx.strokeStyle = "rgba(255, 92, 92, 0.7)"; octx.stroke();
+      }
+
+      var inGlow = 0, inRepel = 0, minDist = Infinity;
+      var nowMs = performance.now();
+      for (var i = 0; i < flies.length; i++) {
+        var f = flies[i];
+        /* 每只萤火虫一个高亮圈：无论真实 alpha 多低都清晰可见 */
+        octx.beginPath(); octx.arc(f.x, f.y, Math.max(7, f.r * 6), 0, Math.PI * 2);
+        octx.strokeStyle = "rgba(245, 184, 75, 0.9)"; octx.lineWidth = 1; octx.stroke();
+        if (ptr && ptr.active) {
+          var dist = Math.hypot(f.x - ptr.x, f.y - ptr.y);
+          if (dist < minDist) minDist = dist;
+          if (dist < GLOW) {
+            inGlow++;
+            octx.beginPath(); octx.arc(f.x, f.y, Math.max(10, f.r * 8), 0, Math.PI * 2);
+            octx.strokeStyle = "rgba(127, 216, 164, 0.95)"; octx.lineWidth = 2; octx.stroke();
+          }
+          if (dist < REPEL) {
+            inRepel++;
+            octx.beginPath(); octx.arc(f.x, f.y, Math.max(13, f.r * 10), 0, Math.PI * 2);
+            octx.strokeStyle = "rgba(255, 90, 200, 0.95)"; octx.lineWidth = 2; octx.stroke();
+          }
+        }
+      }
+
+      dbgEl.textContent = [
+        "【萤火虫调试台】（Ctrl+F5 强刷）",
+        "视口: " + innerWidth + " x " + innerHeight + "   DPR: " + devicePixelRatio.toFixed(2),
+        "screen: " + screen.width + " x " + screen.height,
+        "引擎萤火虫数量: " + d.count + "    FPS: " + fps + "    dt: " + env.dt.toFixed(2),
+        "重排参考视口: " + env.refW + " x " + env.refH,
+        "光标: " + (ptr && ptr.active ? Math.round(ptr.x) + ", " + Math.round(ptr.y) : "（尚未移动）"),
+        "最近萤火虫距离: " + (isFinite(minDist) ? Math.round(minDist) + "px" : "—"),
+        "发光圈内(≤100px): " + inGlow + " 只    避让圈内(≤60px): " + inRepel + " 只",
+        "",
+        "黄圈=每只萤火虫真实位置；绿圈=已触发发光；",
+        "粉圈=已触发避让；青色/红色大圈=光标的发光/避让范围",
+      ].join("\n");
+
+      if (inGlow !== lastInGlow || inRepel !== lastInRepel) {
+        addLog(new Date().toLocaleTimeString() + "  发光圈 " + inGlow + " 只 / 避让圈 " + inRepel + " 只（最近 " + Math.round(minDist) + "px）");
+        lastInGlow = inGlow; lastInRepel = inRepel;
+      }
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+
+    document.getElementById("dbg-btn").addEventListener("click", function () {
+      if (window.flitfancy) {
+        window.flitfancy.fireflyBurst();
+        addLog("已触发萤火爆发（彩蛋路径）");
+      }
+    });
+  })();
+  </script>
+</body>
+</html>

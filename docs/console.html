@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <link rel="canonical" href="https://flitfancy.com/console.html">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='24' fill='%23f5b84b' opacity='0.22'/%3E%3Ccircle cx='32' cy='32' r='12' fill='%23f5b84b'/%3E%3Ccircle cx='32' cy='32' r='5' fill='%23ffe9c4'/%3E%3C/svg%3E">
+  <title>控制台 — 云萤 · FlitFancy</title>
+  <meta name="description" content="小流萤的控制台：实时数据与对话。">
+  <link rel="stylesheet" href="assets/style.css?v=124">
+  <script src="assets/track.js?v=124" defer></script>
+</head>
+<body class="console-page">
+  <canvas id="sky" aria-hidden="true"></canvas>
+
+  <header class="nav">
+    <a class="brand grad-clip grad-flame" href="index.html">云萤 · FlitFancy</a>
+    <nav>
+      <a href="index.html" class="grad-clip grad-cool">首页</a>
+      <a href="journal.html" class="grad-clip grad-cool">旅途</a>
+      <a href="console.html" class="active grad-clip grad-cool">控制台</a>
+      <a href="about.html" class="grad-clip grad-cool">关于</a>
+      <a href="resources.html" class="grad-clip grad-cool">资源</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="section">
+      <div class="console-title">
+        <h1 class="grad-title grad-clip grad-flame">控制台<span class="title-en">CONSOLE</span></h1>
+      </div>
+      <div class="console-status">
+        <span class="dot" data-role="dot"></span>
+        <span data-role="status">正在连接服务…</span>
+        <span class="ffs-actions" hidden>
+          <button class="btn" data-role="ffs-start" data-action="backend" title="启动本地后端 server.py（端口 2671）。首次使用需运行 scripts/install_flitfancy_protocol.ps1"><span class="grad-clip grad-cool">后端</span></button>
+          <button class="btn" data-role="ffs-start" data-action="listener" title="启动感知板监听器（端口 7777）。首次使用需运行 scripts/install_flitfancy_protocol.ps1"><span class="grad-clip grad-cool">感知板</span></button>
+          <button class="btn" data-role="ffs-start" data-action="tunnel" title="启动 Cloudflare 隧道（console.flitfancy.com）。首次使用需运行 scripts/install_flitfancy_protocol.ps1"><span class="grad-clip grad-cool">隧道</span></button>
+        </span>
+      </div>
+
+      <div class="sensor-board">
+        <div class="sensor-board-head">
+          <span>现实感知</span>
+          <span class="sensor-updated" data-role="sensor-updated">等待第一组数据</span>
+          <button class="btn btn-ghost" data-role="admin-logout" hidden>退出管理</button>
+        </div>
+        <div class="sensor-grid" data-role="sensor-grid"></div>
+      </div>
+
+      <div class="console-panel">
+        <h2>对话</h2>
+        <div class="chat-log" data-role="chat-log">
+          <p class="chat-empty" data-role="chat-empty">有求必应</p>
+        </div>
+        <div class="chat-form">
+          <div class="chat-field">
+            <textarea rows="1" placeholder="你会如何问出你的问题" data-role="chat-input"></textarea>
+            <button class="btn chat-send" data-role="chat-send" title="发送">发送</button>
+          </div>
+        </div>
+        <p class="hint status-gap" data-role="chat-status"></p>
+      </div>
+
+    </section>
+  </main>
+
+  <div class="console-panel admin-panel" data-role="admin-panel" hidden>
+    <div class="editor-grab" data-role="admin-grab" aria-hidden="true"></div>
+    <div class="admin-head">
+      <h2>管理</h2>
+      <div class="admin-head-actions">
+        <button class="btn btn-ghost" data-role="admin-mode">底部模式</button>
+        <button class="btn btn-ghost" data-role="admin-collapse">收起</button>
+      </div>
+    </div>
+    <div class="admin-grid">
+          <div>
+            <h3>模型选择</h3>
+            <select data-role="cfg-model">
+              <option value="deepseek-chat">DeepSeek Chat</option>
+              <option value="mimo-v2.5">小米 MiMo</option>
+              <option value="__custom__">自定义…</option>
+            </select>
+            <input data-role="cfg-model-custom" placeholder="输入自定义模型名" hidden>
+            <button class="btn" data-role="cfg-save">保存</button>
+            <p class="hint status-gap" data-role="cfg-status"></p>
+          </div>
+          <div>
+            <h3>AI 请求权限</h3>
+            <label class="switch-line">
+              <input type="checkbox" data-role="cfg-chat-toggle">
+              <span>允许对话请求 AI（关闭后本地与公网都停止调用）</span>
+            </label>
+            <p class="hint status-gap" data-role="chat-toggle-status"></p>
+          </div>
+          <div>
+            <h3>快捷入口（小弹窗打开）</h3>
+            <ul class="admin-links" data-role="quick-links"></ul>
+            <div class="quick-add">
+              <input data-role="ql-name" placeholder="名称">
+              <input data-role="ql-url" placeholder="https://…">
+              <button class="btn" data-role="ql-add">添加</button>
+            </div>
+            <p class="hint status-gap" data-role="ql-status"></p>
+          </div>
+
+        </div>
+
+        <div class="visits-panel">
+          <h3>访问记录</h3>
+          <div class="visits-toolbar">
+            <span class="hint" data-role="visits-status">加载中…</span>
+            <button class="btn" data-role="visits-group-toggle">折叠同 IP</button>
+            <button class="btn" data-role="visits-refresh">刷新</button>
+          </div>
+          <div class="visits-stats" data-role="visits-stats"></div>
+          <div class="visits-table-wrap">
+            <table class="visits-table">
+              <thead>
+                <tr>
+                  <th>时间</th>
+                  <th>IP</th>
+                  <th>页面</th>
+                  <th>来源</th>
+                  <th>设备</th>
+                </tr>
+              </thead>
+              <tbody data-role="visits-list"></tbody>
+            </table>
+          </div>
+          <p class="hint status-gap" data-role="visits-empty" hidden>还没有访问记录，页面被访问后会自动出现在这里。</p>
+        </div>
+  </div>
+
+  <button class="editor-expand-tab" data-role="admin-expand-tab" hidden>展开管理</button>
+
+  <footer>
+    <p class="grad-clip grad-flame"><span>云萤 · FlitFancy</span><span class="sep"> · </span><span>献给我们所热爱的一切</span></p>
+  </footer>
+
+  <div class="admin-overlay" data-role="admin-overlay" hidden>
+    <div class="admin-card">
+      <h2>管理员登录</h2>
+      <p class="hint">Who are you</p>
+      <input type="text" data-role="admin-username" placeholder="用户名" autocomplete="username">
+      <input type="password" data-role="admin-password" placeholder="管理密码" autocomplete="current-password">
+      <div class="admin-actions">
+        <button class="btn" data-role="admin-login">登录</button>
+        <button class="btn btn-ghost" data-role="admin-cancel">取消</button>
+      </div>
+      <p class="hint status-gap" data-role="admin-login-status"></p>
+    </div>
+  </div>
+
+  <div class="js-error" data-role="js-error" hidden></div>
+
+  <script src="assets/firefly.js?v=124"></script>
+  <script src="assets/sitefx.js?v=124"></script>
+  <script src="assets/sensor-state.js?v=124"></script>
+  <script src="assets/admin-core.js?v=124"></script>
+  <script src="assets/admin-panel-shell.js?v=124"></script>
+  <script src="assets/console.js?v=124"></script>
+</body>
+</html>

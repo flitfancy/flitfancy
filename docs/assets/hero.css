@@ -1,0 +1,71 @@
+/* 首页专用：大字 + 位置 + 页脚沉底 + 彩蛋词 + 双行预览。
+   层序在 style.css 顶部声明（hero.css 在其后加载）。 */
+@layer components {
+h1 {
+  font-size: var(--fs-hero);
+  width: -webkit-fit-content;
+  width: fit-content;
+  filter: drop-shadow(var(--glow-title));
+}
+
+.hero {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  /* 五字宽标题的视觉中心落在画面左侧三分线 */
+  padding: clamp(40px, 13vh, 27vh)
+    max(10.833vw, calc(33.333vw - 32.5vh), calc(33.333vw - 347.5px))
+    32px;
+  max-width: none;
+  margin: 0;
+}
+
+.glyph {
+  cursor: pointer;
+  border-radius: 8px;
+  padding: 0 2px;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: filter 0.2s;
+}
+
+.glyph:hover {
+  filter: brightness(1.25) drop-shadow(0 0 8px rgba(255, 90, 0, 0.35));
+}
+
+.glyph.lit {
+  filter: brightness(1.4) drop-shadow(0 0 12px rgba(255, 90, 0, 0.55));
+}
+
+/* 锁定“大标题:副标题”比例：副标题 = 标题 ÷ 7，随视口同步缩放 */
+.sub {
+  font-size: var(--fs-hero-sub);
+  margin-top: clamp(12px, 2.5vh, 26px);
+}
+
+.burst-preview {
+  margin-top: 30px;
+  font-size: var(--fs-meta);
+  color: var(--muted);
+  letter-spacing: 0.06em;
+  opacity: 0.75;
+  line-height: 1.9;
+}
+
+@media (max-width: 640px) {
+  h1 {
+    font-size: var(--fs-hero-mobile);
+  }
+  .hero {
+    padding: 14vh 9vw 20px;
+  }
+  .sub {
+    font-size: var(--fs-ui);
+    margin-top: 16px;
+  }
+  .burst-preview {
+    font-size: var(--fs-caption);
+    margin-top: 14px;
+  }
+}
+}

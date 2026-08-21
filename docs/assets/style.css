@@ -1,0 +1,1832 @@
+/* @layer 层序：后声明的层优先级更高（层序 > 特异性 > 书写顺序）。
+   utilities 必胜——组件里无论怎么写都压不过工具类，历史级联事故不再可能。 */
+@layer tokens, base, components, utilities;
+
+/* 断点约定（桌面优先 + max-width 单方向）：
+   640px（手机）/ 760px（日记时间线单列）/ 900px（编辑表单双列）/ 1200px（三列降单列）。
+   每个组件的媒体块紧贴其基础规则之后；基础规则是桌面默认，媒体块只做降级覆盖。
+   唯一例外：.memory-editor 的 761px 是"组件级视口开关"（桌面固定面板 vs 移动流式），
+   保留 min-width 并在该组件处注明。 */
+
+@layer tokens {
+:root {
+  /* 字号体系（px 档位按 16px 根字号折算；后续调字号只改这里） */
+  --hero-cap: 139px;   /* 首页标题与副标题共用的封顶字号（÷7 比例的唯一出处） */
+  --fs-hero: clamp(40px, min(9vw, 13vh), var(--hero-cap));
+  --fs-hero-sub: clamp(14px, min(9vw, 13vh, var(--hero-cap)) / 7, 21px);
+  --fs-hero-mobile: clamp(30px, 9.5vw, 46px);
+  --fs-h1-wide: clamp(2.375rem, 7vw, 4.5rem);
+  --fs-h1: clamp(1.875rem, 5vw, 3rem);
+  --fs-h1-mobile: clamp(1.5rem, 8vw, 2.125rem);
+  --fs-head-1: clamp(1.35rem, 2.5vw, 2rem);
+  --fs-head-2: clamp(1.125rem, 1.8vw, 1.75rem);
+  --fs-text: clamp(0.9375rem, 1.4vw, 1.25rem);
+  --fs-text-sm: clamp(0.8125rem, 1.2vw, 1rem);
+  --fs-text-xs: clamp(0.75rem, 1.2vw, 0.9375rem);
+  --fs-text-xxs: clamp(0.6875rem, 1.1vw, 0.875rem);
+  --fs-sub: 1.0625rem;
+  --fs-body: clamp(16px, 1.1vw, 19px);
+  --fs-small: 0.9rem;
+  --fs-meta: 0.8125rem;
+  --fs-caption: 0.6875rem;
+  /* 语义字号（按角色命名，不再用像素档位数字；新增字号先找现成角色） */
+  --fs-h2: 1.625rem;             /* 小节标题（.section h2） */
+  --fs-brand: 1.40625rem;        /* 站名与服务按钮 */
+  --fs-nav: 1.3125rem;           /* 导航链接 */
+  --fs-stat: 1.25rem;            /* 统计大数字与弹窗标题 */
+  --fs-quote: 1.1875rem;         /* 引言（关于页） */
+  --fs-panel-title: 1.125rem;    /* 面板标题（console-panel h2） */
+  --fs-base: 1rem;               /* 基准正文（表单/表格/代码数字） */
+  --fs-compact: 0.9375rem;       /* 略小于正文的紧凑文字（移动端导航/页脚） */
+  --fs-ui: 0.875rem;             /* 按钮/标签等界面文字 */
+  --fs-fine: 0.75rem;            /* 微小标注/徽章/卡片小字 */
+  /* 字体与光晕令牌（源头约束：全站展示字体/文字光晕只此一处定义） */
+  --font-display: Georgia, "Noto Serif SC", "Songti SC", serif;
+  --glow-title: 0 0 20px rgba(255, 90, 0, 0.45);
+  --glow-flame: 0 0 10px rgba(255, 90, 0, 0.45);
+  --glow-flame-soft: 0 0 10px rgba(255, 90, 0, 0.35);
+  --glow-brand: 0 0 12px rgba(255, 90, 0, 0.4);
+  --glow-cool: 0 0 8px rgba(63, 208, 232, 0.3);
+  /* 桌面端"旅途整理/控制台管理"右侧面板：初始宽约屏宽 1/9，
+     左缘可拖拽调宽（JS 会把新宽度写回此变量，正文让位自动联动）。 */
+  --editor-panel-w: clamp(280px, 11vw, 440px);
+  /* 面板底边 = 页脚上沿（JS ResizeObserver 实测写入，84px 为兜底） */
+  --footer-h: 84px;
+  --bg: #0b0e17;
+  --card: rgba(255, 255, 255, 0.035);
+  --border: rgba(255, 255, 255, 0.09);
+  --text: #c9d1e2;
+  --muted: #8b94a8;
+  --amber: #f5b84b;
+  --amber-soft: #ffd9a0;
+  --pink: #e8a0b4;
+  --green: #7fd8a4;
+  --cyan: #3fd0e8;
+  --flame-gradient: linear-gradient(105deg, #ff2e00 0%, #ff5a00 14%, #f3b652 28%, #3fd0e8 52%, #a8ecff 74%, #ffffff 100%);
+  --small-gradient: linear-gradient(105deg, #ffd166 0%, #3fd0e8 100%);
+}
+}
+
+@layer utilities {
+/* 渐变文字工具类（源头约束）：clip 三件套只此一处，全站渐变文字一律
+   用 HTML 类组合：<el class="grad-clip grad-flame">（火焰）或
+   <el class="grad-clip grad-cool">（金青）。background-image 是长写、
+   不会被简写重置，类的先后顺序无关紧要——"彩色方块"这类 clip 失效
+   事故在结构上不再可能发生。 */
+.grad-clip {
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: none;
+}
+.grad-flame { background-image: var(--flame-gradient); }
+.grad-cool { background-image: var(--small-gradient); }
+
+/* 渐变状态变体：当前页导航、服务在线按钮的火焰态。
+   必须与 .grad-cool 同在**顶层** utilities 层——嵌套层（如 base.utilities）
+   优先级低于顶层工具层，会被金青底色压住，二阶段火焰永远不亮。 */
+.nav nav a.active { background-image: var(--flame-gradient); }
+.ffs-actions .btn.alive span { background-image: var(--flame-gradient); }
+
+/* 表单状态行的统一间距（替代散落的 inline style="margin-top"） */
+.status-gap { margin-top: 8px; }
+
+/* 资源页固件卡片的元信息行 */
+.mini-meta {
+  font-size: var(--fs-meta);
+  color: var(--muted);
+}
+}
+
+/* hidden 属性永远生效：!important 保留——它的对手是行内 style 属性，
+   而行内样式在所有 @layer 之上，只有 !important 能压住。 */
+@layer utilities {
+[hidden] { display: none !important; }
+}
+
+@layer base {
+* { box-sizing: border-box; }
+
+html {
+  font-size: var(--fs-body);
+  scroll-behavior: smooth;
+  scrollbar-gutter: stable;   /* 内容变高出现滚动条时视口宽度不跳（卡片不再忽窄忽宽） */
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  /* 给固定收束句留位（上下滑动时它始终贴在视口下端） */
+  padding-bottom: 74px;
+  background:
+    radial-gradient(1200px 600px at 75% -10%, rgba(245, 184, 75, 0.07), transparent 60%),
+    radial-gradient(900px 500px at 10% 10%, rgba(232, 160, 180, 0.05), transparent 55%),
+    var(--bg);
+  color: var(--text);
+  font-family: "Noto Sans SC", "Microsoft YaHei", "PingFang SC", sans-serif;
+  line-height: 1.75;
+}
+
+@keyframes pageIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+#sky {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.cursor-fx {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+}
+
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px clamp(18px, 5vw, 48px);
+  background: rgba(11, 14, 23, 0.78);
+  backdrop-filter: blur(10px);
+}
+
+.brand {
+  font-family: var(--font-display);
+  font-size: var(--fs-brand);
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  filter: drop-shadow(var(--glow-brand));
+}
+
+.nav nav { display: flex; gap: 22px; }
+
+.nav nav a {
+  text-decoration: none;
+  font-size: var(--fs-nav);
+  letter-spacing: 0.08em;
+  transition: filter 0.2s;
+}
+
+.nav nav a:hover {
+  filter: brightness(1.35) drop-shadow(0 0 8px rgba(63, 208, 232, 0.4));
+}
+
+/* 当前页：火焰渐变激活态（背景色变体在顶层 utilities 块，
+   见文件头部 grad 工具类处；此处只留光晕） */
+.nav nav a.active {
+  filter: drop-shadow(var(--glow-flame));
+}
+
+/* nav 移动端（≤640）：竖排 + 居中换行 */
+@media (max-width: 640px) {
+  .nav {
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 12px;
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+  .nav .brand { font-size: var(--fs-sub); }
+  .nav nav {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px 12px;
+  }
+  .nav nav a {
+    font-size: var(--fs-compact);
+    letter-spacing: 0.05em;
+    padding: 6px 3px;
+  }
+}
+
+main {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.kicker {
+  margin: 0 0 18px;
+  color: var(--amber);
+  font-size: var(--fs-meta);
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-h1-wide);
+  font-weight: 400;
+  line-height: 1.25;
+  color: #f0e9da;
+  text-shadow: 0 0 46px rgba(245, 184, 75, 0.18);
+}
+
+.sub {
+  margin-top: clamp(12px, 2.5vh, 26px);
+  color: var(--muted);
+  font-size: var(--fs-sub);
+}
+
+.page-hero {
+  padding: 88px clamp(22px, 7vw, 96px) 30px;
+  max-width: 1100px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.page-hero h1 { font-size: var(--fs-h1); }
+
+/* page-hero 移动端（≤640） */
+@media (max-width: 640px) {
+  .page-hero { padding: 34px 20px 12px; }
+  .page-hero h1 { font-size: var(--fs-h1-mobile); }
+  .page-hero .sub { font-size: var(--fs-compact); }
+}
+
+.reflection-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.8em;
+  max-width: 760px;
+  margin: 22px 0 0;
+  /* 颜色由 grad-clip（utilities 层）提供；组件层写 color 也压不过它。 */
+  font-family: var(--font-display);
+  line-height: 1.8;
+}
+
+
+.section {
+  max-width: 1100px;
+  width: 100%;              /* 显式占满：main 是列向 flex + margin auto 会导致
+                               fit-content 收缩，内容小时整页跟着塌（历史曲线
+                               画布固有宽度小曾触发），显式宽度根治 */
+  margin: 0 auto;
+  padding: 34px clamp(22px, 7vw, 96px) 54px;
+}
+
+.section h2 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: var(--fs-h2);
+  color: var(--amber-soft);
+  margin: 0 0 24px;
+}
+
+/* section 移动端（≤640） */
+@media (max-width: 640px) {
+  .section { padding: 22px 18px 34px; }
+}
+}
+
+@layer components {
+.badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: var(--fs-fine);
+  letter-spacing: 0.05em;
+}
+
+.badge.done { color: var(--green); background: rgba(127, 216, 164, 0.1); border: 1px solid rgba(127, 216, 164, 0.25); }
+.badge.doing { color: var(--amber); background: rgba(245, 184, 75, 0.1); border: 1px solid rgba(245, 184, 75, 0.25); }
+.badge.dream { color: var(--pink); background: rgba(232, 160, 180, 0.1); border: 1px solid rgba(232, 160, 180, 0.25); }
+
+.project {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  margin-bottom: 18px;
+}
+
+.project-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.project-head h2 { margin: 0; }
+
+.col-sub {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-sub);
+  letter-spacing: 0.14em;
+  filter: drop-shadow(var(--glow-flame-soft));
+}
+
+.project p { margin: 16px 0 10px; }
+.project ul { margin: 0; padding-left: 20px; color: var(--muted); }
+.project li { margin: 5px 0; }
+
+.mini-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 14px;
+  margin-top: 20px;
+}
+
+.mini-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px 18px 16px;
+}
+
+.mini-card h3 {
+  margin: 0 0 8px;
+  font-size: var(--fs-text);
+  font-weight: 500;
+  color: #efe6d4;
+}
+
+.mini-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-text-xs);
+  line-height: 1.7;
+}
+@media (max-width: 640px) {
+  .mini-card p { font-size: var(--fs-meta); }
+}
+
+.how {
+  margin: 4px 0 0;
+  color: var(--amber);
+  font-size: var(--fs-ui);
+  letter-spacing: 0.2em;
+}
+
+/* 旅程页视图切换（锚点 / 日记）：与"旅程"标题同行、居其右侧，略放大 */
+.page-hero-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+.journal-views {
+  display: flex;
+  gap: 10px;
+  padding-bottom: 8px;
+}
+.journal-views .btn {
+  font-size: var(--fs-base);
+  padding: 6px 16px;
+}
+.journal-views .btn.active {
+  border-color: rgba(245, 184, 75, 0.55);
+  color: var(--amber-soft);
+}
+
+/* 控制台副标题（左上角） */
+.console-title {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+/* 标题内的英文（旅途 JOURNEY / 控制台 CONSOLE / 资源 RESOURCES）：正文大小，同渐变 */
+.title-en {
+  font-size: var(--fs-body);
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  margin-left: 14px;
+}
+
+/* 锚点条目（动态锚点列表） */
+.anchor-stream {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+.anchor {
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.018);
+}
+.anchor time {
+  color: var(--muted);
+  font-size: var(--fs-fine);
+}
+.anchor h3 {
+  margin: 4px 0 6px;
+  font-size: var(--fs-sub);
+  color: var(--amber-soft);
+}
+.anchor p {
+  color: var(--text);
+  margin: 0;
+  font-size: var(--fs-small);
+  line-height: 1.7;
+}
+
+/* 日记管理三区标签 */
+.editor-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 14px 0;
+}
+.editor-tabs .btn.active {
+  border-color: rgba(245, 184, 75, 0.55);
+  color: var(--amber-soft);
+}
+
+
+
+/* 锚点视图（原项目页内容，已并入日记页）：放宽三栏 */
+.journal-view[data-view-pane="anchors"] {
+  max-width: 1560px;
+  padding-top: 18px;
+}
+.project-scope {
+  width: 100%;
+}
+.project-scope .project {
+  padding: 12px 16px;
+  margin-bottom: 6px;
+}
+
+.project-scope .project-head h2 {
+  font-size: var(--fs-head-2);
+}
+
+.project-scope .project p {
+  margin: 6px 0 4px;
+}
+
+.project-scope .how {
+  margin: 0 0 1px;
+  font-size: var(--fs-caption);
+  letter-spacing: 0.18em;
+}
+
+.project-scope .mini-card {
+  padding: 10px 13px 9px;
+}
+
+.project-scope .mini-card p {
+  font-size: var(--fs-text-xxs);
+  line-height: 1.6;
+}
+}
+
+@layer utilities {
+/* 三列布局：Firefly | 天工 | 流明。
+   纯工具类，不挂 .project-scope 前缀——resources 页固件卡也直接用
+   （此前 resources.html 裸用 .tri-grid 拿不到样式，三卡竖排）。 */
+.tri-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  max-width: none;
+  width: 100%;
+  margin: 0 auto;
+  padding: 4px 6px 10px;
+}
+}
+
+@layer components {
+.project-scope .tri-col {
+  margin-bottom: 0;
+}
+
+.project-scope .tri-col .mini-grid {
+  grid-template-columns: 1fr;
+  margin-top: 10px;
+}
+}
+
+@layer utilities {
+@media (max-width: 1200px) {
+  .tri-grid {
+    grid-template-columns: 1fr;
+  }
+}
+}
+
+@layer components {
+.entry {
+  padding: 10px 0 38px;
+  border-left: 1px solid rgba(245, 184, 75, 0.25);
+  padding-left: 28px;
+  position: relative;
+}
+
+.entry::before {
+  content: "";
+  position: absolute;
+  left: -5px;
+  top: 20px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--amber);
+  box-shadow: 0 0 14px rgba(245, 184, 75, 0.7);
+}
+
+.entry time { color: var(--amber); font-size: var(--fs-text-sm); letter-spacing: 0.06em; }
+.entry p { margin: 0; color: var(--muted); font-size: var(--fs-text); }
+
+.prose h2 { margin-top: 34px; }
+.prose p { color: var(--muted); max-width: 720px; }
+.prose strong { color: var(--amber-soft); font-weight: 500; }
+@media (max-width: 640px) {
+  .prose p { font-size: var(--fs-base); }
+}
+
+.essay p { margin: 0 0 1.2em; }
+.signature { margin-top: 2em; color: var(--amber-soft); letter-spacing: 0.08em; }
+
+.quote {
+  margin-top: 34px;
+  padding: 20px 24px;
+  border-left: 2px solid var(--amber);
+  color: var(--amber-soft);   /* 组件层已压过 base，无需 !important */
+  font-family: var(--font-display);
+  font-size: var(--fs-quote);
+}
+
+.back-link {
+  color: var(--amber-soft);
+  text-decoration: none;
+  border-bottom: 1px dashed rgba(245, 184, 75, 0.4);
+}
+
+.back-link:hover {
+  color: var(--amber);
+}
+
+main {
+  animation: pageIn 0.25s ease;
+}
+
+/* 收束句固定贴底：上下滑动不随内容走 */
+/* 旅程页页脚两行（随笔 + 收束句），底部留白相应加高 */
+body.journal-page {
+  padding-bottom: 104px;
+}
+
+footer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+  padding: 10px 24px 14px;
+  text-align: center;
+  color: var(--muted);
+  font-size: var(--fs-base);
+  letter-spacing: 0.08em;
+  background: linear-gradient(180deg, rgba(11, 14, 23, 0.72), rgba(11, 14, 23, 0.94));
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* 页尾标题：随笔句与收束句同字号/字体/渐变，随笔出现时替换收束句。
+   排版规则：盒子贴合文字（渐变才完整），超长自然换行，不隐藏内容；
+   长度由源头（后端 120 字截断）保证，前端不做补丁式裁剪。 */
+footer .reflection-line {
+  display: block;
+  max-width: min(90vw, 760px);
+  margin: 0 auto;
+  line-height: 1.6;
+}
+
+footer p {
+  width: -webkit-fit-content;
+  width: fit-content;
+  margin: 0 auto;
+}
+
+/* footer 移动端（≤640）：紧凑内边距 + 双行竖排（收束句断行、分隔符隐藏） */
+@media (max-width: 640px) {
+  footer {
+    padding: 14px 16px 18px;
+    font-size: var(--fs-compact);
+    padding-bottom: max(18px, env(safe-area-inset-bottom));
+  }
+  footer p {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+  footer p .sep { display: none; }
+}
+
+
+
+}
+
+@layer utilities {
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+}
+
+@layer components {
+/* console */
+body.console-page .section {
+  padding-top: 54px;
+  max-width: min(1320px, 94vw);
+}
+
+.hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-meta);
+  line-height: 1.6;
+}
+
+.console-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 26px;
+  color: var(--muted);
+  font-size: var(--fs-ui);
+}
+@media (max-width: 640px) {
+  .console-status { flex-wrap: wrap; row-gap: 6px; }
+}
+
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--amber);
+  box-shadow: 0 0 12px rgba(245, 184, 75, 0.8);
+}
+.dot.offline {
+  background: var(--muted);
+  box-shadow: none;
+  animation: breathe 2.4s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+.sensor-board {
+  margin: 0 0 22px;
+  padding: 18px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+.sensor-board-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  margin-bottom: 14px;
+  font-family: var(--font-display);
+  font-size: var(--fs-base);
+  color: var(--amber-soft);
+  letter-spacing: 0.04em;
+  text-shadow: 0 0 18px rgba(245, 184, 75, 0.15);
+}
+
+.sensor-updated {
+  color: var(--muted);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: var(--fs-fine);
+  letter-spacing: 0;
+  text-shadow: none;
+  max-width: 62%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sensor-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  /* 数据感知区域：第一帧就锁定最终高度，六格与历史曲线共用同一盒子，
+     切换零跳动。含每格固定的评价行，因此整体比纯数值更高。 */
+  min-height: 320px;
+  height: 320px;   /* 与历史曲线严格等高；移动端由下方 ≤640 块改回 auto */
+  align-content: start;
+}
+
+.sensor-card {
+  min-width: 0;
+  padding: 13px 14px 12px;
+  border: 1px solid rgba(245, 184, 75, 0.16);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.018);
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  display: flex;
+  flex-direction: column;
+}
+
+.sensor-card:hover {
+  border-color: rgba(245, 184, 75, 0.45);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.sensor-overview {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+  height: 320px;
+  display: flex;
+  flex-direction: column;
+}
+
+.overview-head {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  color: var(--amber-soft);
+  font-size: var(--fs-ui);
+  letter-spacing: 0.04em;
+}
+
+.sensor-overview canvas {
+  display: block;
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.sensor-overview .hint {
+  margin-top: 8px;
+}
+
+/* 传感器区移动端（≤640）：单列 + 紧凑内边距 + 高度随内容 */
+@media (max-width: 640px) {
+  .sensor-grid { grid-template-columns: 1fr; height: auto; }
+  .sensor-board { padding: 14px; }
+  .sensor-board-head { margin-bottom: 11px; }
+}
+
+/* FFS 服务按钮两阶段（控制台的两种渐变，与导航"未激活/激活"语言一致）：
+   一阶段 = --small-gradient（金→青，未检测到/未知）
+   二阶段 = --flame-gradient（火焰签名渐变，心跳在线）
+   关键限制：渐变必须挂在包裹文字的内联 span 上——挂在按钮本体会被
+   padding 摊宽，文字只显示渐变的中间一段，火焰的头尾红色就丢了（不燃）。
+   外观：透明底、无边框（导航链接式的纯渐变文字），放大一档的醒目状态钮。 */
+.ffs-actions {
+  display: flex;
+  margin-left: auto;
+  gap: 8px;
+  flex-wrap: nowrap;
+  align-items: baseline;
+}
+
+.ffs-actions .btn {
+  background: transparent;
+  border-color: transparent;
+  padding: 4px 12px;
+  font-size: var(--fs-brand);
+  letter-spacing: 0.1em;
+}
+
+.ffs-actions .btn:hover {
+  background: transparent;
+  border-color: transparent;
+}
+
+.ffs-actions .btn span {
+  filter: drop-shadow(var(--glow-cool));
+  transition: filter 0.3s;
+}
+
+.ffs-actions .btn:hover span {
+  filter: brightness(1.25) drop-shadow(0 0 10px rgba(63, 208, 232, 0.45));
+}
+
+/* 服务在线时的二阶段火焰（背景色变体在顶层 utilities 块；此处只留光晕） */
+.ffs-actions .btn.alive span {
+  filter: drop-shadow(var(--glow-flame));
+}
+
+.ffs-actions .btn.alive:hover span {
+  filter: brightness(1.2) drop-shadow(0 0 12px rgba(255, 90, 0, 0.55));
+}
+
+/* FFS 按钮移动端（≤640）：占满一行、左对齐 */
+@media (max-width: 640px) {
+  .ffs-actions {
+    margin-left: 0;
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .ffs-actions .btn {
+    font-size: var(--fs-sub);
+    padding: 4px 10px;
+  }
+}
+
+/* 移动端覆盖：必须放在基础规则之后（级联顺序） */
+
+
+.sensor-card-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted);
+  font-size: var(--fs-fine);
+  min-height: 1.3em;
+}
+
+.sensor-state {
+  color: var(--amber-soft);
+  white-space: nowrap;
+}
+
+.sensor-card.is-offline .sensor-state,
+.sensor-card.is-offline .sensor-values {
+  color: var(--muted);
+}
+
+.sensor-values {
+  margin-top: 9px;
+  color: var(--amber-soft);
+  font-family: Consolas, "Cascadia Mono", "JetBrains Mono", "Courier New", monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-base);
+  min-height: 1.5em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 派生量（露点/体感/气压趋势/光谱色调/频闪/lux/UV/空气质量评价）：
+   原始值的实时推导，非直接读数；固定卡片下半区槽位（margin-top:auto 贴底） */
+.sensor-derived {
+  margin-top: auto;
+  padding-top: 8px;
+  color: var(--cyan);
+  font-size: var(--fs-caption);
+  letter-spacing: 0.06em;
+  min-height: 1.2em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 总览的模式/波段按钮行（CH2：主通道、8 波段 + F1-F8 开关，按钮即图例） */
+.overview-modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.overview-modes .btn {
+  font-size: var(--fs-fine);
+  padding: 3px 9px;
+}
+/* 波段按钮只显示 3 位波长数字：更窄更整齐 */
+.overview-modes .btn.band-btn {
+  padding: 3px 7px;
+  min-width: 40px;
+  text-align: center;
+}
+.overview-modes .btn.active {
+  border-color: rgba(245, 184, 75, 0.55);
+  color: var(--amber-soft);
+}
+.overview-modes .btn.band-btn.off,
+.overview-modes .btn.band-btn:disabled,
+.overview-modes .btn.series-btn.off,
+.overview-modes .btn.series-btn:disabled {
+  opacity: 0.32;
+  border-style: dashed;
+  cursor: default;
+}
+
+
+
+.console-panel {
+  margin-top: 22px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 20px 22px;
+}
+
+.console-panel h2 {
+  font-family: var(--font-display);
+  font-size: var(--fs-panel-title);
+  color: var(--amber-soft);
+  margin: 0 0 14px;
+  font-weight: 400;
+}
+
+/* 管理面板头部：标题 + 收起按钮同行 */
+.admin-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.admin-head h2 { margin: 0; }
+.admin-head-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.btn {
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(245, 184, 75, 0.35);
+  background: rgba(245, 184, 75, 0.08);
+  color: var(--amber-soft);
+  font-size: var(--fs-meta);
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.btn:hover { background: rgba(245, 184, 75, 0.18); border-color: rgba(245, 184, 75, 0.6); }
+@media (max-width: 640px) {
+  .btn { min-height: 40px; }
+}
+
+/* 控制台：对话 */
+.chat-log {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 2px 2px 14px;
+}
+
+.chat-empty {
+  margin: 10px 0;
+  color: var(--muted);
+  font-size: var(--fs-meta);
+  text-align: center;
+  letter-spacing: 0.08em;
+}
+
+.chat-msg {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-width: 84%;
+}
+
+.chat-msg.user { align-self: flex-end; align-items: flex-end; }
+.chat-msg.ai { align-self: flex-start; align-items: flex-start; }
+
+.chat-who {
+  font-size: var(--fs-fine);
+  color: var(--muted);
+  letter-spacing: 0.14em;
+}
+
+.chat-msg p {
+  margin: 0;
+  padding: 9px 13px;
+  border-radius: 14px;
+  font-size: var(--fs-ui);
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* 对话移动端（≤640） */
+@media (max-width: 640px) {
+  .chat-log { max-height: 55vh; }
+  .chat-msg { max-width: 92%; }
+}
+
+.chat-msg.user p {
+  background: rgba(245, 184, 75, 0.12);
+  border: 1px solid rgba(245, 184, 75, 0.28);
+  color: var(--amber-soft);
+  border-bottom-right-radius: 4px;
+}
+
+.chat-msg.ai p {
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-bottom-left-radius: 4px;
+}
+
+.chat-form {
+  margin-top: 4px;
+}
+
+.chat-form textarea {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  padding: 10px 58px 10px 12px;
+  font: inherit;
+  resize: none;
+}
+
+.chat-form textarea:focus { outline: none; border-color: rgba(245, 184, 75, 0.5); }
+
+.chat-field {
+  position: relative;
+}
+
+.chat-send {
+  position: absolute;
+  right: 6px;
+  top: 42%;
+  transform: translateY(-50%);
+  padding: 4px 12px;
+  border: none;
+  background: none;
+  border-radius: 8px;
+  font-size: var(--fs-meta);
+  color: var(--amber-soft);
+  transition: color 0.2s;
+}
+
+.chat-send:hover {
+  color: var(--amber);
+}
+
+
+
+/* 控制台：管理入口与管理层 */
+.admin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 22px;
+}
+
+.admin-grid h3 {
+  margin: 0 0 10px;
+  font-size: var(--fs-ui);
+  font-weight: 500;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+}
+
+.admin-grid input {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  padding: 9px 12px;
+  font: inherit;
+}
+
+.admin-grid input:focus {
+  outline: none;
+  border-color: rgba(245, 184, 75, 0.5);
+}
+
+.admin-grid select {
+  display: block;
+  width: 100%;
+  margin-bottom: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  padding: 9px 12px;
+  font: inherit;
+}
+
+.admin-grid select:focus {
+  outline: none;
+  border-color: rgba(245, 184, 75, 0.5);
+}
+
+.switch-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--fs-ui);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.switch-line input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--amber);
+}
+
+.quick-add {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.quick-add input {
+  flex: 1;
+  min-width: 110px;
+}
+
+.link-del {
+  margin-left: 10px;
+  background: none;
+  border: none;
+  color: var(--pink);
+  font-size: var(--fs-fine);
+  cursor: pointer;
+  padding: 0;
+}
+
+.link-del:hover { text-decoration: underline; }
+
+.admin-links {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.admin-links li {
+  margin: 8px 0;
+}
+
+.admin-links a {
+  color: var(--amber-soft);
+  text-decoration: none;
+  border-bottom: 1px dashed rgba(245, 184, 75, 0.4);
+}
+
+.admin-links a:hover {
+  color: var(--amber);
+}
+
+/* 控制台：访问记录 */
+.visits-panel {
+  margin-top: 26px;
+  padding-top: 20px;
+  border-top: 1px dashed var(--border);
+}
+
+.visits-panel h3 {
+  margin: 0 0 10px;
+  font-size: var(--fs-ui);
+  font-weight: 500;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+}
+
+.visits-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.visits-stats {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.visits-stat {
+  flex: 1 1 130px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 14px;
+}
+
+.visits-stat b {
+  display: block;
+  font-size: var(--fs-stat);
+  font-weight: 500;
+  color: var(--amber-soft);
+}
+
+.visits-stat span {
+  font-size: var(--fs-fine);
+  color: var(--muted);
+}
+
+.visits-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.visits-table {
+  width: 100%;             /* 贴面板宽 */
+  table-layout: auto;      /* 列宽按真实内容，多余空间按内容占比摊进各列——
+                              来源（最长）分到最多、页面（短）自然窄，
+                              不再把空档集中到某一列 */
+  border-collapse: collapse;
+  font-size: var(--fs-meta);
+  min-width: 560px;        /* 面板极窄时的下限（横向滚动兜底） */
+}
+.visits-table td:nth-child(3) {
+  overflow: hidden;
+  text-overflow: ellipsis;   /* 仅真放不下时截断 */
+}
+.visits-table td.visit-ip {
+  white-space: normal;        /* 长 IPv6 与"· 共 N 次"汇总文字自然折行 */
+  word-break: break-all;
+}
+
+.visits-table th,
+.visits-table td {
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  white-space: nowrap;
+}
+
+.visits-table th {
+  color: var(--muted);
+  font-weight: 500;
+  letter-spacing: 0.05em;
+}
+
+.visits-table td {
+  color: var(--text);
+}
+
+.visits-table tr:last-child td {
+  border-bottom: none;
+}
+
+.visits-table td.ref {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 折叠同 IP 的汇总行：可点击展开/收起 */
+.visits-table tr.visit-collapsed-row {
+  cursor: pointer;
+}
+.visits-table tr.visit-collapsed-row:hover td {
+  color: var(--amber-soft);
+}
+.visits-table tr.visit-collapsed-row td.visit-ip {
+  color: var(--amber);
+  white-space: normal;
+  word-break: break-all;
+}
+
+/* 资源页：三大分区（FIREFLYS / SKYWORKS / FlitFancy）三竖排 */
+.resource-columns {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 22px;
+  align-items: start;
+}
+@media (max-width: 1000px) {
+  .resource-columns { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 640px) {
+  .resource-columns { grid-template-columns: 1fr; }
+}
+
+/* 四页（旅途/控制台/关于/资源）主标题统一：同一字号（渐变由
+   grad-clip + grad-flame 工具类提供，见文件头部定义）。
+   注意：必须收缩到文字宽度——否则渐变铺满整行，短标题只会
+   "采样"到渐变最左段的红橙色（看起来像纯黄色）。 */
+.grad-title {
+  width: -webkit-fit-content;
+  width: fit-content;
+  font-size: var(--fs-h1);
+  filter: drop-shadow(var(--glow-title));
+}
+
+/* 资源页的折叠分组（<details>/<summary>） */
+details.resource-group {
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.018);
+}
+details.resource-group + details.resource-group {
+  margin-top: 10px;
+}
+details.resource-group > summary {
+  cursor: pointer;
+  color: var(--amber-soft);
+  font-size: var(--fs-base);
+  letter-spacing: 0.06em;
+  list-style: none;
+}
+details.resource-group > summary::before {
+  content: "▸ ";
+}
+details.resource-group[open] > summary::before {
+  content: "▾ ";
+}
+details.resource-group > summary::-webkit-details-marker {
+  display: none;
+}
+
+.btn-ghost {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--muted);
+}
+
+.btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.admin-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(5, 8, 15, 0.9);
+  padding: 20px;
+  will-change: transform;
+}
+
+
+.admin-card {
+  width: min(420px, 100%);
+  max-width: 100%;
+  flex: 0 0 auto;
+  background: #121826;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 26px 28px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+}
+
+.admin-card h2 {
+  font-family: var(--font-display);
+  font-size: var(--fs-stat);
+  font-weight: 400;
+  color: var(--amber-soft);
+  margin: 0 0 8px;
+}
+
+.admin-card input {
+  display: block;
+  width: 100%;
+  margin: 14px 0 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  padding: 11px 13px;
+  font: inherit;
+}
+
+.admin-card input:focus {
+  outline: none;
+  border-color: rgba(245, 184, 75, 0.5);
+}
+
+.admin-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.js-error {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 60;
+  max-width: min(520px, calc(100vw - 32px));
+  background: rgba(90, 20, 25, 0.92);
+  border: 1px solid rgba(255, 120, 120, 0.45);
+  color: #ffd7d7;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: var(--fs-meta);
+  line-height: 1.5;
+}
+
+/* 日记页：我与她的双线记忆 */
+.memory-sync {
+  min-height: 1.4em;
+  margin: 18px 0 0;
+  color: rgba(183, 176, 163, 0.68);
+  font-size: var(--fs-fine);
+  letter-spacing: 0.08em;
+}
+
+/* 旅程 · 日记：单条竖线居中，条目交替排左右两侧 */
+.memory-lines {
+  position: relative;
+  width: min(1100px, 92vw);
+}
+.memory-lines::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: linear-gradient(180deg, rgba(245, 184, 75, 0.6), rgba(245, 184, 75, 0.08));
+}
+
+.memory-stream {
+  position: static;
+  padding: 0;
+}
+
+.memory-lines .entry {
+  position: relative;
+  width: calc(50% - 30px);
+  margin: 0 0 26px;
+  padding: 20px 22px;
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.038), rgba(255, 255, 255, 0.012));
+  box-shadow: 0 12px 38px rgba(0, 0, 0, 0.16);
+}
+/* 左一个右一个交替：块级元素每行一个框，margin 推位，绝不重叠 */
+.memory-lines .entry:nth-child(odd) {
+  margin-right: calc(50% + 30px);
+  text-align: right;
+}
+.memory-lines .entry:nth-child(even) {
+  margin-left: calc(50% + 30px);
+}
+
+.memory-lines .entry::before {
+  top: 26px;
+  left: auto;
+}
+.memory-lines .entry:nth-child(odd)::before {
+  right: -35px;
+}
+.memory-lines .entry:nth-child(even)::before {
+  left: -35px;
+}
+
+.memory-lines .entry p {
+  margin-top: 10px;
+  line-height: 1.75;
+  white-space: pre-wrap;
+}
+
+/* 媒体（图片/视频）：为照片/视频日记预留，当前日记为纯文本故无对应 DOM；
+   预览灰色，悬停/划到才显彩。接入媒体前保留即可，勿当死码删除。 */
+.memory-lines .entry img,
+.memory-lines .entry video {
+  width: 100%;
+  border-radius: 10px;
+  margin-top: 12px;
+  filter: grayscale(1);
+  transition: filter 0.35s ease;
+}
+.memory-lines .entry:hover img,
+.memory-lines .entry:hover video {
+  filter: none;
+}
+
+.entry-live {
+  animation: memoryIn 0.42s ease both;
+}
+
+@keyframes memoryIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 760px) {
+  .memory-lines::before { left: 4px; }
+  .memory-stream { padding-left: 26px; }
+  .memory-lines .entry,
+  .memory-lines .entry:nth-child(odd),
+  .memory-lines .entry:nth-child(even) {
+    width: 100%;
+    margin: 0 0 22px;
+    text-align: left;
+    padding: 18px;
+  }
+  .memory-lines .entry::before { left: -27px; right: auto; }
+}
+
+/* 日记页：写入区（移动端样式：随 .section 通栏。
+   注意：本规则必须位于下方 @media(min-width:761px) 之前——
+   桌面端面板的 width/border/radius 由媒体查询覆盖，级联顺序靠后者胜。 */
+.memory-editor {
+  margin-top: 0;
+  padding: clamp(22px, 4vw, 38px);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: rgba(12, 16, 27, 0.82);
+  box-shadow: 0 18px 55px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(12px);
+}
+
+/* 桌面端：管理台全高右侧面板——导航下沿到页脚上沿，贴右缘，
+   初始宽约屏宽 1/14（可拖拽调宽）。元素位于 </main> 之后（body 顶层），
+   z-index 全局生效，导航压不住它。 */
+@media (min-width: 761px) {
+  .memory-editor {
+    position: fixed;
+    top: 76px;                       /* 导航条下沿 */
+    right: 0;
+    bottom: var(--footer-h);         /* 页脚上沿（JS 实测） */
+    width: var(--editor-panel-w);
+    padding: 18px 14px;              /* 窄面板紧凑内边距 */
+    margin: 0;
+    border-radius: 0;
+    border: none;
+    border-left: 1px solid var(--border);
+    box-shadow: -18px 0 55px rgba(0, 0, 0, 0.25);
+    overflow-y: auto;
+    z-index: 20;
+  }
+  /* 左缘拖拽把手：整条 14px 热区 + 居中可视药丸，显眼可抓 */
+  .editor-grab {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: ew-resize;
+    z-index: 3;
+  }
+  .editor-grab::before {
+    content: "";
+    width: 4px;
+    height: 48px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.18);
+    transition: background 0.2s, height 0.2s;
+  }
+  .editor-grab:hover::before {
+    background: rgba(245, 184, 75, 0.6);
+    height: 72px;
+  }
+  .memory-head-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    align-items: stretch;
+  }
+  /* 窄面板下分区标签收紧内边距与字号，三个横排按钮不换行不溢出 */
+  .memory-editor .editor-tabs .btn {
+    padding: 6px 6px;
+    font-size: var(--fs-fine);
+  }
+  body.editor-open main {
+    margin-right: calc(var(--editor-panel-w) + 40px);   /* 正文让位给面板，留 40px 呼吸缝 */
+  }
+  /* 正文在剩余空间里自然居中（.section/.page-hero 自带 margin:0 auto）：
+     剩余 ≥ 1100px 时居中留白对称；更窄时 width:100% 收缩填满，
+     右缘恰好停在面板左缘外 40px——任何窗口宽度都不重叠、也不左贴。 */
+  /* 收起后右侧边缘的"展开整理"细条 */
+  .editor-expand-tab {
+    position: fixed;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    writing-mode: vertical-rl;
+    padding: 14px 8px;
+    border: 1px solid var(--border);
+    border-right: none;
+    border-radius: 12px 0 0 12px;
+    background: rgba(12, 16, 27, 0.9);
+    color: var(--amber-soft);
+    font-size: var(--fs-fine);
+    letter-spacing: 0.2em;
+    cursor: pointer;
+    z-index: 19;
+  }
+
+  /* 控制台管理面板：与旅途整理同一外壳（拖宽/收起/页脚联动） */
+  body.console-page .admin-panel {
+    position: fixed;
+    top: 76px;
+    right: 0;
+    bottom: var(--footer-h);
+    width: var(--editor-panel-w);
+    margin: 0;
+    padding: 18px 14px;
+    border-radius: 0;
+    border: none;
+    border-left: 1px solid var(--border);
+    background: rgba(12, 16, 27, 0.9);
+    backdrop-filter: blur(12px);
+    box-shadow: -18px 0 55px rgba(0, 0, 0, 0.25);
+    overflow-y: auto;
+    z-index: 20;
+  }
+  body.admin-open main {
+    margin-right: calc(var(--editor-panel-w) + 40px);
+  }
+
+  /* 底部模式：旅途整理面板回到页面底部的流式卡片（把手隐藏、正文恢复全宽） */
+  body.editor-mode-bottom .memory-editor {
+    position: static;
+    width: auto;
+    max-width: 1100px;
+    margin: 22px auto 0;
+    padding: clamp(22px, 4vw, 38px);
+    border-radius: 18px;
+    border: 1px solid var(--border);
+    background: rgba(12, 16, 27, 0.82);
+    box-shadow: 0 18px 55px rgba(0, 0, 0, 0.25);
+    overflow: visible;
+  }
+  body.editor-mode-bottom .editor-grab { display: none; }
+  body.editor-mode-bottom main { margin-right: 0; }
+
+  /* 底部模式：面板回到原始流式布局（全宽表格），拖拽把手隐藏 */
+  body.admin-mode-bottom .admin-panel {
+    position: static;
+    width: auto;
+    max-width: min(1320px, 94vw);
+    margin: 22px auto 0;
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    box-shadow: none;
+    backdrop-filter: none;
+    overflow: visible;
+    padding: 20px 22px;
+  }
+  body.admin-mode-bottom .editor-grab { display: none; }
+  body.admin-mode-bottom main { margin-right: 0; }
+}
+
+/* 既有条目的编辑按钮：只有管理态（编辑器打开）才显示 */
+.entry-edit,
+.anchor-edit {
+  display: none;
+}
+body.editor-open .entry-edit,
+body.editor-open .anchor-edit {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 2px 10px;
+  font-size: var(--fs-fine);
+  color: var(--amber-soft);
+  background: transparent;
+  border: 1px dashed rgba(245, 184, 75, 0.4);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+}
+body.editor-open .entry-edit:hover,
+body.editor-open .anchor-edit:hover {
+  color: var(--amber);
+  border-color: rgba(245, 184, 75, 0.8);
+}
+.anchor-edit { margin-top: 8px; }
+
+/* 随笔列表（编辑器"记录随笔"分区）：顶部快速新增框 + 行内编辑/删除 */
+.reflection-new {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+}
+.reflection-new input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font: inherit;
+}
+.reflection-new input:focus {
+  outline: none;
+  border-color: rgba(245, 184, 75, 0.5);
+}
+.reflection-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+.reflection-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.reflection-row input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font: inherit;
+}
+.reflection-row input:focus {
+  outline: none;
+  border-color: rgba(245, 184, 75, 0.5);
+}
+.reflection-del { flex: 0 0 auto; }
+
+.memory-compose-head,
+.memory-compose-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.memory-editor h2 {
+  margin: 4px 0 7px;
+  font-family: var(--font-display);
+  font-size: var(--fs-head-1);
+  font-weight: 400;
+  color: var(--amber-soft);
+}
+
+.memory-compose-head p { margin: 0; }
+
+.memory-form-grid {
+  display: flex;          /* 字段按各自内容自适应宽度，一行放下；
+                             放不下时自动折行（窄面板/手机） */
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.memory-form-grid label,
+.memory-content-field {
+  display: block;
+  color: var(--muted);
+  font-size: var(--fs-fine);
+}
+
+/* 三栏统一 flex-grow:1：拖宽面板时按内容基础宽度同比例一起变宽，
+   拖窄时同比例收缩（收缩下限 = 控件自身最小宽度） */
+.memory-form-grid > label {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.memory-form-grid input,
+.memory-form-grid select,
+.memory-content-field textarea {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px 12px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font: inherit;
+}
+
+.memory-form-grid input:focus,
+.memory-form-grid select:focus,
+.memory-content-field textarea:focus {
+  outline: none;
+  border-color: rgba(245, 184, 75, 0.5);
+}
+
+.memory-content-field { margin-top: 14px; }
+.memory-content-field textarea { resize: vertical; line-height: 1.65; }
+.memory-compose-actions { justify-content: flex-start; margin-top: 14px; }
+
+@media (max-width: 640px) {
+  .memory-form-grid { flex-direction: column; }   /* 手机：字段纵向堆叠 */
+}
+}

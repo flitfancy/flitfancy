@@ -1,0 +1,28 @@
+/* 远程总闸（remote.html）专用：卡片布局与令牌输入框。
+   层序在 style.css 顶部声明（remote.css 在其后加载）。 */
+@layer components {
+.remote-card { max-width: 460px; margin: 10vh auto 0; }
+.remote-status { font-size: 15px; margin-top: 10px; }
+.remote-status .state { font-weight: 600; color: var(--amber-soft); }
+.remote-actions { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+.remote-token { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; min-width: 0; }
+.section { overflow-x: clip; }
+.remote-token input {
+  flex: 1;
+  min-width: 180px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  padding: 9px 12px;
+  font: inherit;
+}
+.remote-token input:focus { outline: none; border-color: rgba(245, 184, 75, 0.5); }
+.remote-msg { min-height: 1.4em; margin-top: 12px; }
+.remote-links { margin-top: 18px; }
+@media (max-width: 420px) {
+  .remote-token { display: block; }
+  .remote-token input { width: 100%; }
+  .remote-token .btn { margin-top: 10px; }
+}
+}

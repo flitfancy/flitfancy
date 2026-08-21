@@ -1,0 +1,19 @@
+{
+  "name": "flitfancy-worker",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "check": "pnpm run check:js && cross-env WRANGLER_SEND_METRICS=false wrangler deploy --dry-run --outdir .wrangler/dry-run",
+    "check:js": "node --check worker.js && node --check ../docs/assets/console.js && node --check ../docs/assets/admin-core.js && node --check ../docs/assets/journal-admin.js && node --check ../docs/assets/about.js && node --check ../docs/assets/sitefx.js && node --check ../docs/assets/glyph.js && node --check ../docs/assets/track.js && node --check ../docs/assets/memory.js && node --check ../docs/assets/anchors.js && node --check ../docs/assets/sensor-state.js && node --check ../docs/assets/remote.js && node --check ../docs/assets/admin-panel-shell.js && node ../tests/worker-fail-closed.test.mjs && node ../tests/firefly-pointer-collision.test.mjs && node ../tests/firefly-resize-burst.test.mjs && node ../tests/about-reflections.test.mjs && node ../tests/sensor-state.test.js && node ../tests/memory-inflight.test.mjs && node ../tests/version-consistency.test.mjs && node ../tests/html-skeleton.test.mjs && stylelint ../docs/assets/style.css ../docs/assets/hero.css ../docs/assets/remote.css --config stylelint.config.mjs",
+    "check:backend": "py -3.14 ../backend/smoke_test.py",
+    "check:all": "pnpm run check && pnpm run check:backend",
+    "deploy": "cross-env WRANGLER_SEND_METRICS=false wrangler deploy",
+    "preview": "cross-env WRANGLER_SEND_METRICS=false wrangler versions upload"
+  },
+  "devDependencies": {
+    "cross-env": "^10.1.0",
+    "stylelint": "^17.14.1",
+    "wrangler": "4.124.0"
+  },
+  "packageManager": "pnpm@11.19.0"
+}

@@ -1,0 +1,25 @@
+# 本地数据库含日记、令牌状态等私有数据（绝不推送）
+backend/data/
+
+# 传感器原始数据/归档 CSV 是本地运行时数据（含作息隐私），不进 Git
+data/*
+!data/sensors/
+data/sensors/*
+!data/sensors/README.md
+
+# AI 密钥配置（绝不推送）
+backend/ai_local.json
+
+# Python 缓存
+__pycache__/
+*.pyc
+
+# Cloudflare Worker 本地依赖、构建产物和开发密钥
+node_modules/
+.wrangler/
+.dev.vars*
+.env*
+
+# 系统文件
+.DS_Store
+Thumbs.db

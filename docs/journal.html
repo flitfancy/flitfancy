@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <link rel="canonical" href="https://flitfancy.com/journal.html">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='24' fill='%23f5b84b' opacity='0.22'/%3E%3Ccircle cx='32' cy='32' r='12' fill='%23f5b84b'/%3E%3Ccircle cx='32' cy='32' r='5' fill='%23ffe9c4'/%3E%3C/svg%3E">
+  <title>旅途 — 云萤 · FlitFancy</title>
+  <meta name="description" content="旅途：云萤与我的锚点和日记，时间会记得我们的存在。">
+  <link rel="stylesheet" href="assets/style.css?v=124">
+  <script src="assets/track.js?v=124" defer></script>
+</head>
+<body class="journal-page">
+  <canvas id="sky" aria-hidden="true"></canvas>
+
+  <header class="nav">
+    <a class="brand grad-clip grad-flame" href="index.html">云萤 · FlitFancy</a>
+    <nav>
+      <a href="index.html" class="grad-clip grad-cool">首页</a>
+      <a href="journal.html" class="active grad-clip grad-cool">旅途</a>
+      <a href="console.html" class="grad-clip grad-cool">控制台</a>
+      <a href="about.html" class="grad-clip grad-cool">关于</a>
+      <a href="resources.html" class="grad-clip grad-cool">资源</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="page-hero">
+      <div class="page-hero-head">
+        <div>
+          <h1 class="grad-title grad-clip grad-flame">旅途<span class="title-en">JOURNEY</span></h1>
+        </div>
+        <div class="journal-views" aria-label="旅途视图切换">
+          <button class="btn btn-ghost" data-role="view-tab" data-view="anchors">锚点</button>
+          <button class="btn btn-ghost active" data-role="view-tab" data-view="flow">日记</button>
+        </div>
+      </div>
+      <p class="sub">时间会记得我们的存在</p>
+      <p class="memory-sync" data-role="memory-sync" aria-live="polite">正在倾听新的记忆…</p>
+    </section>
+
+    <section class="section journal-view" data-view-pane="anchors" hidden aria-label="锚点">
+      <div class="project-scope">
+        <div class="tri-grid">
+          <section class="project tri-col" id="tianxin">
+            <div class="project-head">
+              <p class="col-sub grad-clip grad-flame">Firefly · 天心</p>
+            </div>
+            <p class="how">如何存在</p>
+            <div class="mini-grid">
+              <div class="mini-card">
+                <span class="badge done">已跑通</span>
+                <h3>大脑</h3>
+                <p>Character Knowledge Studio + AstrBot + Ollama：本地角色知识流水线，人格提示词与 RAG 已生成，QQ 接入会说话。</p>
+              </div>
+              <div class="mini-card">
+                <span class="badge dream">规划</span>
+                <h3>记忆</h3>
+                <p>流明的记忆层将作为她的外置记忆——感知数据、便签、日志，她都能读得到。</p>
+              </div>
+            </div>
+          </section>
+
+          <section class="project tri-col" id="skywork">
+            <div class="project-head">
+              <p class="col-sub grad-clip grad-flame">SkyWork · 天工</p>
+            </div>
+            <p class="how">如何感受</p>
+            <div class="mini-grid">
+              <div class="mini-card">
+                <span class="badge done">已实测</span>
+                <h3>FIREFLY 感知板 R1.1</h3>
+                <p>六路环境传感器全部通过，WiFi 数据上行，上电自动巡检。</p>
+              </div>
+              <div class="mini-card">
+                <span class="badge doing">进行中</span>
+                <h3>FIREFLY 音频板</h3>
+                <p>双麦本地唤醒 + Wi-Fi 双向音频，原理图与 EasyEDA 脚本就绪。</p>
+              </div>
+              <div class="mini-card">
+                <span class="badge dream">展望</span>
+                <h3>运动控制板</h3>
+                <p>电机与舵机运动控制，让她能真正动起来。</p>
+              </div>
+            </div>
+          </section>
+
+          <section class="project tri-col" id="flitfancy">
+            <div class="project-head">
+              <p class="col-sub grad-clip grad-flame">FlitFancy · 流明</p>
+            </div>
+            <p class="how">如何交流</p>
+            <div class="mini-grid">
+              <div class="mini-card">
+                <span class="badge done">已上线</span>
+                <h3>网站</h3>
+                <p>flitfancy.com + HTTPS，首页星空与彩蛋。</p>
+              </div>
+              <div class="mini-card">
+                <span class="badge doing">雏形</span>
+                <h3>控制台与记忆</h3>
+                <p>本地 server.py + SQLite，实时数据、命令与记忆 API。</p>
+              </div>
+              <div class="mini-card">
+                <span class="badge dream">规划</span>
+                <h3>云端大脑</h3>
+                <p>本地日常 + 云端满血按需升级的混合路由。</p>
+              </div>
+              <div class="mini-card">
+                <span class="badge dream">规划</span>
+                <h3>双模式</h3>
+                <p>访客看她的家，管理员进她的工作间，她走本地 API。</p>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <div class="anchor-stream" data-role="anchor-list" aria-label="锚点记录"></div>
+    </section>
+
+    <section class="section journal-view memory-lines" data-view-pane="flow" aria-label="日记">
+      <div class="memory-stream" data-role="memory-stream"></div>
+    </section>
+
+  </main>
+
+  <section class="section memory-editor" data-role="memory-editor" hidden aria-label="旅途整理">
+    <div class="editor-grab" data-role="editor-grab" aria-hidden="true"></div>
+    <div class="memory-compose-head">
+      <div>
+        <p class="kicker">MANAGE</p>
+        <p>旅途整理</p>
+      </div>
+      <div class="memory-head-actions">
+        <button class="btn btn-ghost" data-role="memory-logout">退出管理</button>
+        <button class="btn btn-ghost" data-role="editor-mode">底部模式</button>
+        <button class="btn btn-ghost" data-role="memory-collapse">收起</button>
+      </div>
+    </div>
+
+    <div class="editor-tabs" aria-label="管理分区">
+      <button class="btn btn-ghost" data-role="editor-tab" data-tab="anchor">建立锚点</button>
+      <button class="btn btn-ghost active" data-role="editor-tab" data-tab="flow">写日记</button>
+      <button class="btn btn-ghost" data-role="editor-tab" data-tab="note">记录随笔</button>
+    </div>
+
+    <div data-editor-pane="anchor" hidden>
+      <input type="hidden" data-role="anchor-uid">
+      <div class="memory-form-grid">
+        <label>标题
+          <input type="text" maxlength="120" placeholder="例如：FFS R1.2 定稿" data-role="anchor-title">
+        </label>
+        <label>日期
+          <input type="date" data-role="anchor-date">
+        </label>
+        <label>时间（留空 = 只记到日）
+          <input type="time" step="1" data-role="anchor-time">
+        </label>
+      </div>
+      <label class="memory-content-field">内容
+        <textarea rows="4" maxlength="4000" placeholder="这个里程碑发生了什么…" data-role="anchor-content"></textarea>
+      </label>
+      <div class="memory-compose-actions">
+        <button class="btn" data-role="anchor-save">建立锚点</button>
+        <span class="hint" data-role="anchor-write-status" aria-live="polite"></span>
+      </div>
+    </div>
+
+    <div data-editor-pane="flow">
+      <input type="hidden" data-role="memory-uid">
+      <div class="memory-form-grid">
+        <label>属于
+          <select data-role="memory-perspective">
+            <option value="me">我</option>
+            <option value="her">她</option>
+          </select>
+        </label>
+        <label>日期
+          <input type="date" data-role="memory-date">
+        </label>
+        <label>时间（留空 = 只记到日）
+          <input type="time" step="1" data-role="memory-time">
+        </label>
+      </div>
+      <label class="memory-content-field">内容
+        <textarea rows="5" maxlength="4000" placeholder="把这一刻留在这里…" data-role="memory-content"></textarea>
+      </label>
+      <div class="memory-compose-actions">
+        <button class="btn" data-role="memory-save">写入日记</button>
+        <button class="btn btn-ghost" data-role="memory-cancel">收起</button>
+        <span class="hint" data-role="memory-write-status" aria-live="polite"></span>
+      </div>
+    </div>
+
+    <div data-editor-pane="note" hidden>
+      <div class="reflection-new">
+        <input type="text" maxlength="120" placeholder="写点什么" data-role="reflection-new-input">
+        <button class="btn" data-role="reflection-save-list">保存</button>
+      </div>
+      <div class="reflection-list" data-role="reflection-list"></div>
+      <span class="hint" data-role="reflection-write-status" aria-live="polite"></span>
+    </div>
+  </section>
+
+  <button class="editor-expand-tab" data-role="editor-expand-tab" hidden>展开整理</button>
+
+  <footer>
+    <p class="reflection-line grad-clip grad-flame" data-role="reflection-line" hidden>
+      <span data-role="reflection-text"></span>
+    </p>
+    <p class="grad-clip grad-flame" data-role="footer-brand"><span>云萤 · FlitFancy</span><span class="sep"> · </span><span>献给我们所热爱的一切</span></p>
+  </footer>
+
+  <div class="admin-overlay" data-role="memory-login-overlay" hidden>
+    <div class="admin-card">
+      <p>旅途整理</p>
+      <p class="hint">登录后才能管理锚点、日记与随笔。</p>
+      <input type="text" data-role="memory-username" placeholder="用户名" autocomplete="username">
+      <input type="password" data-role="memory-password" placeholder="管理密码" autocomplete="current-password">
+      <div class="admin-actions">
+        <button class="btn" data-role="memory-login">登录</button>
+        <button class="btn btn-ghost" data-role="memory-login-cancel">取消</button>
+      </div>
+      <p class="hint status-gap" data-role="memory-login-status" aria-live="polite"></p>
+    </div>
+  </div>
+
+  <div class="js-error" data-role="js-error" hidden></div>
+
+  <script src="assets/firefly.js?v=124"></script>
+  <script src="assets/sitefx.js?v=124"></script>
+  <script src="assets/admin-core.js?v=124"></script>
+  <script src="assets/admin-panel-shell.js?v=124"></script>
+  <script src="assets/memory.js?v=124"></script>
+  <script src="assets/anchors.js?v=124"></script>
+  <script src="assets/about.js?v=124"></script>
+  <script src="assets/journal-admin.js?v=124"></script>
+</body>
+</html>
