@@ -1191,6 +1191,8 @@ body.console-page .section {
   margin-top: 26px;
   padding-top: 20px;
   border-top: 1px dashed var(--border);
+  container-name: visits;
+  container-type: inline-size;
 }
 
 .visits-panel h3 {
@@ -1244,26 +1246,24 @@ body.console-page .section {
 }
 
 .visits-table {
-  width: 100%;             /* 贴面板宽 */
-  table-layout: auto;      /* 列宽按真实内容，多余空间按内容占比摊进各列——
-                              来源（最长）分到最多、页面（短）自然窄，
-                              不再把空档集中到某一列 */
+  width: 100%;
+  table-layout: fixed;     /* 五列共享同一宽度模型，内容不得反向撑宽表格。 */
   border-collapse: collapse;
   font-size: var(--fs-meta);
-  min-width: 560px;        /* 面板极窄时的下限（横向滚动兜底） */
+  min-width: 560px;
 }
-.visits-table td:nth-child(3) {
-  overflow: hidden;
-  text-overflow: ellipsis;   /* 仅真放不下时截断 */
-}
+.visits-col-time { width: 116px; }
+.visits-col-ip { width: clamp(15ch, 22%, 24ch); }
+.visits-col-device { width: 100px; }
+
 .visits-table td.visit-ip {
   vertical-align: top;
+  white-space: normal;
 }
 .visit-ip-content {
-  /* 沿用原本的连续文本流；短 IP 不提前折行，IPv6 到上限后再换行。 */
-  display: inline-block;
-  inline-size: max-content;
-  max-inline-size: 32ch;
+  /* IP 只在分配到的列内排版，不参与决定整张表的固有宽度。 */
+  display: block;
+  max-inline-size: 100%;
   white-space: normal;
   overflow-wrap: anywhere;
   word-break: normal;
@@ -1275,6 +1275,8 @@ body.console-page .section {
   padding: 8px 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .visits-table th {
@@ -1293,8 +1295,6 @@ body.console-page .section {
 
 .visits-table td.ref {
   color: var(--muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* 折叠同 IP 的汇总行：可点击展开/收起 */
@@ -1306,6 +1306,70 @@ body.console-page .section {
 }
 .visits-table tr.visit-collapsed-row td.visit-ip {
   color: var(--amber);
+}
+
+/* 侧边栏窄到无法容纳五列时，整个组件切换为字段卡片。 */
+@container visits (max-width: 559px) {
+  .visits-table-wrap {
+    overflow: visible;
+    border: 0;
+  }
+
+  .visits-table {
+    display: block;
+    min-width: 0;
+  }
+
+  .visits-table colgroup {
+    display: none;
+  }
+
+  .visits-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .visits-table tbody {
+    display: grid;
+    gap: 10px;
+  }
+
+  .visits-table tbody tr {
+    display: block;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    background: rgba(255, 255, 255, 0.025);
+  }
+
+  .visits-table tbody td {
+    display: grid;
+    grid-template-columns: 4em minmax(0, 1fr);
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+    padding: 4px 0;
+    border: 0;
+    white-space: normal;
+    overflow: visible;
+    overflow-wrap: anywhere;
+    text-overflow: clip;
+  }
+
+  .visits-table tbody td::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: var(--fs-fine);
+    letter-spacing: 0.08em;
+  }
 }
 
 /* 资源页：三大分区（FIREFLYS / SKYWORKS / FlitFancy）三竖排 */

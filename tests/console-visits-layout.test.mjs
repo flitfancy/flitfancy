@@ -4,6 +4,9 @@ import fs from "node:fs";
 const css = fs.readFileSync(
   new URL("../docs/assets/style.css", import.meta.url), "utf8"
 );
+const html = fs.readFileSync(
+  new URL("../docs/console.html", import.meta.url), "utf8"
+);
 
 function ruleBody(selector) {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -12,15 +15,40 @@ function ruleBody(selector) {
   return match[1];
 }
 
+const panelRule = ruleBody(".visits-panel");
+assert.match(panelRule, /container-name:\s*visits/,
+  "访问记录应按自身宽度切换布局，而不是依赖整个窗口宽度");
+assert.match(panelRule, /container-type:\s*inline-size/);
+
+const tableRule = ruleBody(".visits-table");
+assert.match(tableRule, /table-layout:\s*fixed/,
+  "五列必须共享统一列宽模型，内容不得反向撑宽整张表");
+assert.match(tableRule, /width:\s*100%/);
+assert.match(tableRule, /min-width:\s*560px/);
+
+assert.match(html, /<colgroup>[\s\S]*class="visits-col-time"[\s\S]*class="visits-col-ip"[\s\S]*class="visits-col-page"[\s\S]*class="visits-col-ref"[\s\S]*class="visits-col-device"[\s\S]*<\/colgroup>/,
+  "表格列宽职责必须集中声明，不能散落在内容规则中");
+
+const ipColumnRule = ruleBody(".visits-col-ip");
+assert.match(ipColumnRule, /width:\s*clamp\(15ch,\s*22%,\s*24ch\)/,
+  "IP 列应从完整 IPv4 宽度起，在有余量时适度扩张");
+const deviceColumnRule = ruleBody(".visits-col-device");
+assert.match(deviceColumnRule, /width:\s*100px/,
+  "设备列必须预留稳定空间，不能被前面的内容推出视口");
+
 const contentRule = ruleBody(".visit-ip-content");
-assert.match(contentRule, /inline-size:\s*max-content/,
-  "短 IP 与汇总文字必须按自然宽度排版，不得参与列宽压缩");
-assert.match(contentRule, /max-inline-size:\s*32ch/,
-  "长 IPv6 必须在可控上限后换行，不能无限挤占其它列");
+assert.match(contentRule, /display:\s*block/);
+assert.match(contentRule, /max-inline-size:\s*100%/,
+  "IPv6 只能在已经分配的 IP 列内部换行");
 assert.match(contentRule, /white-space:\s*normal/);
 assert.match(contentRule, /overflow-wrap:\s*anywhere/,
   "超长 IPv6 必须能在自身容器内安全换行");
-assert.doesNotMatch(contentRule, /word-break:\s*break-all/,
-  "IP 不得无上限地从任意字符处提前拆开");
+assert.doesNotMatch(contentRule, /max-content|32ch/,
+  "IP 内容不能再参与决定整张表的固有宽度");
 
-console.log("console visits narrow-panel layout test ok");
+assert.match(css, /@container\s+visits\s+\(max-width:\s*559px\)/,
+  "窄管理面板必须整体切换布局，不能继续横向藏掉设备列");
+assert.match(css, /@container\s+visits[\s\S]*?\.visits-table\s*\{[^}]*min-width:\s*0/,
+  "卡片模式必须取消桌面表格的最小宽度");
+
+console.log("console visits responsive layout contract test ok");

@@ -14,6 +14,7 @@ class FakeElement {
     this.hidden = false;
     this.textContent = "";
     this.title = "";
+    this.dataset = {};
     this.handlers = {};
     this.classList = {
       add: (name) => {
@@ -105,6 +106,11 @@ assert.equal(elements['[data-role="visits-stats"]'].children.length, 3);
 assert.equal(elements['[data-role="visits-list"]'].children.length, 3);
 assert.equal(elements['[data-role="visits-empty"]'].hidden, true);
 assert.equal(elements['[data-role="visits-status"]'].textContent, "共 3 条记录");
+assert.deepEqual(
+  elements['[data-role="visits-list"]'].children[0].children.map((cell) => cell.dataset.label),
+  ["时间", "IP", "页面", "来源", "设备"],
+  "窄面板卡片模式必须为每个字段提供统一标签"
+);
 assert.equal(
   elements['[data-role="visits-list"]'].children[0].children[1]
     .querySelector(".visit-ip-content").textContent,

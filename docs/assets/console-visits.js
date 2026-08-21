@@ -32,6 +32,14 @@
     cell.replaceChildren(content);
   }
 
+  function createCell(label, text, className) {
+    const cell = document.createElement("td");
+    cell.dataset.label = label;
+    cell.textContent = text;
+    if (className) cell.className = className;
+    return cell;
+  }
+
   function create(options) {
     const opts = options || {};
     const query = opts.query;
@@ -53,23 +61,19 @@
       const row = visit || {};
       const tr = document.createElement("tr");
 
-      const tdTime = document.createElement("td");
-      tdTime.textContent = formatTime(row.ts);
+      const tdTime = createCell("时间", formatTime(row.ts));
 
-      const tdIp = document.createElement("td");
-      tdIp.className = "visit-ip";
+      const tdIp = createCell("IP", "", "visit-ip");
       renderIpCell(tdIp, row.ip || "—");
 
-      const tdPage = document.createElement("td");
-      tdPage.textContent = row.page || "/";
+      const tdPage = createCell("页面", row.page || "/");
 
-      const tdRef = document.createElement("td");
-      tdRef.className = "ref";
-      tdRef.textContent = row.ref ? hostOf(row.ref) : "—";
+      const tdRef = createCell("来源", row.ref ? hostOf(row.ref) : "—", "ref");
       tdRef.title = row.ref || "";
 
-      const tdDev = document.createElement("td");
-      tdDev.textContent = (row.w && row.h) ? row.w + "×" + row.h : "—";
+      const tdDev = createCell(
+        "设备", (row.w && row.h) ? row.w + "×" + row.h : "—"
+      );
 
       tr.appendChild(tdTime);
       tr.appendChild(tdIp);
