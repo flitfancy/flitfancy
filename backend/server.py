@@ -417,7 +417,7 @@ _protocol_name_cache = {"t": 0.0, "name": ""}
 
 
 def protocol_name():
-    """读取安装脚本注册的随机协议名（HKCU\Software\FlitFancy\ProtocolName）。
+    r"""读取安装脚本注册的随机协议名（HKCU\Software\FlitFancy\ProtocolName）。
     60 秒缓存（monotonic + dict，与 service_status 风格一致）；仅接受
     字母数字下划线连字符，非法/未安装时回退 flitfancy。"""
     now = time.monotonic()
@@ -583,11 +583,8 @@ def sync_public_memory(memory):
         "created_at": memory["created_at"],
         "time": memory["memory_time"],
         "precision": memory["time_precision"],
-        "date": memory["memory_date"],
         "perspective": memory["perspective"],
         "source": memory["source"],
-        # 兼容尚未更新的旧 Worker；新 Worker 不再展示标题与来源。
-        "title": ".",
         "content": memory["content"],
     }
     return worker_post("/admin/memories", payload, 8, "公网日记接口")

@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 
 const source = fs.readFileSync(new URL("../cloudflare/worker.js", import.meta.url), "utf8");
+const reflectionsContract = JSON.parse(fs.readFileSync(
+  new URL("./contracts/reflections.json", import.meta.url), "utf8"
+));
 const workerModule = await import(
   "data:text/javascript;base64," + Buffer.from(source).toString("base64")
 );
@@ -193,7 +196,7 @@ try {
   const reflectionsResponse = await worker.fetch(
     new Request("https://api.flitfancy.com/admin/toggle", {
       method: "POST",
-      body: JSON.stringify({ reflections: [" 星光 ", "星光", "", 7, "风"] }),
+      body: JSON.stringify({ reflections: reflectionsContract.input }),
       headers: {
         "Authorization": "Bearer " + ADMIN_TOKEN,
         "Content-Type": "application/json",
@@ -202,10 +205,10 @@ try {
     { ADMIN_TOKEN, CONFIG: toggleConfig }
   );
   assert.equal(reflectionsResponse.status, 200);
-  assert.deepEqual(toggleWrites, [["reflections", JSON.stringify(["星光", "风"])]]);
+  assert.deepEqual(toggleWrites, [["reflections", JSON.stringify(reflectionsContract.expected)]]);
   assert.equal(cacheDeletes, 2, "更新随笔后必须清除 /config 边缘缓存");
   const reflectionsResult = await reflectionsResponse.json();
-  assert.deepEqual(reflectionsResult.reflections, ["星光", "风"]);
+  assert.deepEqual(reflectionsResult.reflections, reflectionsContract.expected);
   assert.equal(Object.hasOwn(reflectionsResult, "chat_enabled"), false,
     "只更新随笔时不得误关公网 AI 总闸");
 } finally {

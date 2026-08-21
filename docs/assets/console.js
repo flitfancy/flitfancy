@@ -918,6 +918,14 @@
     $('[data-role="admin-logout"]').hidden = !show;
   }
 
+  const visitsPanel = window.FlitFancyVisits.create({
+    query: $,
+    request: adminFetch,
+    authFailed: adminAuthFailed,
+    setStatus: adminStatus,
+    formatTime: window.FlitFancyAdmin.formatUnixTime,
+  });
+
   let quickLinks = [];
   let quickLinkEditing = -1;
 
@@ -1003,7 +1011,7 @@
       $('[data-role="ql-add"]').textContent = "添加";
       renderQuickLinks();
       showAdminPanel(true);
-      loadVisits();
+      visitsPanel.load();
     } catch (e) {
       clearAdminToken();
       showAdminPanel(false);
@@ -1168,136 +1176,6 @@
     }
   }
 
-  /* ---------- 访问记录 ---------- */
-  let visitsGroupByIp = false;
-  const visitsExpanded = {};
-  let lastVisitsData = null;
-
-  function fmtVisitTime(ts) {
-    return window.FlitFancyAdmin.formatUnixTime(ts);
-  }
-
-  function hostOf(url) {
-    try {
-      return new URL(url).host || "—";
-    } catch (e) {
-      return "—";
-    }
-  }
-
-  function renderVisits(data) {
-    const stats = data.stats || {};
-    const statsEl = $('[data-role="visits-stats"]');
-    statsEl.replaceChildren();
-    [
-      ["累计访问", stats.total || 0],
-      ["今日", stats.today || 0],
-      ["独立 IP", stats.uniq || 0]
-    ].forEach(function (item) {
-      const div = document.createElement("div");
-      div.className = "visits-stat";
-      const b = document.createElement("b");
-      b.textContent = item[1];
-      const span = document.createElement("span");
-      span.textContent = item[0];
-      div.appendChild(b);
-      div.appendChild(span);
-      statsEl.appendChild(div);
-    });
-
-    const tbody = $('[data-role="visits-list"]');
-    tbody.replaceChildren();
-    const rows = Array.isArray(data.recent) ? data.recent : [];
-    $('[data-role="visits-empty"]').hidden = rows.length > 0;
-    lastVisitsData = data;
-
-    function buildVisitRow(v) {
-      const tr = document.createElement("tr");
-
-      const tdTime = document.createElement("td");
-      tdTime.textContent = fmtVisitTime(v.ts);
-
-      const tdIp = document.createElement("td");
-      tdIp.className = "visit-ip";
-      tdIp.textContent = v.ip || "—";
-
-      const tdPage = document.createElement("td");
-      tdPage.textContent = v.page || "/";
-
-      const tdRef = document.createElement("td");
-      tdRef.className = "ref";
-      tdRef.textContent = v.ref ? hostOf(v.ref) : "—";
-      tdRef.title = v.ref || "";
-
-      const tdDev = document.createElement("td");
-      tdDev.textContent = (v.w && v.h) ? v.w + "×" + v.h : "—";
-
-      tr.appendChild(tdTime);
-      tr.appendChild(tdIp);
-      tr.appendChild(tdPage);
-      tr.appendChild(tdRef);
-      tr.appendChild(tdDev);
-      return tr;
-    }
-
-    if (!visitsGroupByIp) {
-      rows.forEach(function (v) { tbody.appendChild(buildVisitRow(v)); });
-      return;
-    }
-
-    // 折叠同 IP：相邻同 IP 合并为一行（最新一条 + 共N次），点击展开/收起
-    let i = 0;
-    while (i < rows.length) {
-      const ip = rows[i].ip || "—";
-      let j = i + 1;
-      while (j < rows.length && (rows[j].ip || "—") === ip) j += 1;
-      const group = rows.slice(i, j);
-      if (group.length === 1) {
-        tbody.appendChild(buildVisitRow(group[0]));
-      } else if (visitsExpanded[ip]) {
-        const head = buildVisitRow(group[0]);
-        head.classList.add("visit-collapsed-row");
-        head.querySelector(".visit-ip").textContent = ip + " · 共 " + group.length + " 次 ▾";
-        head.title = "点击折叠该 IP 的全部访问记录";
-        head.addEventListener("click", function () {
-          visitsExpanded[ip] = false;
-          renderVisits(lastVisitsData);
-        });
-        tbody.appendChild(head);
-        group.slice(1).forEach(function (v) { tbody.appendChild(buildVisitRow(v)); });
-      } else {
-        const tr = buildVisitRow(group[0]);
-        tr.classList.add("visit-collapsed-row");
-        tr.querySelector(".visit-ip").textContent = ip + " · 共 " + group.length + " 次 ▸";
-        tr.title = "点击展开该 IP 的全部访问记录";
-        tr.addEventListener("click", function () {
-          visitsExpanded[ip] = true;
-          renderVisits(lastVisitsData);
-        });
-        tbody.appendChild(tr);
-      }
-      i = j;
-    }
-  }
-
-  async function loadVisits() {
-    const status = $('[data-role="visits-status"]');
-    adminStatus(status, "加载中…");
-    try {
-      const r = await adminFetch("/api/visits", { method: "GET" });
-      const data = await r.json();
-      if (adminAuthFailed(r)) {
-        adminStatus(status, "登录已过期，请重新登录");
-        return;
-      }
-      if (!r.ok) throw new Error(data.error || ("HTTP " + r.status));
-      renderVisits(data);
-      adminStatus(status, "共 " + ((data.stats && data.stats.total) || 0) + " 条记录");
-    } catch (e) {
-      adminStatus(status, (e && e.message) || "访问记录加载失败");
-    }
-  }
-
   async function doLogout() {
     try {
       await adminFetch("/api/admin/logout", { method: "POST" });
@@ -1311,7 +1189,7 @@
     e.preventDefault();
     if (adminToken()) {
       showAdminPanel(true);
-      loadVisits();
+      visitsPanel.load();
       $('[data-role="admin-panel"]').scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
@@ -1351,11 +1229,9 @@
 
   $('[data-role="ql-add"]').addEventListener("click", saveQuickLink);
   $('[data-role="admin-logout"]').addEventListener("click", doLogout);
-  $('[data-role="visits-refresh"]').addEventListener("click", loadVisits);
+  $('[data-role="visits-refresh"]').addEventListener("click", visitsPanel.load);
   $('[data-role="visits-group-toggle"]').addEventListener("click", function () {
-    visitsGroupByIp = !visitsGroupByIp;
-    this.textContent = visitsGroupByIp ? "展开全部" : "折叠同 IP";
-    if (lastVisitsData) renderVisits(lastVisitsData);
+    visitsPanel.toggleGrouping(this);
   });
   /* FFS 服务启动：协议名随机（flitfancy-<8位>，经 /api/status 的 protocol_name
      注入，防任意网页静默触发），点击跳 <protocolName>://start/<动作> 拉起本机服务。

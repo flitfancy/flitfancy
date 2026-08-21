@@ -13,8 +13,13 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
 
+import server as server_module
+
 ROOT = os.path.dirname(os.path.abspath(__file__))
 CST = timezone(timedelta(hours=8))
+with open(os.path.join(ROOT, "..", "tests", "contracts", "reflections.json"),
+          encoding="utf-8") as contract_file:
+    REFLECTIONS_CONTRACT = json.load(contract_file)
 
 
 def recent_ts(seconds_ago):
@@ -69,6 +74,31 @@ def wait_until_ready(base, proc, timeout=10):
 
 
 def main():
+    captured_sync = {}
+    original_worker_post = server_module.worker_post
+    try:
+        server_module.worker_post = lambda endpoint, payload, timeout, error_label: (
+            captured_sync.update({"endpoint": endpoint, "payload": payload}) or (True, "")
+        )
+        ok, _ = server_module.sync_public_memory({
+            "uid": "contract-memory-0001",
+            "created_at": "2026-08-21T12:00:00+08:00",
+            "memory_time": "2026-08-21T12:00:00+08:00",
+            "time_precision": "second",
+            "memory_date": "2026-08-21",
+            "perspective": "me",
+            "source": "manual",
+            "content": "契约测试",
+        })
+    finally:
+        server_module.worker_post = original_worker_post
+    assert ok is True
+    assert captured_sync["endpoint"] == "/admin/memories"
+    assert set(captured_sync["payload"]) == {
+        "uid", "created_at", "time", "precision", "perspective", "source", "content",
+    }
+    print("SYNC CONTRACT: current memory payload emits no legacy date/title fields")
+
     with tempfile.TemporaryDirectory(prefix="flitfancy-smoke-") as temp_dir:
         port = free_port()
         base = "http://127.0.0.1:%d" % port
@@ -318,12 +348,12 @@ def main():
             admin_headers = dict(tunnel_headers_a)
             admin_headers["Authorization"] = "Bearer " + relogin["token"]
             reflections_saved = request(base, "/api/admin/config", "POST", {
-                "reflections": [" 第一行 ", "第一行", "", "第二行"],
+                "reflections": REFLECTIONS_CONTRACT["input"],
             }, admin_headers)
-            assert reflections_saved["reflections"] == ["第一行", "第二行"]
+            assert reflections_saved["reflections"] == REFLECTIONS_CONTRACT["expected"]
             assert reflections_saved["public_sync"] is False
             public_reflections = request(base, "/api/reflections")
-            assert public_reflections["reflections"] == ["第一行", "第二行"]
+            assert public_reflections["reflections"] == REFLECTIONS_CONTRACT["expected"]
             print("REFLECTIONS: local save, cleanup and public read ok")
 
             # B1: 前缀域名 Host（DNS rebinding 场景）不得被当作本地放行
