@@ -12,6 +12,18 @@ const worker = workerModule.default;
 const consoleSource = fs.readFileSync(
   new URL("../docs/assets/console.js", import.meta.url), "utf8"
 );
+const consoleChatSource = fs.readFileSync(
+  new URL("../docs/assets/console-chat.js", import.meta.url), "utf8"
+);
+const consoleServicesSource = fs.readFileSync(
+  new URL("../docs/assets/console-services.js", import.meta.url), "utf8"
+);
+const consoleAdminSource = fs.readFileSync(
+  new URL("../docs/assets/console-admin.js", import.meta.url), "utf8"
+);
+const consoleHtmlSource = fs.readFileSync(
+  new URL("../docs/console.html", import.meta.url), "utf8"
+);
 const adminCoreSource = fs.readFileSync(
   new URL("../docs/assets/admin-core.js", import.meta.url), "utf8"
 );
@@ -21,17 +33,33 @@ assert.match(consoleSource, /SENSOR_REFRESH_MS\s*=\s*5000/,
   "传感器网页刷新必须保持 5 秒");
 assert.match(consoleSource, /CONFIG_REFRESH_MS\s*=\s*60000/,
   "公网配置读取必须降到 60 秒");
-assert.match(consoleSource,
-  /serverOnline\s*\?\s*"\/api\/chat"\s*:\s*PUBLIC_BASE\s*\+\s*"\/chat"/,
+assert.match(consoleChatSource,
+  /isServerOnline\(\)\s*\?\s*"\/api\/chat"\s*:\s*publicBase\s*\+\s*"\/chat"/,
   "聊天必须在本地后端与 Worker 明确 /chat 路由之间单选");
-assert.doesNotMatch(consoleSource, /const\s+urls\s*=\s*\["\/api\/chat"/,
+assert.doesNotMatch(consoleChatSource, /const\s+urls\s*=\s*\["\/api\/chat"/,
   "聊天不得把同一内容依次重试到两个后端");
-assert.match(consoleSource, /let\s+protocolName\s*=\s*""/,
+assert.match(consoleServicesSource, /let\s+protocolName\s*=\s*""/,
   "自定义协议必须等待后端随机名称，不得回退到固定名称");
-assert.match(consoleSource, /noopener,noreferrer/,
+assert.match(consoleAdminSource, /noopener,noreferrer/,
   "外部快捷入口必须隔离 window.opener 与来源信息");
 assert.match(adminCoreSource, /response\.status\s*===\s*401\s*&&\s*token/,
   "管理请求遇到 401 必须清除会话令牌");
+
+let previousScriptIndex = -1;
+[
+  "console-visits.js",
+  "console-overview.js",
+  "console-sensors.js",
+  "console-chat.js",
+  "console-admin.js",
+  "console-services.js",
+  "console.js",
+].forEach(function (name) {
+  const index = consoleHtmlSource.indexOf(name);
+  assert.ok(index > previousScriptIndex,
+    name + " 必须存在并按依赖顺序加载在 console.js 之前");
+  previousScriptIndex = index;
+});
 
 const adminRequests = [
   new Request("https://api.flitfancy.com/visits"),

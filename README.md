@@ -194,7 +194,9 @@ site/
 │   ├── assets/           样式与脚本：style.css / hero.css / remote.css / firefly.js /
 │   │                     sitefx.js / glyph.js / track.js / sensor-state.js / admin-core.js /
 │   │                     memory.js / anchors.js / console.js / console-visits.js /
-│   │                     journal-admin.js / about.js / remote.js
+│   │                     console-overview.js / console-sensors.js / console-chat.js /
+│   │                     console-admin.js / console-services.js / journal-admin.js /
+│   │                     about.js / remote.js
 │   ├── CNAME             自定义域名（必须留在发布根）
 │   └── .nojekyll
 ├── backend/              ← 本地服务（不发布）
@@ -204,7 +206,7 @@ site/
 ├── cloudflare/           ← Cloudflare Worker（api.flitfancy.com）
 │   ├── worker.js         Worker 主体
 │   ├── wrangler.jsonc    Worker 配置（KV/D1 绑定）
-│   └── package.json      pnpm run check:all = stylelint + 15 个 JS 语法检查 + 9 个单测 + 冒烟 + dry-run
+│   └── package.json      pnpm run check:all = stylelint + 20 个 JS 语法检查 + 14 个单测 + 冒烟 + dry-run
 ├── tests/                前端单测（vm 直接加载真实脚本，不是复制逻辑）
 ├── scripts/              Windows 脚本：start_flitfancy.bat/.ps1（服务启动，协议白名单入口）、
 │                         install_flitfancy_protocol.ps1（注册随机协议）、
@@ -234,8 +236,10 @@ site/
 - **纯函数单一出处**：传感器衍生计算在 `sensor-state.js`（带单测），
   日期格式化四件套在 `admin-core.js`（formatDateTime/formatDate/nowForInput/
   formatUnixTime），页面只做委托。
-- **控制台职责拆分**：访问统计的加载、连续 IP 折叠和表格渲染集中在
-  `console-visits.js`；`console.js` 只注入管理鉴权与状态显示依赖。
+- **控制台职责拆分**：`console.js` 只负责环境判断、刷新定时器与模块装配；
+  传感器卡片、24 小时图表、AI 对话、管理面板、服务按钮和访问统计分别集中在
+  `console-sensors.js`、`console-overview.js`、`console-chat.js`、
+  `console-admin.js`、`console-services.js` 与 `console-visits.js`。
 - **日记结构单轨**：前端、后端与 Worker 统一使用 `time/precision/content`
   等现行字段；写入请求出现已停用的 `date/title` 会明确返回 400，避免静默丢字段。
   跨运行时的随笔归一规则共用 `tests/contracts` 测试数据，防止 Python 与 Worker
