@@ -57,7 +57,7 @@ export async function handleEssays(env) {
 }
 
 // 管理写入端点公共前置：鉴权 -> D1 就绪 -> 读体 -> uid 校验。
-async function adminBody(request, env, resourceLabel) {
+export async function adminContentBody(request, env, resourceLabel) {
   const authError = await adminAuthError(request, env);
   if (authError) return { error: authError };
   if (!env.DB) {
@@ -76,7 +76,7 @@ async function adminBody(request, env, resourceLabel) {
 }
 
 export async function handleAnchorCreate(request, env) {
-  const pre = await adminBody(request, env, "锚点");
+  const pre = await adminContentBody(request, env, "锚点");
   if (pre.error) return pre.error;
   const body = pre.body;
   const uid = pre.uid;
@@ -124,7 +124,7 @@ export async function handleAnchorCreate(request, env) {
 }
 
 export async function handleEssayCreate(request, env) {
-  const pre = await adminBody(request, env, "短文");
+  const pre = await adminContentBody(request, env, "短文");
   if (pre.error) return pre.error;
   const body = pre.body;
   const uid = pre.uid;
@@ -163,7 +163,7 @@ export async function handleEssayCreate(request, env) {
 }
 
 export async function handleMemoryCreate(request, env) {
-  const pre = await adminBody(request, env, "日记");
+  const pre = await adminContentBody(request, env, "日记");
   if (pre.error) return pre.error;
   const body = pre.body;
   const uid = pre.uid;

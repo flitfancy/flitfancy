@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <link rel="canonical" href="https://flitfancy.com/observations.html">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='24' fill='%23f5b84b' opacity='0.22'/%3E%3Ccircle cx='32' cy='32' r='12' fill='%23f5b84b'/%3E%3Ccircle cx='32' cy='32' r='5' fill='%23ffe9c4'/%3E%3C/svg%3E">
+  <title>见闻 · 星弦 — 云萤 · FlitFancy</title>
+  <meta name="description" content="那些有意思的事情，散作星球，也由弦彼此相连。">
+  <link rel="stylesheet" href="assets/style.css?v=1.3.0">
+  <link rel="stylesheet" href="assets/observations.css?v=1.3.0">
+  <script src="assets/track.js?v=1.3.0" defer></script>
+</head>
+<body class="observations-page">
+  <canvas id="sky" aria-hidden="true"></canvas>
+
+  <header class="nav observations-site-nav">
+    <a class="brand grad-clip grad-flame" href="index.html">云萤 · FlitFancy</a>
+    <nav>
+      <a href="index.html" class="grad-clip grad-cool">首页</a>
+      <a href="journal.html" class="active grad-clip grad-cool">旅途</a>
+      <a href="console.html" class="grad-clip grad-cool">控制台</a>
+      <a href="about.html" class="grad-clip grad-cool">关于</a>
+      <a href="resources.html" class="grad-clip grad-cool">资源</a>
+    </nav>
+  </header>
+
+  <main class="observations-main">
+    <section class="obs-stage" data-role="observations-root" aria-label="见闻星图">
+      <div class="obs-viewport" data-role="viewport" tabindex="0"
+           aria-label="循环星图；拖动或滑动探索，滚轮缩放，方向键移动">
+        <svg class="obs-strings" data-role="strings" aria-hidden="true"></svg>
+        <div class="obs-planets" data-role="planets"></div>
+        <div class="obs-empty" data-role="empty" hidden>
+          <strong>星海里还没有见闻</strong>
+          <span>等第一颗星球被记录下来，这里就会亮起。</span>
+        </div>
+      </div>
+
+      <header class="obs-header">
+        <div class="obs-title-block">
+          <h1>见闻 · 星弦</h1>
+          <p>那些有意思的事情</p>
+        </div>
+        <nav class="journey-nav" data-role="journey-nav" aria-label="旅途视图切换">
+          <a class="btn btn-ghost" href="journal.html#anchors">锚点</a>
+          <a class="btn btn-ghost" href="journal.html#flow">日记</a>
+          <a class="btn btn-ghost active" href="observations.html">见闻</a>
+        </nav>
+      </header>
+
+      <div class="obs-map-tools" aria-label="星图操作">
+        <div class="obs-map-actions">
+          <button type="button" class="btn btn-ghost" data-action="zoom-out" aria-label="缩小">−</button>
+          <button type="button" class="btn btn-ghost" data-action="zoom-in" aria-label="放大">＋</button>
+          <button type="button" class="btn btn-ghost" data-action="home">回到起点</button>
+          <button type="button" class="btn btn-ghost" data-action="list">列表模式</button>
+        </div>
+        <span class="obs-state" data-role="state" aria-live="polite">正在等待星光…</span>
+      </div>
+
+      <aside class="obs-detail" data-role="detail" hidden aria-label="星球详情"></aside>
+
+      <section class="obs-list-mode" data-role="list-panel" hidden aria-label="见闻列表">
+        <header>
+          <div>
+            <p class="kicker">STAR CATALOG</p>
+            <h2>见闻列表</h2>
+          </div>
+          <button type="button" class="btn btn-ghost" data-action="list-close">返回星图</button>
+        </header>
+        <div class="obs-accessible-list" data-role="accessible-list"></div>
+      </section>
+
+      <p class="obs-load-status" data-role="load-status" aria-live="polite"></p>
+    </section>
+  </main>
+
+  <script src="assets/firefly.js?v=1.3.0"></script>
+  <script src="assets/sitefx.js?v=1.3.0"></script>
+  <script src="assets/observations.js?v=1.3.0"></script>
+</body>
+</html>

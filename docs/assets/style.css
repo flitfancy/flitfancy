@@ -571,6 +571,41 @@ h1 {
   color: var(--amber-soft);
 }
 
+.observation-admin-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 16px 0 12px;
+}
+.observation-admin-head p { margin: 0; }
+.observation-admin-list { display: grid; gap: 8px; margin-top: 14px; }
+.observation-admin-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.025);
+}
+.observation-admin-row > div { min-width: 0; }
+.observation-admin-row strong,
+.observation-admin-row span { display: block; overflow-wrap: anywhere; }
+.observation-admin-row strong { color: var(--amber-soft); }
+.observation-admin-row span { margin-top: 3px; color: var(--muted); font-size: var(--fs-fine); }
+.observation-link-editor {
+  margin-top: 26px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.observation-link-editor > label { display: grid; gap: 6px; }
+@media (max-width: 640px) {
+  .observation-admin-head { align-items: flex-start; flex-direction: column; }
+  .observation-admin-row { grid-template-columns: 1fr; }
+}
+
 
 
 /* 锚点视图（原项目页内容，已并入日记页）：放宽三栏 */

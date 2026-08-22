@@ -135,6 +135,9 @@ Worker 额外端点：
 - `POST /admin/anchors`：本机后端向 D1 同步锚点（需 Bearer ADMIN_TOKEN）
 - `GET /essays`：公开读取关于页已发布短文
 - `POST /admin/essays`：发布或撤下短文的公网副本（需 Bearer ADMIN_TOKEN；草稿正文不上传）
+- `GET /observations`：公开读取见闻星球与两端均公开的弦
+- `POST /admin/observations`：发布或撤下星球公网副本（草稿、归档正文不上传）
+- `POST /admin/observation-links`：发布或撤下星球之间的弦（需 Bearer ADMIN_TOKEN）
 - `GET /sensors/latest`：公开读取每块感知板六通道的最新快照
 - `POST /admin/sensors`：本机后端批量更新最新快照（需 Bearer ADMIN_TOKEN）
 - `GET /sensors/history`：24 小时分桶历史（需 Bearer ADMIN_TOKEN）
@@ -173,6 +176,9 @@ Git 忽略、不入库（含作息隐私，仅 `README.md` 例外）。
 - `GET/POST /api/anchors`：锚点；额外字段为 `horizon`（现在/未来）与 `project`
 - `GET /api/essays`：只读公开短文；`GET /api/admin/essays`：管理记录库全部状态
 - `POST /api/essays`：新建或编辑短文，支持草稿、公开、排序和归档
+- `GET /api/observations`：读取公开星球与弦；`GET /api/admin/observations`：管理全部星球
+- `POST /api/observations`：新建或编辑星球，支持草稿、公开和归档
+- `GET /api/admin/observation-links`、`POST /api/observation-links`：读取、新建或编辑弦
 - `POST /api/command`：命令队列（转发到板子下一步接入）
 - `POST /api/chat`：AI 对话（转发到兼容 OpenAI 格式的服务，密钥只在本地）
 - `POST /api/admin/login|logout`：管理登录/登出（用户名 + 密码，失败锁定）
@@ -188,7 +194,7 @@ site/
 ├── docs/                 ← GitHub Pages 发布根
 │   ├── index.html        首页（大字 + 萤火虫）
 │   ├── journal.html      旅途（日记时间线 + 锚点双视图 + 写作编辑器）
-│   ├── observations-prototype.html 见闻·星弦三方案交互原型（假数据、不持久化）
+│   ├── observations.html 见闻·星弦（循环星图、星环、弦、详情与列表模式）
 │   ├── console.html      控制台（传感器总览 + 管理面板 + AI 对话）
 │   ├── about.html        名字与理念
 │   ├── resources.html    资源（FIREFLYS·天心 / SKYWORKS·天工 + 固件）
@@ -203,7 +209,8 @@ site/
 │   │                     console-overview.js / console-sensors.js / console-chat.js /
 │   │                     console-admin.js / console-services.js / journal-admin.js /
 │   │                     about.js / remote.js
-│   │                     essays.js / about-admin.js / observations-prototype.js/.css
+│   │                     essays.js / about-admin.js / observations.js/.css /
+│   │                     observations-admin.js
 │   ├── CNAME             自定义域名（必须留在发布根）
 │   └── .nojekyll
 ├── backend/              ← 本地服务（不发布）
@@ -222,7 +229,8 @@ site/
 │   ├── worker-core.js    HTTP、CORS、鉴权与限流公共边界
 │   ├── worker-storage.js D1 建表与迁移记忆化
 │   ├── worker-visits.js  访问上报与统计
-│   ├── worker-content.js 日记与锚点
+│   ├── worker-content.js 日记、锚点与短文
+│   ├── worker-observations.js 公开见闻星球与弦
 │   ├── worker-sensors.js 传感器快照与历史
 │   ├── worker-config.js  公网配置与随笔缓存
 │   ├── worker-chat.js    AI 对话转发
@@ -280,7 +288,7 @@ site/
 
 规则：
 
-- **读归公网，写归本机**：日记/锚点/随笔/传感器快照的公开读取全部走 Worker（无锁）；
+- **读归公网，写归本机**：日记/锚点/随笔/见闻/传感器快照的公开读取全部走 Worker（无锁）；
   一切写入走隧道后端，由本地管理员账号把关。
 - **隧道零信任**：凡从隧道（console.flitfancy.com）进来的 API 请求一律按远程处理，
   不带有效管理员令牌就 401（唯一例外是登录接口本身）。静态页面匿名可加载，

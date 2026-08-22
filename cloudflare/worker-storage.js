@@ -68,6 +68,31 @@ export const TABLE_ESSAYS = `CREATE TABLE IF NOT EXISTS essays(
         content TEXT NOT NULL
       )`;
 
+export const TABLE_OBSERVATIONS = `CREATE TABLE IF NOT EXISTS observations(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        uid TEXT UNIQUE NOT NULL,
+        created_ts INTEGER NOT NULL,
+        updated_ts INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        category TEXT NOT NULL,
+        tags_json TEXT NOT NULL DEFAULT '[]',
+        summary TEXT NOT NULL,
+        content TEXT NOT NULL DEFAULT '',
+        discovered_at TEXT NOT NULL,
+        source_name TEXT NOT NULL DEFAULT '',
+        source_url TEXT NOT NULL DEFAULT ''
+      )`;
+
+export const TABLE_OBSERVATION_LINKS = `CREATE TABLE IF NOT EXISTS observation_links(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        uid TEXT UNIQUE NOT NULL,
+        created_ts INTEGER NOT NULL,
+        updated_ts INTEGER NOT NULL,
+        source_uid TEXT NOT NULL,
+        target_uid TEXT NOT NULL,
+        relation TEXT NOT NULL
+      )`;
+
 export function ensureAnchorsTable(env) {
   return runOnce(env, "anchors:migration", () => ensureAnchorsTableOnce(env));
 }

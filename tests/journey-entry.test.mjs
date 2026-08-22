@@ -3,7 +3,7 @@ import fs from "node:fs";
 
 const read = (path) => fs.readFileSync(new URL(path, import.meta.url), "utf8");
 const journal = read("../docs/journal.html");
-const observations = read("../docs/observations-prototype.html");
+const observations = read("../docs/observations.html");
 const css = read("../docs/assets/style.css");
 
 function journeyNav(html) {
@@ -18,7 +18,7 @@ for (const [name, html] of [["旅途", journal], ["见闻", observations]]) {
     `${name}页缺少锚点入口`);
   assert.match(nav, /href="journal\.html#flow"[^>]*>\s*日记\s*</,
     `${name}页缺少日记入口`);
-  assert.match(nav, /href="observations-prototype\.html"[^>]*>\s*见闻\s*</,
+  assert.match(nav, /href="observations\.html"[^>]*>\s*见闻\s*</,
     `${name}页缺少见闻入口`);
 }
 

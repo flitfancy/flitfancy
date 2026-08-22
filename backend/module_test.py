@@ -17,6 +17,7 @@ from flitfancy_core import (
     normalize_reflections,
     now_iso,
 )
+from flitfancy_observations import normalize_observation, normalize_observation_link
 from flitfancy_sensors import (
     normalize_sensor_row,
     parse_sensor_csv_line,
@@ -40,6 +41,24 @@ def test_core():
     assert normalize_protocol_name("flitfancy-a1b2c3d4") == "flitfancy-a1b2c3d4"
     assert normalize_protocol_name("flitfancy:fixed") == ""
     assert normalize_protocol_name(None) == ""
+    observation, error = normalize_observation({
+        "title": "测试星球", "category": "技术与造物", "tags": ["机械", "机械"],
+        "summary": "短描述", "content": "正文", "discovered_at": "2026-08-22",
+        "source_name": "来源", "source_url": "https://example.com/source", "status": "draft",
+    })
+    assert error is None and observation["tags"] == ["机械"]
+    _, error = normalize_observation({
+        "title": "危险来源", "category": "技术与造物", "tags": [],
+        "summary": "短描述", "discovered_at": "2026-08-22",
+        "source_url": "javascript:alert(1)", "status": "draft",
+    })
+    assert "http" in error
+    _, error = normalize_observation_link({
+        "source_uid": "same-observation-uid-0001",
+        "target_uid": "same-observation-uid-0001",
+        "relation": "类比",
+    })
+    assert "同一颗" in error
 
 
 def test_sensors():
@@ -225,9 +244,20 @@ def test_storage():
         essay_columns = {
             row[1] for row in connection.execute("PRAGMA table_info(essays)")
         }
+        observation_columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(observations)")
+        }
+        observation_link_columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(observation_links)")
+        }
         connection.close()
         assert migrated == {"horizon": "now", "project": "pending"}
         assert {"uid", "status", "display_order", "synced"} <= essay_columns
+        assert {
+            "uid", "category", "tags_json", "summary", "content", "discovered_at",
+            "source_name", "source_url", "status", "synced",
+        } <= observation_columns
+        assert {"uid", "source_uid", "target_uid", "relation", "synced"} <= observation_link_columns
 
 
 def main():

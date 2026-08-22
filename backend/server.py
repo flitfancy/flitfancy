@@ -33,6 +33,7 @@ from flitfancy_core import (
     now_iso,
 )
 from flitfancy_http import HttpDependencies, create_handler
+from flitfancy_observations import ObservationService, decode_tags
 from flitfancy_sensors import (
     normalize_sensor_row,
     parse_sensor_csv_line,
@@ -116,6 +117,8 @@ def _history_sync_loop():
         sync_pending_anchors()
         sync_pending_memories()
         sync_pending_essays()
+        sync_pending_observations()
+        sync_pending_observation_links()
         time.sleep(300)
 
 
@@ -340,6 +343,47 @@ def sync_public_essay(essay):
     return worker_post("/admin/essays", payload, 8, "公网短文接口")
 
 
+def sync_public_observation(observation):
+    """只把公开星球同步到 Worker；草稿和归档发送撤下指令。"""
+    published = observation["status"] == "public"
+    payload = {"uid": observation["uid"], "published": published}
+    if published:
+        payload.update({
+            "created_at": observation["created_at"],
+            "updated_at": observation["updated_at"],
+            "title": observation["title"],
+            "category": observation["category"],
+            "tags": decode_tags(observation["tags_json"]),
+            "summary": observation["summary"],
+            "content": observation["content"],
+            "discovered_at": observation["discovered_at"],
+            "source_name": observation["source_name"],
+            "source_url": observation["source_url"],
+        })
+    return worker_post("/admin/observations", payload, 8, "公网见闻接口")
+
+
+def sync_public_observation_link(link):
+    """只有弦的两端均公开时才在 Worker 保留公开副本。"""
+    con = db()
+    statuses = con.execute(
+        "SELECT uid, status FROM observations WHERE uid IN (?, ?)",
+        (link["source_uid"], link["target_uid"]),
+    ).fetchall()
+    con.close()
+    published = len(statuses) == 2 and all(row["status"] == "public" for row in statuses)
+    payload = {"uid": link["uid"], "published": published}
+    if published:
+        payload.update({
+            "created_at": link["created_at"],
+            "updated_at": link["updated_at"],
+            "source_uid": link["source_uid"],
+            "target_uid": link["target_uid"],
+            "relation": link["relation"],
+        })
+    return worker_post("/admin/observation-links", payload, 8, "公网星弦接口")
+
+
 def _sync_pending_rows(table, pusher, limit):
     """重试补传 synced=0 的滞留记录（锚点/日记共用）：
     逐条推送，失败即停（不重试风暴），成功后落 synced=1。"""
@@ -376,6 +420,16 @@ def sync_pending_memories(limit=20):
 def sync_pending_essays(limit=20):
     """同步公开短文或撤下已转为草稿/归档的公网副本。"""
     return _sync_pending_rows("essays", sync_public_essay, limit)
+
+
+def sync_pending_observations(limit=20):
+    """同步公开星球或撤下草稿、归档的公网副本。"""
+    return _sync_pending_rows("observations", sync_public_observation, limit)
+
+
+def sync_pending_observation_links(limit=40):
+    """同步两端均公开的弦，其他弦只发送撤下指令。"""
+    return _sync_pending_rows("observation_links", sync_public_observation_link, limit)
 
 
 def sync_public_sensors(rows):
@@ -451,6 +505,10 @@ def ingest_csv_line(line, board=None, con=None):
     return ingest_json(row, board=board, con=con)
 
 
+_observation_service = ObservationService(
+    db, now_iso, sync_pending_observations, sync_pending_observation_links,
+)
+
 Handler = create_handler(HttpDependencies(
     ai_opener=AI_OPENER,
     cst=CST,
@@ -474,6 +532,7 @@ Handler = create_handler(HttpDependencies(
     ingest_json=ingest_json,
     maybe_prune_sensor_history=maybe_prune_sensor_history,
     normalize_reflections=normalize_reflections,
+    observation_service=_observation_service,
     now_iso=now_iso,
     protocol_name=protocol_name,
     queue_public_sensor_sync=queue_public_sensor_sync,

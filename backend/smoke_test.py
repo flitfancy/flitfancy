@@ -112,6 +112,21 @@ def main():
             "display_order": 10,
         })
         draft_sync = dict(captured_sync)
+        server_module.sync_public_observation({
+            "uid": "contract-observation-0001",
+            "created_at": "2026-08-21T12:00:00+08:00",
+            "updated_at": "2026-08-21T12:00:00+08:00",
+            "title": "本地草稿星球",
+            "category": "技术与造物",
+            "tags_json": '["私密"]',
+            "summary": "这段摘要不得上传",
+            "content": "这段正文不得上传",
+            "discovered_at": "2026-08-21",
+            "source_name": "私密来源",
+            "source_url": "https://example.com/private",
+            "status": "draft",
+        })
+        draft_observation_sync = dict(captured_sync)
     finally:
         server_module.worker_post = original_worker_post
     assert ok is True
@@ -126,7 +141,11 @@ def main():
         "endpoint": "/admin/essays",
         "payload": {"uid": "contract-essay-0001", "published": False},
     }
-    print("SYNC CONTRACT: anchor taxonomy preserved; draft essay content stays local")
+    assert draft_observation_sync == {
+        "endpoint": "/admin/observations",
+        "payload": {"uid": "contract-observation-0001", "published": False},
+    }
+    print("SYNC CONTRACT: taxonomy preserved; draft essay/observation content stays local")
 
     with tempfile.TemporaryDirectory(prefix="flitfancy-smoke-") as temp_dir:
         port = free_port()
@@ -337,6 +356,51 @@ def main():
             assert archived["status"] == "archived"
             assert [row["uid"] for row in request(base, "/api/essays")["rows"]] == [first["uid"]]
             print("ESSAYS: draft, publish, order and archive paths ok")
+
+            draft_star = request(base, "/api/observations", "POST", {
+                "title": "脉冲星的钟", "category": "宇宙与自然",
+                "tags": ["时间", "宇宙"], "summary": "宇宙中的稳定节拍。",
+                "content": "一些脉冲星拥有极其稳定的周期。",
+                "discovered_at": "2026-08-22", "source_name": "示例来源",
+                "source_url": "https://example.com/pulsar", "status": "draft",
+            }, expected=201)["observation"]
+            assert request(base, "/api/observations")["rows"] == []
+            assert request(base, "/api/admin/observations")["rows"][0]["tags"] == ["时间", "宇宙"]
+            first_star = request(base, "/api/observations", "POST", {
+                "uid": draft_star["uid"], "title": "脉冲星的钟", "category": "宇宙与自然",
+                "tags": ["时间", "宇宙"], "summary": "宇宙中的稳定节拍。",
+                "content": "一些脉冲星拥有极其稳定的周期。",
+                "discovered_at": "2026-08-22", "source_name": "示例来源",
+                "source_url": "https://example.com/pulsar", "status": "public",
+            }, expected=200)["observation"]
+            second_star = request(base, "/api/observations", "POST", {
+                "title": "两千年前的齿轮", "category": "历史与文明",
+                "tags": ["机械", "计时"], "summary": "古代机械与天体运行。",
+                "content": "安提基特拉机械展现了古代精密造物。",
+                "discovered_at": "2026-08-21", "source_name": "示例来源",
+                "source_url": "https://example.com/gears", "status": "public",
+            }, expected=201)["observation"]
+            link = request(base, "/api/observation-links", "POST", {
+                "source_uid": first_star["uid"], "target_uid": second_star["uid"],
+                "relation": "类比",
+            }, expected=201)["link"]
+            public_observations = request(base, "/api/observations")
+            assert len(public_observations["rows"]) == 2
+            assert public_observations["links"][0]["uid"] == link["uid"]
+            request(base, "/api/observations", "POST", {
+                "uid": first_star["uid"], "title": "脉冲星的钟", "category": "宇宙与自然",
+                "tags": ["时间"], "summary": "宇宙中的稳定节拍。", "content": "归档。",
+                "discovered_at": "2026-08-22", "source_name": "", "source_url": "",
+                "status": "archived",
+            }, expected=200)
+            assert request(base, "/api/observations")["links"] == []
+            request(base, "/api/observations", "POST", {
+                "title": "危险来源", "category": "技术与造物", "tags": [],
+                "summary": "来源协议不合法。", "content": "测试。",
+                "discovered_at": "2026-08-22", "source_name": "错误",
+                "source_url": "javascript:alert(1)", "status": "draft",
+            }, expected=400)
+            print("OBSERVATIONS: draft, publish, archive, links and URL validation ok")
 
             # C7: 静态日记一次性导入：确定性 uid + 重复导入幂等。
             imp1 = request(base, "/api/memories/import-static", "POST", {

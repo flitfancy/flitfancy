@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 
 const docs = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "docs");
 const PAGES = ["index.html", "journal.html", "console.html", "about.html", "resources.html"];
+const NAV_PAGES = [...PAGES, "observations.html"];
 
 function read(name) {
   return fs.readFileSync(path.join(docs, name), "utf8");
@@ -40,12 +41,14 @@ function footerBrand(html) {
     .trim();
 }
 
-const navs = PAGES.map(function (name) { return navInner(read(name)); });
+const navs = NAV_PAGES.map(function (name) { return navInner(read(name)); });
 const footers = PAGES.map(function (name) { return footerBrand(read(name)); });
 
-for (let i = 1; i < PAGES.length; i++) {
+for (let i = 1; i < NAV_PAGES.length; i++) {
   assert.equal(navs[i], navs[0],
-    "导航骨架不一致：" + PAGES[0] + " vs " + PAGES[i]);
+    "导航骨架不一致：" + NAV_PAGES[0] + " vs " + NAV_PAGES[i]);
+}
+for (let i = 1; i < PAGES.length; i++) {
   assert.equal(footers[i], footers[0],
     "页脚收束句不一致：" + PAGES[0] + " vs " + PAGES[i]);
 }
@@ -53,4 +56,5 @@ for (let i = 1; i < PAGES.length; i++) {
 assert.ok(navs[0].includes("grad-clip"), "导航链接必须带渐变工具类");
 assert.ok(footers[0].includes("grad-clip grad-flame"), "收束句必须带火焰渐变工具类");
 
-console.log("html skeleton ok: nav/footer identical across " + PAGES.length + " pages");
+console.log("html skeleton ok: nav across " + NAV_PAGES.length +
+  " pages; footer across " + PAGES.length + " pages");

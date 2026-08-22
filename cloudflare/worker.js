@@ -17,6 +17,11 @@ import {
   handleMemoryCreate,
 } from "./worker-content.js";
 import {
+  handleObservationCreate,
+  handleObservationLinkCreate,
+  handleObservations,
+} from "./worker-observations.js";
+import {
   adminOriginAllowed,
   corsPolicy,
   json,
@@ -80,6 +85,9 @@ async function routeRequest(request, env, ctx, url) {
   if (pathname === "/essays" && request.method === "GET") {
     return handleEssays(env);
   }
+  if (pathname === "/observations" && request.method === "GET") {
+    return handleObservations(env);
+  }
   if (pathname === "/admin/memories" && request.method === "POST") {
     return handleMemoryCreate(request, env);
   }
@@ -88,6 +96,12 @@ async function routeRequest(request, env, ctx, url) {
   }
   if (pathname === "/admin/essays" && request.method === "POST") {
     return handleEssayCreate(request, env);
+  }
+  if (pathname === "/admin/observations" && request.method === "POST") {
+    return handleObservationCreate(request, env);
+  }
+  if (pathname === "/admin/observation-links" && request.method === "POST") {
+    return handleObservationLinkCreate(request, env);
   }
   if (pathname === "/sensors/latest" && request.method === "GET") {
     return handleSensorsLatest(env);

@@ -139,6 +139,34 @@ class SQLiteStore:
                 synced INTEGER NOT NULL DEFAULT 0)"""
         )
         connection.execute(
+            """CREATE TABLE IF NOT EXISTS observations(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uid TEXT UNIQUE NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                title TEXT NOT NULL,
+                category TEXT NOT NULL,
+                tags_json TEXT NOT NULL DEFAULT '[]',
+                summary TEXT NOT NULL,
+                content TEXT NOT NULL DEFAULT '',
+                discovered_at TEXT NOT NULL,
+                source_name TEXT NOT NULL DEFAULT '',
+                source_url TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'draft',
+                synced INTEGER NOT NULL DEFAULT 0)"""
+        )
+        connection.execute(
+            """CREATE TABLE IF NOT EXISTS observation_links(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uid TEXT UNIQUE NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                source_uid TEXT NOT NULL,
+                target_uid TEXT NOT NULL,
+                relation TEXT NOT NULL,
+                synced INTEGER NOT NULL DEFAULT 0)"""
+        )
+        connection.execute(
             """CREATE TABLE IF NOT EXISTS commands(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 ts TEXT, command TEXT, status TEXT)"""
@@ -155,6 +183,14 @@ class SQLiteStore:
         connection.execute(
             "CREATE INDEX IF NOT EXISTS idx_essays_status_order "
             "ON essays(status, display_order, updated_at DESC)"
+        )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_observations_status_date "
+            "ON observations(status, discovered_at DESC, updated_at DESC)"
+        )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_observation_links_source_target "
+            "ON observation_links(source_uid, target_uid)"
         )
         connection.commit()
         connection.close()

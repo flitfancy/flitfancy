@@ -17,6 +17,7 @@ const PUBLIC_CORS_PATHS = new Set([
   "/memories",
   "/anchors",
   "/essays",
+  "/observations",
   "/sensors/latest",
   "/chat",
 ]);
@@ -26,6 +27,8 @@ const ADMIN_CORS_PATHS = new Set([
   "/admin/memories",
   "/admin/anchors",
   "/admin/essays",
+  "/admin/observations",
+  "/admin/observation-links",
   "/admin/sensors-history",
   "/admin/sensors",
   "/visits",

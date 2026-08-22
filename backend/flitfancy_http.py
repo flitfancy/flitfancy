@@ -12,7 +12,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler
 
-
 @dataclass(frozen=True)
 class HttpDependencies:
     ai_opener: object
@@ -37,6 +36,7 @@ class HttpDependencies:
     ingest_json: object
     maybe_prune_sensor_history: object
     normalize_reflections: object
+    observation_service: object
     now_iso: object
     protocol_name: object
     queue_public_sensor_sync: object
@@ -72,6 +72,7 @@ def create_handler(app):
     ingest_json = app.ingest_json
     maybe_prune_sensor_history = app.maybe_prune_sensor_history
     normalize_reflections = app.normalize_reflections
+    observation_service = app.observation_service
     now_iso = app.now_iso
     protocol_name = app.protocol_name
     queue_public_sensor_sync = app.queue_public_sensor_sync
@@ -179,6 +180,10 @@ def create_handler(app):
                 self._api_anchor_create()
             elif parsed.path == "/api/essays":
                 self._api_essay_create()
+            elif parsed.path == "/api/observations":
+                self._api_observation_create()
+            elif parsed.path == "/api/observation-links":
+                self._api_observation_link_create()
             elif parsed.path == "/api/reflections":
                 self._api_reflection_create()
             elif parsed.path == "/api/memories/import-static":
@@ -346,6 +351,12 @@ def create_handler(app):
                 ).fetchall()
                 con.close()
                 self._send(200, {"ok": True, "rows": [dict(r) for r in rows]})
+            elif path == "/api/observations":
+                self._send(200, observation_service.public_catalog())
+            elif path == "/api/admin/observations":
+                self._send(200, observation_service.admin_observations())
+            elif path == "/api/admin/observation-links":
+                self._send(200, observation_service.admin_links())
             elif path == "/api/reflections":
                 self._send(200, {
                     "ok": True,
@@ -757,6 +768,20 @@ def create_handler(app):
                 "public_sync": bool(saved["synced"]),
                 "public_sync_note": sync_note,
             })
+
+        def _api_observation_create(self):
+            data = self._json_body()
+            if data is None:
+                return
+            status, payload = observation_service.save_observation(data)
+            self._send(status, payload)
+
+        def _api_observation_link_create(self):
+            data = self._json_body()
+            if data is None:
+                return
+            status, payload = observation_service.save_link(data)
+            self._send(status, payload)
 
         def _api_reflection_create(self):
             data = self._json_body()

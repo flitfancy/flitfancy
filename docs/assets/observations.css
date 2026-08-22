@@ -1,0 +1,362 @@
+.observations-page {
+  height: 100dvh;
+  min-height: 620px;
+  overflow: hidden;
+  padding-bottom: 0;
+}
+
+.observations-site-nav {
+  position: relative;
+  z-index: 80;
+}
+
+.observations-main {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: calc(100dvh - 76px);
+  min-height: 520px;
+  overflow: hidden;
+}
+
+.obs-stage,
+.obs-viewport {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.obs-stage {
+  color: var(--text);
+  background:
+    radial-gradient(circle at 50% 45%, rgba(36, 73, 105, 0.12), transparent 42%),
+    linear-gradient(180deg, rgba(5, 8, 15, 0.12), rgba(5, 8, 15, 0.34));
+}
+
+.obs-viewport {
+  touch-action: none;
+  cursor: grab;
+  outline: none;
+}
+
+.obs-viewport:active { cursor: grabbing; }
+.obs-viewport:focus-visible { box-shadow: inset 0 0 0 2px rgba(245, 184, 75, 0.55); }
+
+.obs-header,
+.obs-map-tools,
+.obs-detail,
+.obs-list-mode {
+  border: 1px solid var(--border);
+  background: rgba(8, 12, 21, 0.78);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(14px);
+}
+
+.obs-header {
+  position: absolute;
+  z-index: 20;
+  top: 18px;
+  left: 18px;
+  display: grid;
+  gap: 13px;
+  width: min(430px, calc(100% - 36px));
+  padding: 16px;
+  border-radius: 16px;
+}
+
+.obs-title-block h1 {
+  margin: 0;
+  color: var(--amber-soft);
+  font-size: clamp(1.35rem, 2.3vw, 2rem);
+  letter-spacing: 0.08em;
+}
+
+.obs-title-block p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: var(--fs-meta);
+  letter-spacing: 0.1em;
+}
+
+.obs-map-tools {
+  position: absolute;
+  z-index: 20;
+  left: 18px;
+  bottom: 18px;
+  display: grid;
+  gap: 8px;
+  max-width: calc(100% - 36px);
+  padding: 12px;
+  border-radius: 14px;
+}
+
+.obs-map-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.obs-map-actions .btn { padding: 6px 10px; }
+
+.obs-state,
+.obs-load-status {
+  color: var(--muted);
+  font-size: var(--fs-fine);
+}
+
+.obs-load-status {
+  position: absolute;
+  z-index: 18;
+  right: 20px;
+  bottom: 16px;
+  max-width: min(380px, calc(100% - 40px));
+  margin: 0;
+  text-align: right;
+}
+
+.obs-planets,
+.obs-strings {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.obs-strings { overflow: visible; pointer-events: none; }
+
+.obs-string {
+  stroke: rgba(128, 194, 224, 0.24);
+  stroke-width: 1.3;
+  stroke-dasharray: 7 8;
+  vector-effect: non-scaling-stroke;
+}
+
+.obs-string.is-active {
+  stroke: rgba(245, 184, 75, 0.82);
+  stroke-width: 2;
+  filter: drop-shadow(0 0 7px rgba(245, 184, 75, 0.48));
+}
+
+.obs-string-label {
+  fill: rgba(207, 222, 230, 0.66);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  paint-order: stroke;
+  stroke: rgba(5, 8, 15, 0.92);
+  stroke-width: 4px;
+}
+
+.obs-planet {
+  --planet-color: #f5b84b;
+  --planet-size: clamp(104px, 12vw, 148px);
+  position: absolute;
+  width: var(--planet-size);
+  height: var(--planet-size);
+  padding: 0;
+  border: 0;
+  color: var(--text);
+  background: transparent;
+  cursor: pointer;
+  transition: opacity 0.2s ease, filter 0.2s ease;
+}
+
+.obs-planet-core {
+  position: absolute;
+  inset: 25%;
+  display: grid;
+  place-items: center;
+  padding: 8px;
+  border: 1px solid color-mix(in srgb, var(--planet-color), white 24%);
+  border-radius: 50%;
+  color: #f7fbff;
+  background:
+    radial-gradient(circle at 36% 30%, rgba(255, 255, 255, 0.8), transparent 13%),
+    radial-gradient(circle at 42% 40%, color-mix(in srgb, var(--planet-color), white 14%), var(--planet-color) 58%, #101520 100%);
+  box-shadow:
+    0 0 24px color-mix(in srgb, var(--planet-color), transparent 48%),
+    inset -13px -11px 18px rgba(0, 0, 0, 0.38);
+  font-size: clamp(0.72rem, 1.1vw, 0.9rem);
+  line-height: 1.25;
+  text-align: center;
+  text-wrap: balance;
+  transition: transform 0.24s ease, box-shadow 0.24s ease;
+}
+
+.obs-ring {
+  position: absolute;
+  pointer-events: none;
+  border: 1px solid color-mix(in srgb, var(--planet-color), transparent 30%);
+  border-radius: 50%;
+  transform: rotate(-17deg);
+}
+
+.obs-ring-one { inset: 15% 3%; }
+.obs-ring-two {
+  inset: 7% 17%;
+  opacity: 0.54;
+  transform: rotate(24deg);
+}
+
+.obs-orbit-label {
+  position: absolute;
+  top: 4%;
+  left: 62%;
+  max-width: 14em;
+  padding: 3px 7px;
+  border: 1px solid color-mix(in srgb, var(--planet-color), transparent 55%);
+  border-radius: 999px;
+  color: var(--amber-soft);
+  background: rgba(7, 10, 17, 0.88);
+  font-size: 10px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.obs-orbit-summary {
+  top: auto;
+  right: 58%;
+  bottom: -2%;
+  left: auto;
+  width: max-content;
+  max-width: 18em;
+  overflow: hidden;
+  color: var(--muted);
+  opacity: 0;
+  text-overflow: ellipsis;
+  transform: translateY(4px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.obs-planet:hover .obs-planet-core,
+.obs-planet:focus-visible .obs-planet-core,
+.obs-planet.is-selected .obs-planet-core {
+  transform: scale(1.13);
+  box-shadow:
+    0 0 38px color-mix(in srgb, var(--planet-color), transparent 28%),
+    inset -13px -11px 18px rgba(0, 0, 0, 0.34);
+}
+
+.obs-planet:hover .obs-orbit-summary,
+.obs-planet:focus-visible .obs-orbit-summary,
+.obs-planet.is-selected .obs-orbit-summary {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.obs-planet:focus-visible { outline: 2px solid var(--amber); outline-offset: 5px; border-radius: 50%; }
+
+.obs-empty {
+  position: absolute;
+  z-index: 4;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  gap: 8px;
+  width: min(420px, calc(100% - 40px));
+  padding: 26px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  color: var(--muted);
+  background: rgba(8, 12, 21, 0.66);
+  text-align: center;
+  transform: translate(-50%, -50%);
+  backdrop-filter: blur(12px);
+}
+
+.obs-empty strong { color: var(--amber-soft); font-size: var(--fs-sub); }
+
+.obs-detail {
+  position: absolute;
+  z-index: 24;
+  top: 18px;
+  right: 18px;
+  bottom: 18px;
+  width: min(370px, calc(100% - 36px));
+  overflow: auto;
+  border-radius: 16px;
+}
+
+.obs-detail-inner { display: grid; gap: 14px; padding: 20px; }
+.obs-detail-head { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+.obs-detail h2 { margin: 0; color: var(--amber-soft); font-size: var(--fs-h2); }
+.obs-detail p { margin: 0; color: var(--muted); line-height: 1.72; white-space: pre-wrap; }
+.obs-detail-summary { color: var(--text) !important; }
+.obs-detail-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.obs-detail-tags span {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--amber-soft);
+  font-size: var(--fs-fine);
+}
+.obs-detail-meta { display: grid; gap: 9px; padding-top: 8px; border-top: 1px solid var(--border); }
+.obs-detail-meta span,
+.obs-detail-meta a { color: var(--muted); font-size: var(--fs-meta); }
+.obs-detail-meta a:hover { color: var(--amber-soft); }
+.obs-related { display: grid; gap: 7px; }
+.obs-related button {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.03);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.obs-related button:hover { color: var(--amber-soft); border-color: rgba(245, 184, 75, 0.45); }
+
+.obs-list-mode {
+  position: absolute;
+  z-index: 30;
+  inset: 18px;
+  padding: 22px;
+  overflow: auto;
+  border-radius: 18px;
+}
+
+.obs-list-mode > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+.obs-list-mode h2 { margin: 3px 0 0; color: var(--amber-soft); }
+.obs-accessible-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.obs-accessible-card {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.025);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.obs-accessible-card:hover { border-color: rgba(245, 184, 75, 0.46); }
+.obs-accessible-card strong { color: var(--amber-soft); }
+.obs-accessible-card span { color: var(--muted); font-size: var(--fs-meta); line-height: 1.55; }
+
+@media (max-width: 640px) {
+  .observations-page { min-height: 680px; }
+  .observations-main { height: calc(100dvh - 102px); min-height: 570px; }
+  .obs-header { top: 10px; left: 10px; width: calc(100% - 20px); padding: 12px; gap: 10px; }
+  .obs-title-block h1 { font-size: 1.25rem; }
+  .obs-map-tools { left: 10px; bottom: 10px; max-width: calc(100% - 20px); padding: 9px; }
+  .obs-map-actions .btn { min-height: 36px; padding: 5px 8px; font-size: var(--fs-fine); }
+  .obs-load-status { right: 12px; bottom: 88px; max-width: calc(100% - 24px); }
+  .obs-detail { top: auto; right: 10px; bottom: 76px; left: 10px; width: auto; max-height: 49%; }
+  .obs-detail-inner { padding: 16px; }
+  .obs-list-mode { inset: 10px; padding: 15px; }
+  .obs-accessible-list { grid-template-columns: 1fr; }
+  .obs-orbit-summary { max-width: 13em; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .obs-planet,
+  .obs-planet-core,
+  .obs-orbit-summary { transition: none; }
+}
