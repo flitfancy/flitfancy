@@ -214,14 +214,6 @@
     return variants.includes(value.toUpperCase()) ? value.toUpperCase() : "A";
   }
 
-  function journeyNav() {
-    return '<nav class="obs-journey-nav" aria-label="旅途分区">' +
-      '<a href="journal.html#anchors">锚点</a>' +
-      '<a href="journal.html#flow">日记</a>' +
-      '<a href="observations-prototype.html" class="active">见闻</a>' +
-      '</nav>';
-  }
-
   function titleBlock() {
     return '<div class="obs-title-block"><h1>见闻 · 星弦</h1>' +
       '<p>PROTOTYPE · 假数据 · 坐标与弦刷新后保持稳定</p></div>';
@@ -280,7 +272,7 @@
 
   function templateA() {
     return '<div class="obs-shell obs-variant-a">' + viewport() +
-      '<header class="obs-a-header">' + titleBlock() + journeyNav() + '</header>' +
+      '<header class="obs-a-header">' + titleBlock() + '</header>' +
       '<section class="obs-a-tools">' + searchField() + dateFields() + quickFilters() +
       mapActions() + '<span class="obs-state" data-role="state"></span>' + results() + '</section>' +
       detailPanel() + listPanel() + '</div>';
@@ -288,7 +280,7 @@
 
   function templateB() {
     return '<div class="obs-shell obs-variant-b">' +
-      '<aside class="obs-b-catalog">' + titleBlock() + journeyNav() + searchField() + dateFields() +
+      '<aside class="obs-b-catalog">' + titleBlock() + searchField() + dateFields() +
       quickFilters() + mapActions() + results() + '</aside>' +
       '<div class="obs-viewport-wrap"><div class="obs-b-status"><span>循环坐标观测区</span>' +
       '<span class="obs-state" data-role="state"></span></div>' + viewport() + '</div>' +
@@ -299,7 +291,7 @@
     return '<div class="obs-shell obs-variant-c">' +
       '<header class="obs-c-ribbon">' + titleBlock() +
       '<div class="obs-c-search">' + searchField() + dateFields() + '</div>' +
-      '<div>' + journeyNav() + mapActions() + '</div></header>' +
+      '<div>' + mapActions() + '</div></header>' +
       '<div class="obs-c-map">' + viewport() + detailPanel() + '</div>' +
       '<section class="obs-c-ledger"><div>' + quickFilters() +
       '<span class="obs-state" data-role="state"></span></div>' + results() + '</section>' +

@@ -21,6 +21,18 @@
   color: var(--text);
 }
 
+.observations-prototype-root {
+  width: 100%;
+  height: 100%;
+}
+
+.observations-journey-nav {
+  position: absolute;
+  z-index: 24;
+  top: 112px;
+  left: 18px;
+}
+
 .obs-shell {
   width: 100%;
   height: 100%;
@@ -495,6 +507,11 @@
 @media (max-width: 700px) {
   .observations-prototype-page { min-height: 640px; }
   .observations-prototype { height: calc(100dvh - 102px); }
+  .observations-journey-nav {
+    top: 92px;
+    left: 10px;
+    right: 10px;
+  }
   .obs-variant-a .obs-a-header { left: 10px; top: 10px; right: 10px; padding: 12px; }
   .obs-variant-a .obs-a-tools { left: 10px; bottom: 60px; width: calc(100% - 20px); padding: 12px; }
   .obs-variant-a .obs-date-range { display: none; }

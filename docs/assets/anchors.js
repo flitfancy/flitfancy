@@ -24,7 +24,8 @@
   }
 
   tabs.forEach(function (button) {
-    button.addEventListener("click", function () {
+    button.addEventListener("click", function (event) {
+      event.preventDefault();
       showView(button.getAttribute("data-view"));
     });
   });

@@ -152,8 +152,14 @@
         showPanel(true);
         visitsPanel.load();
       } catch (e) {
-        clearToken();
-        showPanel(false);
+        if (adminCore.isUnauthorized(e)) {
+          clearToken();
+          showPanel(false);
+          return;
+        }
+        showPanel(true);
+        setStatus(query('[data-role="cfg-model-status"]'),
+          (e && e.status === 0) ? "管理配置加载超时，登录状态已保留" : ((e && e.message) || "管理配置加载失败"));
       }
     }
 

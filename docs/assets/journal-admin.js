@@ -65,9 +65,15 @@
       await api("/api/admin/config", { method: "GET" });
       showEditor();
     } catch (e) {
-      setToken("");
-      showLogin();
-      setStatus('[data-role="memory-login-status"]', "登录已过期，请重新登录");
+      if (window.FlitFancyAdmin.isUnauthorized(e)) {
+        setToken("");
+        showLogin();
+        setStatus('[data-role="memory-login-status"]', "登录已过期，请重新登录");
+        return;
+      }
+      showEditor();
+      setStatus('[data-role="memory-write-status"]',
+        (e && e.status === 0) ? "管理服务连接超时，登录状态已保留" : ((e && e.message) || "管理服务暂不可用"));
     }
   }
 
@@ -132,7 +138,7 @@
         : "已保存在本机，公网稍后自动补传");
       document.dispatchEvent(new CustomEvent("flitfancy:memory-saved"));
     } catch (e) {
-      if (e && e.status === 401) setToken("");
+      if (window.FlitFancyAdmin.isUnauthorized(e)) setToken("");
       setStatus('[data-role="memory-write-status"]', e.message || "写入失败");
     }
     button.disabled = false;
@@ -185,7 +191,7 @@
         : "已保存在本机，公网稍后自动补传");
       document.dispatchEvent(new CustomEvent("flitfancy:anchor-saved"));
     } catch (e) {
-      if (e && e.status === 401) setToken("");
+      if (window.FlitFancyAdmin.isUnauthorized(e)) setToken("");
       setStatus('[data-role="anchor-write-status"]', e.message || "保存失败");
     }
     button.disabled = false;
@@ -255,7 +261,7 @@
         : "已保存在本机，公网稍后自动补传");
       document.dispatchEvent(new CustomEvent("flitfancy:reflection-saved"));
     } catch (e) {
-      if (e && e.status === 401) setToken("");
+      if (window.FlitFancyAdmin.isUnauthorized(e)) setToken("");
       setStatus('[data-role="reflection-write-status"]', e.message || "保存失败");
     }
     button.disabled = false;

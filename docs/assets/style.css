@@ -383,6 +383,7 @@ h1 {
   gap: 10px;
   padding-bottom: 8px;
 }
+.journey-nav a { text-decoration: none; text-align: center; }
 .journal-views .btn {
   font-size: var(--fs-base);
   padding: 6px 16px;
@@ -547,13 +548,21 @@ h1 {
   gap: 6px;
 }
 .essay-admin-actions .btn { padding: 5px 9px; }
+.essay-library-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 18px 0 10px;
+}
 @media (max-width: 640px) {
   .essay-admin-row { grid-template-columns: 1fr; }
 }
 
 /* 日记管理三区标签 */
 .editor-tabs {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
   margin: 14px 0;
 }
@@ -1366,11 +1375,12 @@ body.console-page .section {
   table-layout: fixed;     /* 五列共享同一宽度模型，内容不得反向撑宽表格。 */
   border-collapse: collapse;
   font-size: var(--fs-meta);
-  min-width: 560px;
+  min-width: 640px;
 }
 .visits-col-time { width: clamp(132px, 19%, 150px); }
 .visits-col-ip { width: clamp(15ch, 22%, 24ch); }
-.visits-col-page { width: clamp(72px, 12%, 96px); }
+.visits-col-page { width: clamp(64px, 10%, 84px); }
+.visits-col-ref { width: clamp(20ch, 28%, 26ch); }
 .visits-col-device { width: clamp(112px, 15%, 132px); }
 
 .visits-table td.visit-ip {
@@ -1426,7 +1436,7 @@ body.console-page .section {
 }
 
 /* 侧边栏窄到无法容纳五列时，整个组件切换为字段卡片。 */
-@container visits (max-width: 559px) {
+@container visits (max-width: 639px) {
   .visits-table-wrap {
     overflow: visible;
     border: 0;
@@ -2015,5 +2025,16 @@ body.editor-open .anchor-edit:hover {
 
 @media (max-width: 640px) {
   .memory-form-grid { flex-direction: column; }   /* 手机：字段纵向堆叠 */
+  .page-hero-head { align-items: stretch; flex-direction: column; }
+  .journey-nav {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+    gap: 6px;
+  }
+  .journey-nav .btn {
+    min-width: 0;
+    padding-inline: 6px;
+  }
 }
 }

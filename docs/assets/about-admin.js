@@ -10,7 +10,7 @@
   function token() { return window.FlitFancyAdmin.token(ADMIN_KEY); }
   function setToken(value) { window.FlitFancyAdmin.setToken(ADMIN_KEY, value); }
   function api(path, options) {
-    return window.FlitFancyAdmin.request(path, Object.assign({}, options, { authMode: "always" }));
+    return window.FlitFancyAdmin.request(path, Object.assign({ authMode: "always" }, options));
   }
   function setStatus(selector, text) {
     const target = $(selector);
@@ -105,6 +105,32 @@
     renderRows();
   }
 
+  function openPanel() {
+    panelShell.show();
+    $('[data-role="essay-login-overlay"]').hidden = true;
+  }
+
+  async function loadRowsWithStatus() {
+    setStatus('[data-role="essay-library-status"]', "正在加载短文库…");
+    try {
+      await loadRows();
+      setStatus('[data-role="essay-library-status"]', "短文库已加载");
+      return true;
+    } catch (error) {
+      if (window.FlitFancyAdmin.isUnauthorized(error)) {
+        setToken("");
+        panelShell.hide();
+        showLogin("登录已过期，请重新登录");
+        return false;
+      }
+      const message = error && error.status === 0
+        ? "短文库加载超时，可重试"
+        : "短文库加载失败，可重试：" + ((error && error.message) || "未知错误");
+      setStatus('[data-role="essay-library-status"]', message);
+      return false;
+    }
+  }
+
   function showLogin(message) {
     $('[data-role="essay-login-overlay"]').hidden = false;
     $('[data-role="essay-password"]').value = "";
@@ -123,14 +149,8 @@
       showLogin("");
       return;
     }
-    try {
-      await loadRows();
-      panelShell.show();
-      $('[data-role="essay-login-overlay"]').hidden = true;
-    } catch (error) {
-      setToken("");
-      showLogin("登录已过期，请重新登录");
-    }
+    openPanel();
+    await loadRowsWithStatus();
   }
 
   async function login() {
@@ -146,12 +166,12 @@
     try {
       const data = await api("/api/admin/login", {
         method: "POST",
+        authMode: "none",
         body: JSON.stringify({ username: username, password: password })
       });
       setToken(data.token);
-      $('[data-role="essay-login-overlay"]').hidden = true;
-      await loadRows();
-      panelShell.show();
+      openPanel();
+      await loadRowsWithStatus();
     } catch (error) {
       setStatus('[data-role="essay-login-status"]', error.message || "登录失败");
     }
@@ -170,7 +190,7 @@
         display_order: Number.parseInt(payload.display_order, 10) || 0
       })
     });
-    await loadRows();
+    await loadRowsWithStatus();
     document.dispatchEvent(new CustomEvent("flitfancy:essay-saved"));
     setStatus('[data-role="essay-write-status"]', data.public_sync
       ? "短文已保存，公开列表正在更新"
@@ -198,7 +218,7 @@
         ? "短文已保存，公开列表正在更新"
         : "已保存在本机，公网稍后自动补传");
     } catch (error) {
-      if (error && error.status === 401) setToken("");
+      if (window.FlitFancyAdmin.isUnauthorized(error)) setToken("");
       setStatus('[data-role="essay-write-status"]', error.message || "保存失败");
     }
     button.disabled = false;
@@ -213,7 +233,10 @@
   }
 
   window.FlitFancyAdmin.installErrorHandler('[data-role="js-error"]');
-  $('[data-role="essay-manage-open"]').addEventListener("click", openManager);
+  $('.nav nav a[href="about.html"]').addEventListener("click", function (event) {
+    event.preventDefault();
+    openManager();
+  });
   $('[data-role="essay-login"]').addEventListener("click", login);
   $('[data-role="essay-login-cancel"]').addEventListener("click", function () {
     $('[data-role="essay-login-overlay"]').hidden = true;
@@ -223,6 +246,7 @@
   });
   $('[data-role="essay-save"]').addEventListener("click", save);
   $('[data-role="essay-new"]').addEventListener("click", clearForm);
+  $('[data-role="essay-reload"]').addEventListener("click", loadRowsWithStatus);
   $('[data-role="essay-logout"]').addEventListener("click", logout);
   if (window.location.hash === "#write") openManager();
 })();

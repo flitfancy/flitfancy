@@ -22,8 +22,10 @@ assert.match(anchorsSource, /data-filter="horizon"/,
 assert.match(anchorsSource, /anchor-badge/,
   "锚点卡片必须同时显示项目和时间视角文字徽章");
 
-assert.match(aboutHtml, /data-role="essay-manage-open"/,
-  "关于页必须提供短文记录入口");
+assert.match(aboutHtml, /<a href="about\.html" class="active[^>]*>关于<\/a>/,
+  "关于页必须通过当前激活导航提供管理入口");
+assert.doesNotMatch(aboutHtml, /data-role="essay-manage-open"/,
+  "访客正文不应再放置单独的短文管理按钮");
 assert.match(aboutHtml, /序章[\s\S]*data-role="essay-list"/,
   "原文章必须固定保留为序章，新短文另列展示");
 assert.match(essaysSource, /https:\/\/api\.flitfancy\.com\/essays/,

@@ -25,6 +25,10 @@
     return host === "localhost" || host === "127.0.0.1" || host === "console.flitfancy.com";
   }
 
+  function isUnauthorized(value) {
+    return Boolean(value && Number(value.status) === 401);
+  }
+
   function applyAuth(headers, url, token, authMode) {
     if (!token) return;
     if (authMode === "always" || url.indexOf("/api/") === 0) {
@@ -134,6 +138,7 @@
     token: readToken,
     setToken: writeToken,
     isAdminHost: isAdminHost,
+    isUnauthorized: isUnauthorized,
     request: request,
     fetchRaw: fetchRaw,
     pad: pad,
