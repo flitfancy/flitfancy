@@ -11,6 +11,14 @@
     }
   }
 
+  /* 页面列显示短名：去掉开头斜杠与结尾 .html，避免长路径被省略号截断；
+     根路径与空值保持 "/"，不显示空文本。 */
+  function pageLabel(page) {
+    if (!page) return "/";
+    const trimmed = String(page).replace(/^\//, "").replace(/\.html$/, "");
+    return trimmed || page;
+  }
+
   function groupConsecutive(rows) {
     const groups = [];
     (Array.isArray(rows) ? rows : []).forEach(function (row) {
@@ -66,7 +74,7 @@
       const tdIp = createCell("IP", "", "visit-ip");
       renderIpCell(tdIp, row.ip || "—");
 
-      const tdPage = createCell("页面", row.page || "/");
+      const tdPage = createCell("页面", pageLabel(row.page));
 
       const tdRef = createCell("来源", row.ref ? hostOf(row.ref) : "—", "ref");
       tdRef.title = row.ref || "";
@@ -189,5 +197,6 @@
     create: create,
     groupConsecutive: groupConsecutive,
     hostOf: hostOf,
+    pageLabel: pageLabel,
   };
 })(window);

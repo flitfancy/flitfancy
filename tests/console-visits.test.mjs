@@ -66,6 +66,16 @@ vm.runInNewContext(source, {
 
 assert.equal(window.FlitFancyVisits.hostOf("https://example.com/path"), "example.com");
 assert.equal(window.FlitFancyVisits.hostOf("not a url"), "—");
+assert.equal(
+  window.FlitFancyVisits.pageLabel("/observations.html"), "observations",
+  "页面列只显示短名：去掉开头斜杠与结尾 .html"
+);
+assert.equal(window.FlitFancyVisits.pageLabel("/console.html"), "console");
+assert.equal(window.FlitFancyVisits.pageLabel("/about"), "about",
+  "无后缀路径只去掉开头斜杠");
+assert.equal(window.FlitFancyVisits.pageLabel("/"), "/",
+  "根路径保持原样，不能显示成空文本");
+assert.equal(window.FlitFancyVisits.pageLabel(""), "/");
 const grouped = window.FlitFancyVisits.groupConsecutive([
   { ip: "A" }, { ip: "A" }, { ip: "B" }, { ip: "A" },
 ]);
@@ -89,7 +99,7 @@ const visits = window.FlitFancyVisits.create({
           recent: [
             { ts: 3, ip: "A", page: "/", ref: "https://search.example/a", w: 1200, h: 800 },
             { ts: 2, ip: "A", page: "/about", ref: "", w: 390, h: 844 },
-            { ts: 1, ip: "B", page: "/journal" },
+            { ts: 1, ip: "B", page: "/observations.html" },
           ],
         };
       },
@@ -120,6 +130,11 @@ assert.equal(
 assert.equal(
   elements['[data-role="visits-list"]'].children[0].children[3].textContent,
   "search.example"
+);
+assert.equal(
+  elements['[data-role="visits-list"]'].children[2].children[2].textContent,
+  "observations",
+  "表格与卡片共用的页面单元格必须渲染短名"
 );
 
 const toggle = new FakeElement("button");
