@@ -1411,14 +1411,15 @@ body.console-page .section {
   table-layout: fixed;     /* 五列共享同一宽度模型，内容不得反向撑宽表格。 */
   border-collapse: collapse;
   font-size: var(--fs-meta);
-  min-width: 760px;
+  min-width: 700px;
 }
-/* 表格列上的百分比数学表达式可能被浏览器视为 auto；使用合计 100% 的直接比例。 */
-.visits-col-time { width: 18%; }
-.visits-col-ip { width: 22%; }
-.visits-col-page { width: 15%; }
-.visits-col-ref { width: 27%; }
-.visits-col-device { width: 18%; }
+/* 表格列上的百分比数学表达式可能被浏览器视为 auto；使用合计 100% 的直接比例。
+   比例按各列内容宽度取均衡值，避免列起点疏密悬殊。 */
+.visits-col-time { width: 19%; }
+.visits-col-ip { width: 20%; }
+.visits-col-page { width: 18%; }
+.visits-col-ref { width: 24%; }
+.visits-col-device { width: 19%; }
 
 .visits-table td.visit-ip {
   vertical-align: top;
@@ -1473,7 +1474,7 @@ body.console-page .section {
 }
 
 /* 侧边栏窄到无法容纳五列时，整个组件切换为字段卡片。 */
-@container visits (max-width: 759px) {
+@container visits (max-width: 699px) {
   .visits-table-wrap {
     overflow: visible;
     border: 0;

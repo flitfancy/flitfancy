@@ -28,17 +28,17 @@ assert.match(tableRule, /--visits-cell-pad-inline:\s*12px/,
   "表格列宽与单元格必须共享同一个横向内边距变量");
 assert.doesNotMatch(tableRule, /--visits-cell-inline-space/,
   "表格列不再通过间接数学表达式计算内边距");
-assert.match(tableRule, /min-width:\s*760px/);
+assert.match(tableRule, /min-width:\s*700px/);
 
 assert.match(html, /<colgroup>[\s\S]*class="visits-col-time"[\s\S]*class="visits-col-ip"[\s\S]*class="visits-col-page"[\s\S]*class="visits-col-ref"[\s\S]*class="visits-col-device"[\s\S]*<\/colgroup>/,
   "表格列宽职责必须集中声明，不能散落在内容规则中");
 
 const columnShares = [
-  [".visits-col-time", 18],
-  [".visits-col-ip", 22],
-  [".visits-col-page", 15],
-  [".visits-col-ref", 27],
-  [".visits-col-device", 18]
+  [".visits-col-time", 19],
+  [".visits-col-ip", 20],
+  [".visits-col-page", 18],
+  [".visits-col-ref", 24],
+  [".visits-col-device", 19]
 ];
 let totalColumnShare = 0;
 for (const [selector, expectedShare] of columnShares) {
@@ -68,7 +68,7 @@ assert.match(contentRule, /overflow-wrap:\s*anywhere/,
 assert.doesNotMatch(contentRule, /max-content|32ch/,
   "IP 内容不能再参与决定整张表的固有宽度");
 
-assert.match(css, /@container\s+visits\s+\(max-width:\s*759px\)/,
+assert.match(css, /@container\s+visits\s+\(max-width:\s*699px\)/,
   "窄管理面板必须整体切换布局，不能继续横向藏掉设备列");
 assert.match(css, /@container\s+visits[\s\S]*?\.visits-table\s*\{[^}]*min-width:\s*0/,
   "卡片模式必须取消桌面表格的最小宽度");
