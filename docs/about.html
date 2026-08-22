@@ -7,8 +7,8 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='24' fill='%23f5b84b' opacity='0.22'/%3E%3Ccircle cx='32' cy='32' r='12' fill='%23f5b84b'/%3E%3Ccircle cx='32' cy='32' r='5' fill='%23ffe9c4'/%3E%3C/svg%3E">
   <title>关于 — 云萤 · FlitFancy</title>
   <meta name="description" content="一只飞掠的萤火虫，一场不肯落地的奇思妙想。">
-  <link rel="stylesheet" href="assets/style.css?v=1.1.6">
-  <script src="assets/track.js?v=1.1.6" defer></script>
+  <link rel="stylesheet" href="assets/style.css?v=1.2.0">
+  <script src="assets/track.js?v=1.2.0" defer></script>
 </head>
 <body>
   <canvas id="sky" aria-hidden="true"></canvas>
@@ -26,11 +26,20 @@
 
   <main>
     <section class="page-hero">
-      <h1 class="grad-title grad-clip grad-flame">云萤 · FlitFancy</h1>
-      <p class="sub">萤火飞掠，热爱无限…</p>
+      <div class="page-hero-head">
+        <div>
+          <h1 class="grad-title grad-clip grad-flame">云萤 · FlitFancy</h1>
+          <p class="sub">萤火飞掠，热爱无限…</p>
+        </div>
+        <button class="btn btn-ghost" data-role="essay-manage-open">记录</button>
+      </div>
     </section>
 
     <section class="section prose essay">
+      <header class="about-essay-head">
+        <p class="kicker">PROLOGUE</p>
+        <h2>序章</h2>
+      </header>
       <p>我常常思考存在的意义与生命的意义。</p>
       <p>野马也，尘埃也，生物之以息相吹也。</p>
       <p>人之在世，不过是一百个春天，一百个夏天，一百个秋天和一百个冬天。</p>
@@ -46,13 +55,82 @@
       <p class="quote"><span class="quote-text grad-clip grad-flame">“愿此行，终抵群星！”</span></p>
       <p class="signature">云萤 · 2026.08.07</p>
     </section>
+
+    <section class="section about-essay-library" data-role="essay-library" hidden>
+      <header class="about-essay-head">
+        <p class="kicker">RECORDS</p>
+        <h2>短文</h2>
+      </header>
+      <div class="about-essay-list" data-role="essay-list"></div>
+    </section>
   </main>
+
+  <section class="section memory-editor essay-editor" data-role="essay-editor" hidden aria-label="短文记录库">
+    <div class="editor-grab" data-role="essay-editor-grab" aria-hidden="true"></div>
+    <div class="memory-compose-head">
+      <div>
+        <p class="kicker">RECORD</p>
+        <p>短文记录库</p>
+      </div>
+      <div class="memory-head-actions">
+        <button class="btn btn-ghost" data-role="essay-new">新建</button>
+        <button class="btn btn-ghost" data-role="essay-logout">退出管理</button>
+        <button class="btn btn-ghost" data-role="essay-collapse">收起</button>
+      </div>
+    </div>
+    <input type="hidden" data-role="essay-uid">
+    <div class="memory-form-grid">
+      <label>标题
+        <input type="text" maxlength="120" data-role="essay-title" placeholder="这篇短文叫什么">
+      </label>
+      <label>状态
+        <select data-role="essay-status">
+          <option value="draft">草稿</option>
+          <option value="public">公开展示</option>
+          <option value="archived">归档</option>
+        </select>
+      </label>
+      <label>展示顺序
+        <input type="number" min="0" max="9999" value="100" data-role="essay-order">
+      </label>
+    </div>
+    <label class="memory-content-field">正文
+      <textarea rows="10" maxlength="12000" data-role="essay-content" placeholder="慢慢写下这一篇…"></textarea>
+    </label>
+    <div class="memory-compose-actions">
+      <button class="btn" data-role="essay-save">保存短文</button>
+      <span class="hint" data-role="essay-write-status" aria-live="polite"></span>
+    </div>
+    <div class="essay-admin-list" data-role="essay-admin-list"></div>
+  </section>
+
+  <button class="editor-expand-tab" data-role="essay-expand-tab" hidden>展开记录</button>
 
   <footer>
     <p class="grad-clip grad-flame"><span>云萤 · FlitFancy</span><span class="sep"> · </span><span>献给我们所热爱的一切</span></p>
   </footer>
 
-  <script src="assets/firefly.js?v=1.1.6"></script>
-  <script src="assets/sitefx.js?v=1.1.6"></script>
+  <div class="admin-overlay" data-role="essay-login-overlay" hidden>
+    <div class="admin-card">
+      <h2>短文记录库</h2>
+      <p class="hint">登录后可以管理草稿、公开顺序和归档。</p>
+      <input type="text" data-role="essay-username" placeholder="用户名" autocomplete="username">
+      <input type="password" data-role="essay-password" placeholder="管理密码" autocomplete="current-password">
+      <div class="admin-actions">
+        <button class="btn" data-role="essay-login">登录</button>
+        <button class="btn btn-ghost" data-role="essay-login-cancel">取消</button>
+      </div>
+      <p class="hint status-gap" data-role="essay-login-status" aria-live="polite"></p>
+    </div>
+  </div>
+
+  <div class="js-error" data-role="js-error" hidden></div>
+
+  <script src="assets/firefly.js?v=1.2.0"></script>
+  <script src="assets/sitefx.js?v=1.2.0"></script>
+  <script src="assets/admin-core.js?v=1.2.0"></script>
+  <script src="assets/admin-panel-shell.js?v=1.2.0"></script>
+  <script src="assets/essays.js?v=1.2.0"></script>
+  <script src="assets/about-admin.js?v=1.2.0"></script>
 </body>
 </html>

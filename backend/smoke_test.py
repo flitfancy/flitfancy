@@ -90,14 +90,43 @@ def main():
             "source": "manual",
             "content": "契约测试",
         })
+        memory_sync = dict(captured_sync)
+        server_module.sync_public_anchor({
+            "uid": "contract-anchor-0001",
+            "created_at": "2026-08-21T12:00:00+08:00",
+            "anchor_time": "2026-08-21T12:00:00+08:00",
+            "time_precision": "second",
+            "horizon": "future",
+            "project": "skywork",
+            "title": "契约锚点",
+            "content": "契约测试",
+        })
+        anchor_sync = dict(captured_sync)
+        server_module.sync_public_essay({
+            "uid": "contract-essay-0001",
+            "created_at": "2026-08-21T12:00:00+08:00",
+            "updated_at": "2026-08-21T12:00:00+08:00",
+            "title": "草稿",
+            "content": "这段草稿不得上传",
+            "status": "draft",
+            "display_order": 10,
+        })
+        draft_sync = dict(captured_sync)
     finally:
         server_module.worker_post = original_worker_post
     assert ok is True
-    assert captured_sync["endpoint"] == "/admin/memories"
-    assert set(captured_sync["payload"]) == {
+    assert memory_sync["endpoint"] == "/admin/memories"
+    assert set(memory_sync["payload"]) == {
         "uid", "created_at", "time", "precision", "perspective", "source", "content",
     }
-    print("SYNC CONTRACT: current memory payload emits no legacy date/title fields")
+    assert anchor_sync["endpoint"] == "/admin/anchors"
+    assert anchor_sync["payload"]["horizon"] == "future"
+    assert anchor_sync["payload"]["project"] == "skywork"
+    assert draft_sync == {
+        "endpoint": "/admin/essays",
+        "payload": {"uid": "contract-essay-0001", "published": False},
+    }
+    print("SYNC CONTRACT: anchor taxonomy preserved; draft essay content stays local")
 
     with tempfile.TemporaryDirectory(prefix="flitfancy-smoke-") as temp_dir:
         port = free_port()
@@ -242,9 +271,12 @@ def main():
             anchor_created = request(base, "/api/anchors", "POST", {
                 "title": "测试锚点", "content": "冒烟测试里的一个锚点。",
                 "time": "2026-08-10",
+                "horizon": "now", "project": "flitfancy",
             }, expected=201)
             assert anchor_created["anchor"]["title"] == "测试锚点"
             assert anchor_created["anchor"]["precision"] == "date"
+            assert anchor_created["anchor"]["horizon"] == "now"
+            assert anchor_created["anchor"]["project"] == "flitfancy"
             anchors = request(base, "/api/anchors")
             assert anchors["rows"][0]["title"] == "测试锚点"
             print("ANCHOR: local save and read ok")
@@ -265,12 +297,46 @@ def main():
                 "title": "编辑后的锚点",
                 "content": "编辑后的锚点内容。",
                 "time": "2026-08-10",
+                "horizon": "future",
+                "project": "firefly",
             }, expected=200)
             assert updated_anchor["updated"] is True
             assert updated_anchor["anchor"]["title"] == "编辑后的锚点"
+            assert updated_anchor["anchor"]["horizon"] == "future"
+            assert updated_anchor["anchor"]["project"] == "firefly"
             anchors_now = request(base, "/api/anchors")["rows"]
             assert len([r for r in anchors_now if r["uid"] == anchor_created["anchor"]["uid"]]) == 1
             print("EDIT: memory/anchor update in place without duplicates")
+
+            invalid_anchor = request(base, "/api/anchors", "POST", {
+                "title": "缺少分类", "content": "不能保存", "time": "2026-08-10",
+            }, expected=400)
+            assert "时间视角" in invalid_anchor["error"]
+
+            draft = request(base, "/api/essays", "POST", {
+                "title": "草稿短文", "content": "尚未公开。",
+                "status": "draft", "display_order": 20,
+            }, expected=201)["essay"]
+            assert request(base, "/api/essays")["rows"] == []
+            assert request(base, "/api/admin/essays")["rows"][0]["status"] == "draft"
+            published = request(base, "/api/essays", "POST", {
+                "uid": draft["uid"], "title": "公开短文", "content": "已经公开。",
+                "status": "public", "display_order": 20,
+            }, expected=200)["essay"]
+            assert published["status"] == "public"
+            first = request(base, "/api/essays", "POST", {
+                "title": "排在前面", "content": "顺序为十。",
+                "status": "public", "display_order": 10,
+            }, expected=201)["essay"]
+            public_essays = request(base, "/api/essays")["rows"]
+            assert [row["uid"] for row in public_essays] == [first["uid"], draft["uid"]]
+            archived = request(base, "/api/essays", "POST", {
+                "uid": draft["uid"], "title": "公开短文", "content": "已经归档。",
+                "status": "archived", "display_order": 20,
+            }, expected=200)["essay"]
+            assert archived["status"] == "archived"
+            assert [row["uid"] for row in request(base, "/api/essays")["rows"]] == [first["uid"]]
+            print("ESSAYS: draft, publish, order and archive paths ok")
 
             # C7: 静态日记一次性导入：确定性 uid + 重复导入幂等。
             imp1 = request(base, "/api/memories/import-static", "POST", {

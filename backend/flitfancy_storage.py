@@ -109,8 +109,33 @@ class SQLiteStore:
                 created_at TEXT NOT NULL,
                 anchor_time TEXT NOT NULL,
                 time_precision TEXT NOT NULL DEFAULT 'second',
+                horizon TEXT NOT NULL DEFAULT 'now',
+                project TEXT NOT NULL DEFAULT 'pending',
                 title TEXT NOT NULL,
                 content TEXT NOT NULL,
+                synced INTEGER NOT NULL DEFAULT 0)"""
+        )
+        anchor_columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(anchors)").fetchall()
+        }
+        if "horizon" not in anchor_columns:
+            connection.execute(
+                "ALTER TABLE anchors ADD COLUMN horizon TEXT NOT NULL DEFAULT 'now'"
+            )
+        if "project" not in anchor_columns:
+            connection.execute(
+                "ALTER TABLE anchors ADD COLUMN project TEXT NOT NULL DEFAULT 'pending'"
+            )
+        connection.execute(
+            """CREATE TABLE IF NOT EXISTS essays(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uid TEXT UNIQUE NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                title TEXT NOT NULL,
+                content TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'draft',
+                display_order INTEGER NOT NULL DEFAULT 100,
                 synced INTEGER NOT NULL DEFAULT 0)"""
         )
         connection.execute(
@@ -126,6 +151,10 @@ class SQLiteStore:
         connection.execute(
             "CREATE INDEX IF NOT EXISTS idx_sensors_channel_ts "
             "ON sensors(channel, ts)"
+        )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_essays_status_order "
+            "ON essays(status, display_order, updated_at DESC)"
         )
         connection.commit()
         connection.close()

@@ -133,6 +133,8 @@ Worker 额外端点：
 - `POST /admin/memories`：本机后端向 D1 同步日记，可更新（需 Bearer ADMIN_TOKEN）
 - `GET /anchors`：公开读取锚点（有意公开的展示数据）
 - `POST /admin/anchors`：本机后端向 D1 同步锚点（需 Bearer ADMIN_TOKEN）
+- `GET /essays`：公开读取关于页已发布短文
+- `POST /admin/essays`：发布或撤下短文的公网副本（需 Bearer ADMIN_TOKEN；草稿正文不上传）
 - `GET /sensors/latest`：公开读取每块感知板六通道的最新快照
 - `POST /admin/sensors`：本机后端批量更新最新快照（需 Bearer ADMIN_TOKEN）
 - `GET /sensors/history`：24 小时分桶历史（需 Bearer ADMIN_TOKEN）
@@ -168,6 +170,9 @@ Git 忽略、不入库（含作息隐私，仅 `README.md` 例外）。
 - `GET /api/sensors/latest`、`/api/sensors/history`：传感器数据
 - `GET/POST /api/notes`：她的记忆
 - `GET/POST /api/memories`：双线日记；字段为 `perspective`、`time`、`content`
+- `GET/POST /api/anchors`：锚点；额外字段为 `horizon`（现在/未来）与 `project`
+- `GET /api/essays`：只读公开短文；`GET /api/admin/essays`：管理记录库全部状态
+- `POST /api/essays`：新建或编辑短文，支持草稿、公开、排序和归档
 - `POST /api/command`：命令队列（转发到板子下一步接入）
 - `POST /api/chat`：AI 对话（转发到兼容 OpenAI 格式的服务，密钥只在本地）
 - `POST /api/admin/login|logout`：管理登录/登出（用户名 + 密码，失败锁定）
@@ -183,6 +188,7 @@ site/
 ├── docs/                 ← GitHub Pages 发布根
 │   ├── index.html        首页（大字 + 萤火虫）
 │   ├── journal.html      旅途（日记时间线 + 锚点双视图 + 写作编辑器）
+│   ├── observations-prototype.html 见闻·星弦三方案交互原型（假数据、不持久化）
 │   ├── console.html      控制台（传感器总览 + 管理面板 + AI 对话）
 │   ├── about.html        名字与理念
 │   ├── resources.html    资源（FIREFLYS·天心 / SKYWORKS·天工 + 固件）
@@ -197,6 +203,7 @@ site/
 │   │                     console-overview.js / console-sensors.js / console-chat.js /
 │   │                     console-admin.js / console-services.js / journal-admin.js /
 │   │                     about.js / remote.js
+│   │                     essays.js / about-admin.js / observations-prototype.js/.css
 │   ├── CNAME             自定义域名（必须留在发布根）
 │   └── .nojekyll
 ├── backend/              ← 本地服务（不发布）

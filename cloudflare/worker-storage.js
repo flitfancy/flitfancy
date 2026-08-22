@@ -52,9 +52,42 @@ export const TABLE_ANCHORS = `CREATE TABLE IF NOT EXISTS anchors(
         created_ts INTEGER NOT NULL,
         anchor_time TEXT NOT NULL,
         time_precision TEXT NOT NULL DEFAULT 'second',
+        horizon TEXT NOT NULL DEFAULT 'now',
+        project TEXT NOT NULL DEFAULT 'pending',
         title TEXT NOT NULL,
         content TEXT NOT NULL
       )`;
+
+export const TABLE_ESSAYS = `CREATE TABLE IF NOT EXISTS essays(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        uid TEXT UNIQUE NOT NULL,
+        created_ts INTEGER NOT NULL,
+        updated_ts INTEGER NOT NULL,
+        display_order INTEGER NOT NULL DEFAULT 100,
+        title TEXT NOT NULL,
+        content TEXT NOT NULL
+      )`;
+
+export function ensureAnchorsTable(env) {
+  return runOnce(env, "anchors:migration", () => ensureAnchorsTableOnce(env));
+}
+
+async function ensureAnchorsTableOnce(env) {
+  await env.DB.prepare(TABLE_ANCHORS).run();
+  const columns = await env.DB.prepare("PRAGMA table_info(anchors)").all();
+  const names = (columns.results || []).map((column) => column.name);
+  if (!names.includes("horizon")) {
+    await env.DB.prepare(
+      "ALTER TABLE anchors ADD COLUMN horizon TEXT NOT NULL DEFAULT 'now'"
+    ).run();
+  }
+  if (!names.includes("project")) {
+    await env.DB.prepare(
+      "ALTER TABLE anchors ADD COLUMN project TEXT NOT NULL DEFAULT 'pending'"
+    ).run();
+  }
+  return true;
+}
 
 export function ensureMemoriesTable(env) {
   return runOnce(env, "memories:migration", () => ensureMemoriesTableOnce(env));

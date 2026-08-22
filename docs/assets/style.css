@@ -411,17 +411,61 @@ h1 {
 .anchor-stream {
   display: grid;
   gap: 10px;
-  margin-top: 18px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 10px;
 }
+.anchor-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px 18px;
+  margin-top: 24px;
+}
+.anchor-filter-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.anchor-filter-group .btn {
+  padding: 5px 11px;
+  font-size: var(--fs-fine);
+}
+.anchor-filter-group .btn.active {
+  color: var(--amber-soft);
+  border-color: rgba(245, 184, 75, 0.55);
+}
+.anchor-count { margin: 12px 0 0; }
+.anchor-empty { grid-column: 1 / -1; }
 .anchor {
   border: 1px solid var(--border);
   border-radius: 11px;
   padding: 12px 14px;
   background: rgba(255, 255, 255, 0.018);
 }
+.anchor-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+}
 .anchor time {
   color: var(--muted);
   font-size: var(--fs-fine);
+}
+.anchor-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 2px 8px;
+  border: 1px solid rgba(245, 184, 75, 0.22);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: var(--fs-fine);
+  line-height: 1.2;
+}
+.anchor-badge-horizon {
+  color: var(--amber-soft);
+  border-color: rgba(245, 184, 75, 0.38);
 }
 .anchor h3 {
   margin: 4px 0 6px;
@@ -433,6 +477,78 @@ h1 {
   margin: 0;
   font-size: var(--fs-small);
   line-height: 1.7;
+}
+@media (max-width: 1000px) {
+  .anchor-stream { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .anchor-stream { grid-template-columns: 1fr; }
+  .anchor-filter-bar { display: grid; }
+}
+
+/* 关于页：固定序章 + 独立短文记录库。 */
+.about-essay-head .kicker { margin-bottom: 8px; }
+.about-essay-head h2 { margin-bottom: 24px; }
+.about-essay-list {
+  display: grid;
+  gap: 18px;
+}
+.about-essay-card {
+  padding: clamp(22px, 4vw, 38px);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.012));
+}
+.about-essay-card h3 {
+  margin: 0 0 8px;
+  color: var(--amber-soft);
+  font-family: var(--font-display);
+  font-size: var(--fs-sub);
+  font-weight: 400;
+}
+.about-essay-card time {
+  color: var(--muted);
+  font-size: var(--fs-fine);
+}
+.about-essay-card p {
+  margin: 18px 0 0;
+  color: var(--text);
+  line-height: 1.9;
+  white-space: pre-wrap;
+}
+.essay-admin-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+.essay-admin-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.essay-admin-row strong {
+  display: block;
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.essay-admin-meta {
+  color: var(--muted);
+  font-size: var(--fs-fine);
+}
+.essay-admin-actions {
+  display: flex;
+  gap: 6px;
+}
+.essay-admin-actions .btn { padding: 5px 9px; }
+@media (max-width: 640px) {
+  .essay-admin-row { grid-template-columns: 1fr; }
 }
 
 /* 日记管理三区标签 */

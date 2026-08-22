@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex,nofollow">
+  <title>见闻 · 星弦交互原型 — 云萤 · FlitFancy</title>
+  <meta name="description" content="见闻 · 星弦的交互原型，用于验证无限星图、检索、星环与弦。">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='24' fill='%23f5b84b' opacity='0.22'/%3E%3Ccircle cx='32' cy='32' r='12' fill='%23f5b84b'/%3E%3Ccircle cx='32' cy='32' r='5' fill='%23ffe9c4'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="assets/style.css?v=1.2.0">
+  <link rel="stylesheet" href="assets/observations-prototype.css?v=1.2.0">
+</head>
+<body class="observations-prototype-page">
+  <header class="nav observations-site-nav">
+    <a class="brand grad-clip grad-flame" href="index.html">云萤 · FlitFancy</a>
+    <nav>
+      <a href="index.html" class="grad-clip grad-cool">首页</a>
+      <a href="journal.html" class="active grad-clip grad-cool">旅途</a>
+      <a href="console.html" class="grad-clip grad-cool">控制台</a>
+      <a href="about.html" class="grad-clip grad-cool">关于</a>
+      <a href="resources.html" class="grad-clip grad-cool">资源</a>
+    </nav>
+  </header>
+
+  <main class="observations-prototype" data-role="prototype-root"></main>
+
+  <div class="prototype-switcher" role="group" aria-label="星弦原型方案切换">
+    <button type="button" data-role="variant-prev" aria-label="上一个方案">←</button>
+    <span data-role="variant-label" aria-live="polite"></span>
+    <button type="button" data-role="variant-next" aria-label="下一个方案">→</button>
+  </div>
+
+  <script src="assets/observations-prototype.js?v=1.2.0"></script>
+</body>
+</html>

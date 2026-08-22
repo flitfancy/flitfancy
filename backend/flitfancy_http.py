@@ -43,6 +43,7 @@ class HttpDependencies:
     sensor_row_public: object
     service_status: object
     sync_pending_anchors: object
+    sync_pending_essays: object
     sync_pending_memories: object
     sync_public_config: object
 
@@ -77,6 +78,7 @@ def create_handler(app):
     sensor_row_public = app.sensor_row_public
     service_status = app.service_status
     sync_pending_anchors = app.sync_pending_anchors
+    sync_pending_essays = app.sync_pending_essays
     sync_pending_memories = app.sync_pending_memories
     sync_public_config = app.sync_public_config
 
@@ -175,6 +177,8 @@ def create_handler(app):
                 self._api_memory_create()
             elif parsed.path == "/api/anchors":
                 self._api_anchor_create()
+            elif parsed.path == "/api/essays":
+                self._api_essay_create()
             elif parsed.path == "/api/reflections":
                 self._api_reflection_create()
             elif parsed.path == "/api/memories/import-static":
@@ -317,8 +321,28 @@ def create_handler(app):
                 con = db()
                 rows = con.execute(
                     """SELECT uid, anchor_time AS time, time_precision AS precision,
-                              title, content, synced
+                              horizon, project, title, content, synced
                        FROM anchors ORDER BY anchor_time DESC, id DESC LIMIT 200"""
+                ).fetchall()
+                con.close()
+                self._send(200, {"ok": True, "rows": [dict(r) for r in rows]})
+            elif path == "/api/essays":
+                con = db()
+                rows = con.execute(
+                    """SELECT uid, created_at, updated_at, title, content, display_order
+                       FROM essays WHERE status = 'public'
+                       ORDER BY display_order ASC, updated_at DESC, id DESC LIMIT 100"""
+                ).fetchall()
+                con.close()
+                self._send(200, {"ok": True, "rows": [dict(r) for r in rows]})
+            elif path == "/api/admin/essays":
+                con = db()
+                rows = con.execute(
+                    """SELECT uid, created_at, updated_at, title, content,
+                              status, display_order, synced
+                       FROM essays
+                       ORDER BY CASE status WHEN 'public' THEN 0 WHEN 'draft' THEN 1 ELSE 2 END,
+                                display_order ASC, updated_at DESC, id DESC LIMIT 200"""
                 ).fetchall()
                 con.close()
                 self._send(200, {"ok": True, "rows": [dict(r) for r in rows]})
@@ -569,11 +593,19 @@ def create_handler(app):
             title = str(data.get("title") or "").strip()
             content = str(data.get("content") or "").strip()
             anchor_time = str(data.get("time") or "").strip()
+            horizon = str(data.get("horizon") or "").strip()
+            project = str(data.get("project") or "").strip()
             if not title or not content:
                 self._send(400, {"error": "标题和内容都要填写"})
                 return
             if len(title) > 120 or len(content) > 4000:
                 self._send(400, {"error": "标题或内容过长"})
+                return
+            if horizon not in ("now", "future"):
+                self._send(400, {"error": "时间视角必须是 now 或 future"})
+                return
+            if project not in ("firefly", "skywork", "flitfancy"):
+                self._send(400, {"error": "请选择锚点所属项目"})
                 return
             time_precision = "second"
             if not anchor_time:
@@ -597,9 +629,10 @@ def create_handler(app):
             con = db()
             if edit_uid:
                 cur = con.execute(
-                    """UPDATE anchors SET anchor_time=?, time_precision=?, title=?, content=?,
-                           synced=0 WHERE uid=?""",
-                    (anchor_time, time_precision, title, content, edit_uid),
+                    """UPDATE anchors SET anchor_time=?, time_precision=?, horizon=?, project=?,
+                           title=?, content=?, synced=0 WHERE uid=?""",
+                    (anchor_time, time_precision, horizon, project,
+                     title, content, edit_uid),
                 )
                 con.commit()
                 con.close()
@@ -614,16 +647,20 @@ def create_handler(app):
                     "created_at": now_iso(),
                     "anchor_time": anchor_time,
                     "time_precision": time_precision,
+                    "horizon": horizon,
+                    "project": project,
                     "title": title,
                     "content": content,
                 }
                 con.execute(
                     """INSERT INTO anchors(
-                           uid, created_at, anchor_time, time_precision, title, content, synced
-                       ) VALUES(?,?,?,?,?,?,0)""",
+                           uid, created_at, anchor_time, time_precision, horizon, project,
+                           title, content, synced
+                       ) VALUES(?,?,?,?,?,?,?,?,0)""",
                     (
                         record["uid"], record["created_at"], record["anchor_time"],
-                        record["time_precision"], record["title"], record["content"],
+                        record["time_precision"], record["horizon"], record["project"],
+                        record["title"], record["content"],
                     ),
                 )
                 con.commit()
@@ -635,7 +672,7 @@ def create_handler(app):
             con = db()
             saved = con.execute(
                 """SELECT uid, anchor_time AS time, time_precision AS precision,
-                          title, content, synced
+                          horizon, project, title, content, synced
                    FROM anchors WHERE uid = ?""",
                 (uid_value,),
             ).fetchone()
@@ -645,6 +682,78 @@ def create_handler(app):
                 "ok": True,
                 "updated": updated,
                 "anchor": saved,
+                "public_sync": bool(saved["synced"]),
+                "public_sync_note": sync_note,
+            })
+
+        def _api_essay_create(self):
+            data = self._json_body()
+            if data is None:
+                return
+            title = str(data.get("title") or "").strip()
+            content = str(data.get("content") or "").strip()
+            status = str(data.get("status") or "draft").strip()
+            try:
+                display_order = int(data.get("display_order", 100))
+            except (TypeError, ValueError):
+                self._send(400, {"error": "展示顺序必须是整数"})
+                return
+            display_order = max(0, min(display_order, 9999))
+            if not title or not content:
+                self._send(400, {"error": "标题和正文都要填写"})
+                return
+            if len(title) > 120 or len(content) > 12000:
+                self._send(400, {"error": "标题或正文过长"})
+                return
+            if status not in ("draft", "public", "archived"):
+                self._send(400, {"error": "短文状态不正确"})
+                return
+            edit_uid = str(data.get("uid") or "").strip()
+            if edit_uid and not re.match(r"^[a-zA-Z0-9_-]{16,80}$", edit_uid):
+                self._send(400, {"ok": False, "error": "invalid uid"})
+                return
+            updated_at = now_iso()
+            con = db()
+            if edit_uid:
+                cur = con.execute(
+                    """UPDATE essays SET updated_at=?, title=?, content=?, status=?,
+                           display_order=?, synced=0 WHERE uid=?""",
+                    (updated_at, title, content, status, display_order, edit_uid),
+                )
+                con.commit()
+                con.close()
+                if cur.rowcount == 0:
+                    self._send(404, {"ok": False, "error": "要编辑的短文不存在"})
+                    return
+                uid_value = edit_uid
+                updated = True
+            else:
+                uid_value = secrets.token_hex(16)
+                con.execute(
+                    """INSERT INTO essays(
+                           uid, created_at, updated_at, title, content,
+                           status, display_order, synced
+                       ) VALUES(?,?,?,?,?,?,?,0)""",
+                    (uid_value, updated_at, updated_at, title, content,
+                     status, display_order),
+                )
+                con.commit()
+                con.close()
+                updated = False
+            _, sync_note = sync_pending_essays()
+            con = db()
+            saved = con.execute(
+                """SELECT uid, created_at, updated_at, title, content,
+                          status, display_order, synced
+                   FROM essays WHERE uid = ?""",
+                (uid_value,),
+            ).fetchone()
+            con.close()
+            saved = dict(saved)
+            self._send(200 if updated else 201, {
+                "ok": True,
+                "updated": updated,
+                "essay": saved,
                 "public_sync": bool(saved["synced"]),
                 "public_sync_note": sync_note,
             })

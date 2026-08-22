@@ -2,6 +2,7 @@
 
 import json
 import os
+import sqlite3
 import tempfile
 import threading
 import time
@@ -191,6 +192,42 @@ def test_storage():
         }
         connection.close()
         assert "idx_sensors_channel_ts" in indexes
+
+    with tempfile.TemporaryDirectory(prefix="flitfancy-anchor-migration-") as temp_dir:
+        path = os.path.join(temp_dir, "legacy.db")
+        connection = sqlite3.connect(path)
+        connection.execute(
+            """CREATE TABLE anchors(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uid TEXT UNIQUE NOT NULL,
+                created_at TEXT NOT NULL,
+                anchor_time TEXT NOT NULL,
+                time_precision TEXT NOT NULL DEFAULT 'second',
+                title TEXT NOT NULL,
+                content TEXT NOT NULL,
+                synced INTEGER NOT NULL DEFAULT 0)"""
+        )
+        connection.execute(
+            """INSERT INTO anchors(
+                uid, created_at, anchor_time, time_precision, title, content, synced
+            ) VALUES(?,?,?,?,?,?,?)""",
+            ("legacy-anchor-0001", now_iso(), now_iso(), "second", "旧锚点", "旧内容", 1),
+        )
+        connection.commit()
+        connection.close()
+        store = SQLiteStore(path)
+        store.initialize()
+        connection = store.connect()
+        migrated = dict(connection.execute(
+            "SELECT horizon, project FROM anchors WHERE uid = ?",
+            ("legacy-anchor-0001",),
+        ).fetchone())
+        essay_columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(essays)")
+        }
+        connection.close()
+        assert migrated == {"horizon": "now", "project": "pending"}
+        assert {"uid", "status", "display_order", "synced"} <= essay_columns
 
 
 def main():

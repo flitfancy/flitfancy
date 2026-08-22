@@ -7,8 +7,8 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='24' fill='%23f5b84b' opacity='0.22'/%3E%3Ccircle cx='32' cy='32' r='12' fill='%23f5b84b'/%3E%3Ccircle cx='32' cy='32' r='5' fill='%23ffe9c4'/%3E%3C/svg%3E">
   <title>旅途 — 云萤 · FlitFancy</title>
   <meta name="description" content="旅途：云萤与我的锚点和日记，时间会记得我们的存在。">
-  <link rel="stylesheet" href="assets/style.css?v=1.1.6">
-  <script src="assets/track.js?v=1.1.6" defer></script>
+  <link rel="stylesheet" href="assets/style.css?v=1.2.0">
+  <script src="assets/track.js?v=1.2.0" defer></script>
 </head>
 <body class="journal-page">
   <canvas id="sky" aria-hidden="true"></canvas>
@@ -33,6 +33,7 @@
         <div class="journal-views" aria-label="旅途视图切换">
           <button class="btn btn-ghost" data-role="view-tab" data-view="anchors">锚点</button>
           <button class="btn btn-ghost active" data-role="view-tab" data-view="flow">日记</button>
+          <a class="btn btn-ghost" href="observations-prototype.html">见闻</a>
         </div>
       </div>
       <p class="sub">时间会记得我们的存在</p>
@@ -116,6 +117,21 @@
         </div>
       </div>
 
+      <div class="anchor-filter-bar" aria-label="锚点筛选">
+        <div class="anchor-filter-group" aria-label="按项目筛选">
+          <button class="btn btn-ghost active" data-filter="project" data-value="all">全部项目</button>
+          <button class="btn btn-ghost" data-filter="project" data-value="firefly">天心</button>
+          <button class="btn btn-ghost" data-filter="project" data-value="skywork">天工</button>
+          <button class="btn btn-ghost" data-filter="project" data-value="flitfancy">流明</button>
+          <button class="btn btn-ghost" data-filter="project" data-value="pending">待归类</button>
+        </div>
+        <div class="anchor-filter-group" aria-label="按时间视角筛选">
+          <button class="btn btn-ghost active" data-filter="horizon" data-value="all">全部时间</button>
+          <button class="btn btn-ghost" data-filter="horizon" data-value="now">现在</button>
+          <button class="btn btn-ghost" data-filter="horizon" data-value="future">未来</button>
+        </div>
+      </div>
+      <p class="hint anchor-count" data-role="anchor-count" aria-live="polite"></p>
       <div class="anchor-stream" data-role="anchor-list" aria-label="锚点记录"></div>
     </section>
 
@@ -150,6 +166,20 @@
       <div class="memory-form-grid">
         <label>标题
           <input type="text" maxlength="120" placeholder="例如：FFS R1.2 定稿" data-role="anchor-title">
+        </label>
+        <label>时间视角
+          <select data-role="anchor-horizon" required>
+            <option value="now">现在</option>
+            <option value="future">未来</option>
+          </select>
+        </label>
+        <label>所属项目
+          <select data-role="anchor-project" required>
+            <option value="">请选择项目</option>
+            <option value="firefly">Firefly · 天心</option>
+            <option value="skywork">SkyWork · 天工</option>
+            <option value="flitfancy">FlitFancy · 流明</option>
+          </select>
         </label>
         <label>日期
           <input type="date" data-role="anchor-date">
@@ -228,13 +258,13 @@
 
   <div class="js-error" data-role="js-error" hidden></div>
 
-  <script src="assets/firefly.js?v=1.1.6"></script>
-  <script src="assets/sitefx.js?v=1.1.6"></script>
-  <script src="assets/admin-core.js?v=1.1.6"></script>
-  <script src="assets/admin-panel-shell.js?v=1.1.6"></script>
-  <script src="assets/memory.js?v=1.1.6"></script>
-  <script src="assets/anchors.js?v=1.1.6"></script>
-  <script src="assets/about.js?v=1.1.6"></script>
-  <script src="assets/journal-admin.js?v=1.1.6"></script>
+  <script src="assets/firefly.js?v=1.2.0"></script>
+  <script src="assets/sitefx.js?v=1.2.0"></script>
+  <script src="assets/admin-core.js?v=1.2.0"></script>
+  <script src="assets/admin-panel-shell.js?v=1.2.0"></script>
+  <script src="assets/memory.js?v=1.2.0"></script>
+  <script src="assets/anchors.js?v=1.2.0"></script>
+  <script src="assets/about.js?v=1.2.0"></script>
+  <script src="assets/journal-admin.js?v=1.2.0"></script>
 </body>
 </html>

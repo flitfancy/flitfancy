@@ -11,6 +11,8 @@ import { handleConfig, handleToggle } from "./worker-config.js";
 import {
   handleAnchorCreate,
   handleAnchors,
+  handleEssayCreate,
+  handleEssays,
   handleMemories,
   handleMemoryCreate,
 } from "./worker-content.js";
@@ -75,11 +77,17 @@ async function routeRequest(request, env, ctx, url) {
   if (pathname === "/anchors" && request.method === "GET") {
     return handleAnchors(env);
   }
+  if (pathname === "/essays" && request.method === "GET") {
+    return handleEssays(env);
+  }
   if (pathname === "/admin/memories" && request.method === "POST") {
     return handleMemoryCreate(request, env);
   }
   if (pathname === "/admin/anchors" && request.method === "POST") {
     return handleAnchorCreate(request, env);
+  }
+  if (pathname === "/admin/essays" && request.method === "POST") {
+    return handleEssayCreate(request, env);
   }
   if (pathname === "/sensors/latest" && request.method === "GET") {
     return handleSensorsLatest(env);

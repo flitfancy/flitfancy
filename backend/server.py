@@ -115,6 +115,7 @@ def _history_sync_loop():
             print("[%s] 公网历史同步暂不可用: %s" % (now_iso(), note))
         sync_pending_anchors()
         sync_pending_memories()
+        sync_pending_essays()
         time.sleep(300)
 
 
@@ -313,10 +314,30 @@ def sync_public_anchor(anchor):
         "created_at": anchor["created_at"],
         "time": anchor["anchor_time"],
         "precision": anchor["time_precision"],
+        "horizon": anchor["horizon"],
+        "project": anchor["project"],
         "title": anchor["title"],
         "content": anchor["content"],
     }
     return worker_post("/admin/anchors", payload, 8, "公网锚点接口")
+
+
+def sync_public_essay(essay):
+    """公开短文同步内容；草稿和归档只发送撤下指令，不上传正文。"""
+    published = essay["status"] == "public"
+    payload = {
+        "uid": essay["uid"],
+        "published": published,
+    }
+    if published:
+        payload.update({
+            "created_at": essay["created_at"],
+            "updated_at": essay["updated_at"],
+            "title": essay["title"],
+            "content": essay["content"],
+            "display_order": essay["display_order"],
+        })
+    return worker_post("/admin/essays", payload, 8, "公网短文接口")
 
 
 def _sync_pending_rows(table, pusher, limit):
@@ -350,6 +371,11 @@ def sync_pending_anchors(limit=20):
 def sync_pending_memories(limit=20):
     """重试未同步的本地日记，避免临时断网造成记录丢失。"""
     return _sync_pending_rows("memories", sync_public_memory, limit)
+
+
+def sync_pending_essays(limit=20):
+    """同步公开短文或撤下已转为草稿/归档的公网副本。"""
+    return _sync_pending_rows("essays", sync_public_essay, limit)
 
 
 def sync_public_sensors(rows):
@@ -454,6 +480,7 @@ Handler = create_handler(HttpDependencies(
     sensor_row_public=sensor_row_public,
     service_status=service_status,
     sync_pending_anchors=sync_pending_anchors,
+    sync_pending_essays=sync_pending_essays,
     sync_pending_memories=sync_pending_memories,
     sync_public_config=sync_public_config,
 ))

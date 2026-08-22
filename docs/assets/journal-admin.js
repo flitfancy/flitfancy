@@ -158,10 +158,12 @@
       uid: ($('[data-role="anchor-uid"]') || { value: "" }).value.trim(),
       title: $('[data-role="anchor-title"]').value.trim(),
       time: anchorTime ? anchorDate + "T" + anchorTime : anchorDate,
+      horizon: $('[data-role="anchor-horizon"]').value,
+      project: $('[data-role="anchor-project"]').value,
       content: $('[data-role="anchor-content"]').value.trim()
     };
-    if (!payload.title || !anchorDate || !payload.content) {
-      setStatus('[data-role="anchor-write-status"]', "标题、日期和内容都要填写");
+    if (!payload.title || !anchorDate || !payload.horizon || !payload.project || !payload.content) {
+      setStatus('[data-role="anchor-write-status"]', "标题、分类、日期和内容都要填写");
       return;
     }
     button.disabled = true;
@@ -174,6 +176,8 @@
       });
       $('[data-role="anchor-title"]').value = "";
       $('[data-role="anchor-content"]').value = "";
+      $('[data-role="anchor-horizon"]').value = "now";
+      $('[data-role="anchor-project"]').value = "";
       fillNow();
       if ($('[data-role="anchor-uid"]')) $('[data-role="anchor-uid"]').value = "";
       setStatus('[data-role="anchor-write-status"]', data.public_sync
@@ -341,13 +345,19 @@
     showEditorPane("anchor");
     $('[data-role="anchor-uid"]').value = a.uid;
     $('[data-role="anchor-title"]').value = String(a.title || "");
+    $('[data-role="anchor-horizon"]').value = a.horizon === "future" ? "future" : "now";
+    $('[data-role="anchor-project"]').value = ["firefly", "skywork", "flitfancy"].includes(a.project)
+      ? a.project
+      : "";
     const anchorTimeText = String(a.time || "");
     $('[data-role="anchor-date"]').value = anchorTimeText.slice(0, 10);
     $('[data-role="anchor-time"]').value = a.precision === "date"
       ? ""
       : (anchorTimeText.length >= 19 ? anchorTimeText.slice(11, 19) : "");
     $('[data-role="anchor-content"]').value = String(a.content || "");
-    setStatus('[data-role="anchor-write-status"]', "正在编辑既有锚点，保存后覆盖原条目");
+    setStatus('[data-role="anchor-write-status"]', a.project === "pending"
+      ? "旧锚点尚未归类，请选择所属项目后保存"
+      : "正在编辑既有锚点，保存后覆盖原条目");
   });
 
   if (window.location.hash === "#write") openWriter();

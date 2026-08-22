@@ -70,6 +70,9 @@ const adminRequests = [
   new Request("https://api.flitfancy.com/admin/anchors", {
     method: "POST", body: "{}", headers: { "Content-Type": "application/json" },
   }),
+  new Request("https://api.flitfancy.com/admin/essays", {
+    method: "POST", body: "{}", headers: { "Content-Type": "application/json" },
+  }),
   new Request("https://api.flitfancy.com/admin/sensors", {
     method: "POST", body: "{}", headers: { "Content-Type": "application/json" },
   }),
