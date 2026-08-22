@@ -341,6 +341,8 @@ def create_handler(app):
                 con.close()
                 self._send(200, {"ok": True, "rows": [dict(r) for r in rows]})
             elif path == "/api/admin/essays":
+                if self._require_admin() is None:
+                    return
                 con = db()
                 rows = con.execute(
                     """SELECT uid, created_at, updated_at, title, content,
@@ -354,8 +356,12 @@ def create_handler(app):
             elif path == "/api/observations":
                 self._send(200, observation_service.public_catalog())
             elif path == "/api/admin/observations":
+                if self._require_admin() is None:
+                    return
                 self._send(200, observation_service.admin_observations())
             elif path == "/api/admin/observation-links":
+                if self._require_admin() is None:
+                    return
                 self._send(200, observation_service.admin_links())
             elif path == "/api/reflections":
                 self._send(200, {

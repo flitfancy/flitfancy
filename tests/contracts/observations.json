@@ -1,0 +1,111 @@
+{
+  "cases": [
+    {
+      "name": "valid-full",
+      "payload": {
+        "title": "脉冲星的钟",
+        "category": "宇宙与自然",
+        "tags": [
+          "时间",
+          "发现"
+        ],
+        "summary": "一颗用于测试公开契约的星球。",
+        "content": "完整内容。",
+        "discovered_at": "2026-08-22",
+        "source_name": "示例来源",
+        "source_url": "https://example.com/source"
+      },
+      "valid": true
+    },
+    {
+      "name": "valid-minimal-no-source",
+      "payload": {
+        "title": "无来源的星球",
+        "category": "思想与日常",
+        "tags": [],
+        "summary": "只有短描述也算完整。",
+        "content": "",
+        "discovered_at": "2026-08-01",
+        "source_name": "",
+        "source_url": ""
+      },
+      "valid": true
+    },
+    {
+      "name": "missing-summary",
+      "payload": {
+        "title": "缺短描述",
+        "category": "技术与造物",
+        "tags": [],
+        "summary": "",
+        "content": "内容。",
+        "discovered_at": "2026-08-01"
+      },
+      "valid": false
+    },
+    {
+      "name": "invalid-category",
+      "payload": {
+        "title": "分类不在枚举内",
+        "category": "矿物学",
+        "tags": [],
+        "summary": "分类必须来自六个初始分类。",
+        "content": "",
+        "discovered_at": "2026-08-01"
+      },
+      "valid": false
+    },
+    {
+      "name": "invalid-date",
+      "payload": {
+        "title": "日期不存在",
+        "category": "历史与文明",
+        "tags": [],
+        "summary": "二月没有三十日。",
+        "content": "",
+        "discovered_at": "2026-02-30"
+      },
+      "valid": false
+    },
+    {
+      "name": "javascript-source-url",
+      "payload": {
+        "title": "危险来源",
+        "category": "技术与造物",
+        "tags": [],
+        "summary": "来源协议不合法。",
+        "content": "",
+        "discovered_at": "2026-08-01",
+        "source_name": "错误",
+        "source_url": "javascript:alert(1)"
+      },
+      "valid": false
+    },
+    {
+      "name": "tag-too-long",
+      "payload": {
+        "title": "标签超长",
+        "category": "语言与艺术",
+        "tags": [
+          "这是一个超过三十二个字符限制的标签字符串用于验证边界拒绝行为用的超长标"
+        ],
+        "summary": "单个标签不能超过 32 字。",
+        "content": "",
+        "discovered_at": "2026-08-01"
+      },
+      "valid": false
+    },
+    {
+      "name": "title-too-long",
+      "payload": {
+        "title": "长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长",
+        "category": "生命与感知",
+        "tags": [],
+        "summary": "标题超过 120 字。",
+        "content": "",
+        "discovered_at": "2026-08-01"
+      },
+      "valid": false
+    }
+  ]
+}

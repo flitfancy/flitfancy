@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 
 const worker = (await import(new URL("../cloudflare/worker.js", import.meta.url))).default;
+const ESSAYS_CONTRACT = JSON.parse(
+  fs.readFileSync(new URL("./contracts/essays.json", import.meta.url), "utf8")
+);
 const ADMIN_TOKEN = "taxonomy-admin-token-0123456789abcdef012345";
 
 class FakeStatement {
@@ -135,5 +139,23 @@ essays = await (await worker.fetch(
   new Request("https://api.flitfancy.com/essays"), env
 )).json();
 assert.deepEqual(essays.rows, []);
+
+// 与本地后端共用同一份契约：accept/reject 判定必须逐条一致。
+for (const [index, testCase] of ESSAYS_CONTRACT.cases.entries()) {
+  const response = await worker.fetch(new Request(
+    "https://api.flitfancy.com/admin/essays", {
+      method: "POST", headers: adminHeaders,
+      body: JSON.stringify({
+        published: true,
+        created_at: "2026-08-22T12:00:00+08:00",
+        updated_at: "2026-08-22T12:00:00+08:00",
+        uid: "contract-essay-" + String(index).padStart(4, "0"),
+        ...testCase.payload,
+      }),
+    }
+  ), env);
+  assert.equal(response.status, testCase.valid ? 200 : 400,
+    `契约用例 ${testCase.name} 判定与本地后端不一致`);
+}
 
 console.log("worker anchor taxonomy and public essays test ok");

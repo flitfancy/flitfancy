@@ -123,6 +123,15 @@ export async function handleAnchorCreate(request, env) {
   return json({ ok: true, uid });
 }
 
+function toDisplayOrder(value) {
+  if (value === undefined || value === null) return 100;
+  if (typeof value === "number" && Number.isFinite(value)) return Math.trunc(value);
+  if (typeof value === "string" && /^[+-]?\d+$/.test(value.trim())) {
+    return parseInt(value.trim(), 10);
+  }
+  return null;
+}
+
 export async function handleEssayCreate(request, env) {
   const pre = await adminContentBody(request, env, "短文");
   if (pre.error) return pre.error;
@@ -136,7 +145,13 @@ export async function handleEssayCreate(request, env) {
   }
   const title = String(body.title || "").trim();
   const content = String(body.content || "").trim();
-  const displayOrder = Math.max(0, Math.min(9999, Number.parseInt(body.display_order, 10) || 0));
+  // 与本地后端 int() 契约一致：缺省 100；数字向零截断；纯数字字符串可解析；
+  // 其余类型拒绝（不再静默归零）。
+  const rawOrder = toDisplayOrder(body.display_order);
+  if (rawOrder === null) {
+    return json({ ok: false, error: "invalid display order" }, 400);
+  }
+  const displayOrder = Math.max(0, Math.min(9999, rawOrder));
   if (!title || title.length > 120 || !content || content.length > 12000) {
     return json({ ok: false, error: "invalid essay content" }, 400);
   }

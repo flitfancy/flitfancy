@@ -80,7 +80,8 @@ export const TABLE_OBSERVATIONS = `CREATE TABLE IF NOT EXISTS observations(
         content TEXT NOT NULL DEFAULT '',
         discovered_at TEXT NOT NULL,
         source_name TEXT NOT NULL DEFAULT '',
-        source_url TEXT NOT NULL DEFAULT ''
+        source_url TEXT NOT NULL DEFAULT '',
+        published INTEGER NOT NULL DEFAULT 0
       )`;
 
 export const TABLE_OBSERVATION_LINKS = `CREATE TABLE IF NOT EXISTS observation_links(
@@ -95,6 +96,25 @@ export const TABLE_OBSERVATION_LINKS = `CREATE TABLE IF NOT EXISTS observation_l
 
 export function ensureAnchorsTable(env) {
   return runOnce(env, "anchors:migration", () => ensureAnchorsTableOnce(env));
+}
+
+// 公开查询依赖 published 标志做纵深防御（写入侧本就只保留公开副本，
+// 撤下即 DELETE）。存量行按同一不变量一次性回填为 1。
+export function ensureObservationsTable(env) {
+  return runOnce(env, "observations:migration", () => ensureObservationsTableOnce(env));
+}
+
+async function ensureObservationsTableOnce(env) {
+  await env.DB.prepare(TABLE_OBSERVATIONS).run();
+  const columns = await env.DB.prepare("PRAGMA table_info(observations)").all();
+  const names = (columns.results || []).map((column) => column.name);
+  if (!names.includes("published")) {
+    await env.DB.prepare(
+      "ALTER TABLE observations ADD COLUMN published INTEGER NOT NULL DEFAULT 0"
+    ).run();
+    await env.DB.prepare("UPDATE observations SET published = 1").run();
+  }
+  return true;
 }
 
 async function ensureAnchorsTableOnce(env) {

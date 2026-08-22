@@ -1,8 +1,8 @@
 import { adminContentBody } from "./worker-content.js";
 import { clearFails, clientIp, json } from "./worker-core.js";
 import {
+  ensureObservationsTable,
   runDdlOnce,
-  TABLE_OBSERVATIONS,
   TABLE_OBSERVATION_LINKS,
 } from "./worker-storage.js";
 
@@ -17,7 +17,7 @@ const CATEGORIES = new Set([
 const UID_RE = /^[a-zA-Z0-9_-]{16,80}$/;
 
 async function ensureTables(env) {
-  await runDdlOnce(env, TABLE_OBSERVATIONS);
+  await ensureObservationsTable(env);
   await runDdlOnce(env, TABLE_OBSERVATION_LINKS);
 }
 
@@ -67,7 +67,8 @@ export async function handleObservations(env) {
   const rows = await env.DB.prepare(
     `SELECT uid, created_ts, updated_ts, title, category, tags_json,
             summary, content, discovered_at, source_name, source_url
-     FROM observations ORDER BY discovered_at DESC, updated_ts DESC, id DESC LIMIT 300`
+     FROM observations WHERE published = 1
+     ORDER BY discovered_at DESC, updated_ts DESC, id DESC LIMIT 300`
   ).all();
   const links = await env.DB.prepare(
     `SELECT link.uid, link.created_ts, link.updated_ts, link.source_uid,
@@ -122,8 +123,8 @@ export async function handleObservationCreate(request, env) {
   await env.DB.prepare(
     `INSERT INTO observations(
        uid, created_ts, updated_ts, title, category, tags_json, summary,
-       content, discovered_at, source_name, source_url
-     ) VALUES(?,?,?,?,?,?,?,?,?,?,?)
+       content, discovered_at, source_name, source_url, published
+     ) VALUES(?,?,?,?,?,?,?,?,?,?,?,1)
      ON CONFLICT(uid) DO UPDATE SET
        updated_ts = excluded.updated_ts,
        title = excluded.title,
@@ -133,7 +134,8 @@ export async function handleObservationCreate(request, env) {
        content = excluded.content,
        discovered_at = excluded.discovered_at,
        source_name = excluded.source_name,
-       source_url = excluded.source_url`
+       source_url = excluded.source_url,
+       published = 1`
   ).bind(
     uid, unixTime(body.created_at), unixTime(body.updated_at), title, category,
     JSON.stringify(tags), summary, content, discoveredAt, sourceName, sourceUrl

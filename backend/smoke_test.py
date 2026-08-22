@@ -20,6 +20,12 @@ CST = timezone(timedelta(hours=8))
 with open(os.path.join(ROOT, "..", "tests", "contracts", "reflections.json"),
           encoding="utf-8") as contract_file:
     REFLECTIONS_CONTRACT = json.load(contract_file)
+with open(os.path.join(ROOT, "..", "tests", "contracts", "essays.json"),
+          encoding="utf-8") as contract_file:
+    ESSAYS_CONTRACT = json.load(contract_file)
+with open(os.path.join(ROOT, "..", "tests", "contracts", "observations.json"),
+          encoding="utf-8") as contract_file:
+    OBSERVATIONS_CONTRACT = json.load(contract_file)
 
 
 def recent_ts(seconds_ago):
@@ -332,12 +338,21 @@ def main():
             }, expected=400)
             assert "时间视角" in invalid_anchor["error"]
 
+            # 本地管理员登录：后续 /api/admin/* 读接口都需要令牌（与会话
+            # IP 绑定，隧道段另有独立登录，互不影响）。
+            admin_login_local = request(base, "/api/admin/login", "POST", {
+                "username": "smoke-admin", "password": password,
+            })
+            assert admin_login_local.get("token"), admin_login_local
+            admin_bearer = {"Authorization": "Bearer " + admin_login_local["token"]}
+
             draft = request(base, "/api/essays", "POST", {
                 "title": "草稿短文", "content": "尚未公开。",
                 "status": "draft", "display_order": 20,
             }, expected=201)["essay"]
             assert request(base, "/api/essays")["rows"] == []
-            assert request(base, "/api/admin/essays")["rows"][0]["status"] == "draft"
+            assert request(base, "/api/admin/essays",
+                           headers=admin_bearer)["rows"][0]["status"] == "draft"
             published = request(base, "/api/essays", "POST", {
                 "uid": draft["uid"], "title": "公开短文", "content": "已经公开。",
                 "status": "public", "display_order": 20,
@@ -357,6 +372,12 @@ def main():
             assert [row["uid"] for row in request(base, "/api/essays")["rows"]] == [first["uid"]]
             print("ESSAYS: draft, publish, order and archive paths ok")
 
+            # 与 Worker 共用同一份契约：accept/reject 判定必须逐条一致。
+            for index, case in enumerate(ESSAYS_CONTRACT["cases"]):
+                request(base, "/api/essays", "POST", dict(case["payload"]),
+                        expected=201 if case["valid"] else 400)
+            print("ESSAYS-CONTRACT: parity with worker fixtures ok")
+
             draft_star = request(base, "/api/observations", "POST", {
                 "title": "脉冲星的钟", "category": "宇宙与自然",
                 "tags": ["时间", "宇宙"], "summary": "宇宙中的稳定节拍。",
@@ -365,7 +386,7 @@ def main():
                 "source_url": "https://example.com/pulsar", "status": "draft",
             }, expected=201)["observation"]
             assert request(base, "/api/observations")["rows"] == []
-            assert request(base, "/api/admin/observations")["rows"][0]["tags"] == ["时间", "宇宙"]
+            assert request(base, "/api/admin/observations", headers=admin_bearer)["rows"][0]["tags"] == ["时间", "宇宙"]
             first_star = request(base, "/api/observations", "POST", {
                 "uid": draft_star["uid"], "title": "脉冲星的钟", "category": "宇宙与自然",
                 "tags": ["时间", "宇宙"], "summary": "宇宙中的稳定节拍。",
@@ -400,6 +421,12 @@ def main():
                 "discovered_at": "2026-08-22", "source_name": "错误",
                 "source_url": "javascript:alert(1)", "status": "draft",
             }, expected=400)
+
+            # 与 Worker 共用同一份契约：accept/reject 判定必须逐条一致。
+            for index, case in enumerate(OBSERVATIONS_CONTRACT["cases"]):
+                request(base, "/api/observations", "POST", dict(case["payload"]),
+                        expected=201 if case["valid"] else 400)
+            print("OBSERVATIONS-CONTRACT: parity with worker fixtures ok")
             print("OBSERVATIONS: draft, publish, archive, links and URL validation ok")
 
             # C7: 静态日记一次性导入：确定性 uid + 重复导入幂等。
@@ -483,6 +510,15 @@ def main():
             public_reflections = request(base, "/api/reflections")
             assert public_reflections["reflections"] == REFLECTIONS_CONTRACT["expected"]
             print("REFLECTIONS: local save, cleanup and public read ok")
+
+            # /api/admin/* 读取与写接口同一姿态：未登录一律 401，带令牌放行。
+            # 令牌与会话 IP 绑定，因此用本地登录换取的令牌走本地请求。
+            for admin_read_path in ("/api/admin/essays",
+                                    "/api/admin/observations",
+                                    "/api/admin/observation-links"):
+                request(base, admin_read_path, expected=401)
+                request(base, admin_read_path, headers=admin_bearer)
+            print("ADMIN-READ: essays/observations/links require login")
 
             # B1: 前缀域名 Host（DNS rebinding 场景）不得被当作本地放行
             rebind = request(base, "/api/status", headers={

@@ -384,14 +384,41 @@ def sync_public_observation_link(link):
     return worker_post("/admin/observation-links", payload, 8, "公网星弦接口")
 
 
+# 补传 SQL 白名单：表名不再参与字符串格式化，杜绝未来调用方传入
+# 非常量表名的可能。键集合与 sync_pending_* 系列入口一一对应。
+_SYNC_PENDING_SQL = {
+    "anchors": (
+        "SELECT * FROM anchors WHERE synced = 0 ORDER BY id LIMIT ?",
+        "UPDATE anchors SET synced = 1 WHERE uid = ?",
+    ),
+    "memories": (
+        "SELECT * FROM memories WHERE synced = 0 ORDER BY id LIMIT ?",
+        "UPDATE memories SET synced = 1 WHERE uid = ?",
+    ),
+    "essays": (
+        "SELECT * FROM essays WHERE synced = 0 ORDER BY id LIMIT ?",
+        "UPDATE essays SET synced = 1 WHERE uid = ?",
+    ),
+    "observations": (
+        "SELECT * FROM observations WHERE synced = 0 ORDER BY id LIMIT ?",
+        "UPDATE observations SET synced = 1 WHERE uid = ?",
+    ),
+    "observation_links": (
+        "SELECT * FROM observation_links WHERE synced = 0 ORDER BY id LIMIT ?",
+        "UPDATE observation_links SET synced = 1 WHERE uid = ?",
+    ),
+}
+
+
 def _sync_pending_rows(table, pusher, limit):
-    """重试补传 synced=0 的滞留记录（锚点/日记共用）：
+    """重试补传 synced=0 的滞留记录（锚点/日记/短文/见闻共用）：
     逐条推送，失败即停（不重试风暴），成功后落 synced=1。"""
+    try:
+        select_sql, mark_sql = _SYNC_PENDING_SQL[table]
+    except KeyError:
+        raise ValueError(f"unknown sync table: {table}") from None
     con = db()
-    rows = con.execute(
-        "SELECT * FROM %s WHERE synced = 0 ORDER BY id LIMIT ?" % table,
-        (limit,),
-    ).fetchall()
+    rows = con.execute(select_sql, (limit,)).fetchall()
     con.close()
     synced = 0
     note = ""
@@ -400,7 +427,7 @@ def _sync_pending_rows(table, pusher, limit):
         if not ok:
             break
         con = db()
-        con.execute("UPDATE %s SET synced = 1 WHERE uid = ?" % table, (row["uid"],))
+        con.execute(mark_sql, (row["uid"],))
         con.commit()
         con.close()
         synced += 1

@@ -1,0 +1,65 @@
+{
+  "cases": [
+    {
+      "name": "valid-default-order",
+      "payload": {
+        "title": "缺省排序的短文",
+        "content": "不传 display_order 时两端都必须缺省为 100。"
+      },
+      "valid": true
+    },
+    {
+      "name": "valid-int-order",
+      "payload": {
+        "title": "整数排序",
+        "content": "显式整数排序直接生效。",
+        "display_order": 42
+      },
+      "valid": true
+    },
+    {
+      "name": "order-float-truncates",
+      "payload": {
+        "title": "浮点排序截断",
+        "content": "与 Python int() 语义一致：向零截断。",
+        "display_order": 1.5
+      },
+      "valid": true
+    },
+    {
+      "name": "order-numeric-string",
+      "payload": {
+        "title": "数字字符串排序",
+        "content": "纯数字字符串按 int() 语义可解析。",
+        "display_order": "7"
+      },
+      "valid": true
+    },
+    {
+      "name": "order-not-int",
+      "payload": {
+        "title": "非法排序",
+        "content": "非数字字符串必须拒绝，不能静默归零。",
+        "display_order": "abc"
+      },
+      "valid": false
+    },
+    {
+      "name": "missing-title",
+      "payload": {
+        "title": "",
+        "content": "标题和正文都要填写。"
+      },
+      "valid": false
+    },
+    {
+      "name": "bad-uid-edit",
+      "payload": {
+        "uid": "short",
+        "title": "编辑路径的非法 uid",
+        "content": "uid 必须满足 16-80 位 [a-zA-Z0-9_-]。"
+      },
+      "valid": false
+    }
+  ]
+}
