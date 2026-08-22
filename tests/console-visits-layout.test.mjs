@@ -24,26 +24,39 @@ const tableRule = ruleBody(".visits-table");
 assert.match(tableRule, /table-layout:\s*fixed/,
   "五列必须共享统一列宽模型，内容不得反向撑宽整张表");
 assert.match(tableRule, /width:\s*100%/);
-assert.match(tableRule, /min-width:\s*640px/);
+assert.match(tableRule, /--visits-cell-pad-inline:\s*12px/,
+  "表格列宽与单元格必须共享同一个横向内边距变量");
+assert.match(tableRule, /--visits-cell-inline-space:\s*calc\(var\(--visits-cell-pad-inline\)\s*\+\s*var\(--visits-cell-pad-inline\)\)/,
+  "列宽计算必须包含左右两侧的单元格内边距");
+assert.match(tableRule, /min-width:\s*700px/);
 
 assert.match(html, /<colgroup>[\s\S]*class="visits-col-time"[\s\S]*class="visits-col-ip"[\s\S]*class="visits-col-page"[\s\S]*class="visits-col-ref"[\s\S]*class="visits-col-device"[\s\S]*<\/colgroup>/,
   "表格列宽职责必须集中声明，不能散落在内容规则中");
 
 const ipColumnRule = ruleBody(".visits-col-ip");
-assert.match(ipColumnRule, /width:\s*clamp\(15ch,\s*22%,\s*24ch\)/,
+assert.match(ipColumnRule, /width:\s*clamp\(calc\(15ch\s*\+\s*var\(--visits-cell-inline-space\)\),\s*22%,\s*calc\(24ch\s*\+\s*var\(--visits-cell-inline-space\)\)\)/,
   "IP 列应从完整 IPv4 宽度起，在有余量时适度扩张");
 const timeColumnRule = ruleBody(".visits-col-time");
-assert.match(timeColumnRule, /width:\s*clamp\(132px,\s*19%,\s*150px\)/,
+assert.match(timeColumnRule, /width:\s*clamp\(calc\(108px\s*\+\s*var\(--visits-cell-inline-space\)\),\s*19%,\s*calc\(126px\s*\+\s*var\(--visits-cell-inline-space\)\)\)/,
   "时间列必须计入单元格内边距并随可用空间适度扩张");
 const deviceColumnRule = ruleBody(".visits-col-device");
-assert.match(deviceColumnRule, /width:\s*clamp\(112px,\s*15%,\s*132px\)/,
+assert.match(deviceColumnRule, /width:\s*clamp\(calc\(88px\s*\+\s*var\(--visits-cell-inline-space\)\),\s*15%,\s*calc\(108px\s*\+\s*var\(--visits-cell-inline-space\)\)\)/,
   "设备列必须完整容纳常见分辨率并随可用空间适度扩张");
 const pageColumnRule = ruleBody(".visits-col-page");
-assert.match(pageColumnRule, /width:\s*clamp\(64px,\s*10%,\s*84px\)/,
+assert.match(pageColumnRule, /width:\s*clamp\(calc\(40px\s*\+\s*var\(--visits-cell-inline-space\)\),\s*10%,\s*calc\(60px\s*\+\s*var\(--visits-cell-inline-space\)\)\)/,
   "较短的页面列应限制宽度，让来源列独占剩余空间");
 const refColumnRule = ruleBody(".visits-col-ref");
-assert.match(refColumnRule, /width:\s*clamp\(20ch,\s*28%,\s*26ch\)/,
-  "来源列必须至少比旧布局多约 5 个字符，并继续随面板宽度扩张");
+const refMinMatch = refColumnRule.match(/width:\s*clamp\(calc\((\d+)ch\s*\+\s*var\(--visits-cell-inline-space\)\),\s*28%,\s*calc\((\d+)ch\s*\+\s*var\(--visits-cell-inline-space\)\)\)/);
+assert.ok(refMinMatch,
+  "来源列的内容宽度与单元格内边距必须分开计算");
+const referenceHost = "console.flitfancy.com";
+assert.ok(Number(refMinMatch[1]) >= referenceHost.length + 1,
+  "来源列内容区必须完整容纳 console.flitfancy.com 并保留余量");
+
+const cellRuleMatch = css.match(/\.visits-table th,\s*\.visits-table td\s*\{([^}]*)\}/);
+assert.ok(cellRuleMatch, "缺少访问记录单元格样式");
+assert.match(cellRuleMatch[1], /padding:\s*8px\s+var\(--visits-cell-pad-inline\)/,
+  "单元格实际内边距必须使用列宽模型中的同一变量");
 
 const contentRule = ruleBody(".visit-ip-content");
 assert.match(contentRule, /display:\s*block/);
@@ -55,7 +68,7 @@ assert.match(contentRule, /overflow-wrap:\s*anywhere/,
 assert.doesNotMatch(contentRule, /max-content|32ch/,
   "IP 内容不能再参与决定整张表的固有宽度");
 
-assert.match(css, /@container\s+visits\s+\(max-width:\s*639px\)/,
+assert.match(css, /@container\s+visits\s+\(max-width:\s*699px\)/,
   "窄管理面板必须整体切换布局，不能继续横向藏掉设备列");
 assert.match(css, /@container\s+visits[\s\S]*?\.visits-table\s*\{[^}]*min-width:\s*0/,
   "卡片模式必须取消桌面表格的最小宽度");

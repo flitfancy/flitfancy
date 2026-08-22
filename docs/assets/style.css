@@ -1406,17 +1406,19 @@ body.console-page .section {
 }
 
 .visits-table {
+  --visits-cell-pad-inline: 12px;
+  --visits-cell-inline-space: calc(var(--visits-cell-pad-inline) + var(--visits-cell-pad-inline));
   width: 100%;
   table-layout: fixed;     /* 五列共享同一宽度模型，内容不得反向撑宽表格。 */
   border-collapse: collapse;
   font-size: var(--fs-meta);
-  min-width: 640px;
+  min-width: 700px;
 }
-.visits-col-time { width: clamp(132px, 19%, 150px); }
-.visits-col-ip { width: clamp(15ch, 22%, 24ch); }
-.visits-col-page { width: clamp(64px, 10%, 84px); }
-.visits-col-ref { width: clamp(20ch, 28%, 26ch); }
-.visits-col-device { width: clamp(112px, 15%, 132px); }
+.visits-col-time { width: clamp(calc(108px + var(--visits-cell-inline-space)), 19%, calc(126px + var(--visits-cell-inline-space))); }
+.visits-col-ip { width: clamp(calc(15ch + var(--visits-cell-inline-space)), 22%, calc(24ch + var(--visits-cell-inline-space))); }
+.visits-col-page { width: clamp(calc(40px + var(--visits-cell-inline-space)), 10%, calc(60px + var(--visits-cell-inline-space))); }
+.visits-col-ref { width: clamp(calc(22ch + var(--visits-cell-inline-space)), 28%, calc(28ch + var(--visits-cell-inline-space))); }
+.visits-col-device { width: clamp(calc(88px + var(--visits-cell-inline-space)), 15%, calc(108px + var(--visits-cell-inline-space))); }
 
 .visits-table td.visit-ip {
   vertical-align: top;
@@ -1434,7 +1436,7 @@ body.console-page .section {
 .visits-table th,
 .visits-table td {
   text-align: left;
-  padding: 8px 12px;
+  padding: 8px var(--visits-cell-pad-inline);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   white-space: nowrap;
   overflow: hidden;
@@ -1471,7 +1473,7 @@ body.console-page .section {
 }
 
 /* 侧边栏窄到无法容纳五列时，整个组件切换为字段卡片。 */
-@container visits (max-width: 639px) {
+@container visits (max-width: 699px) {
   .visits-table-wrap {
     overflow: visible;
     border: 0;
