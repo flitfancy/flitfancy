@@ -67,7 +67,7 @@
 .obs-title-block h1 {
   margin: 0;
   color: var(--amber-soft);
-  font-size: clamp(1.35rem, 2.3vw, 2rem);
+  font-size: var(--fs-head-1);
   letter-spacing: 0.08em;
 }
 
@@ -139,7 +139,7 @@
 
 .obs-string-label {
   fill: rgba(207, 222, 230, 0.66);
-  font-size: 11px;
+  font-size: var(--fs-caption);
   letter-spacing: 0.08em;
   paint-order: stroke;
   stroke: rgba(5, 8, 15, 0.92);
@@ -175,7 +175,7 @@
   box-shadow:
     0 0 24px color-mix(in srgb, var(--planet-color), transparent 48%),
     inset -13px -11px 18px rgba(0, 0, 0, 0.38);
-  font-size: clamp(0.72rem, 1.1vw, 0.9rem);
+  font-size: var(--fs-text-xs);
   line-height: 1.25;
   text-align: center;
   text-wrap: balance;
@@ -207,7 +207,7 @@
   border-radius: 999px;
   color: var(--amber-soft);
   background: rgba(7, 10, 17, 0.88);
-  font-size: 10px;
+  font-size: var(--fs-caption);
   line-height: 1.2;
   white-space: nowrap;
 }
@@ -344,7 +344,7 @@
   .observations-page { min-height: 680px; }
   .observations-main { height: calc(100dvh - 102px); min-height: 570px; }
   .obs-header { top: 10px; left: 10px; width: calc(100% - 20px); padding: 12px; gap: 10px; }
-  .obs-title-block h1 { font-size: 1.25rem; }
+  .obs-title-block h1 { font-size: var(--fs-stat); }
   .obs-map-tools { left: 10px; bottom: 10px; max-width: calc(100% - 20px); padding: 9px; }
   .obs-map-actions .btn { min-height: 36px; padding: 5px 8px; font-size: var(--fs-fine); }
   .obs-load-status { right: 12px; bottom: 88px; max-width: calc(100% - 24px); }
