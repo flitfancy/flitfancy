@@ -161,6 +161,74 @@
     };
   }
 
+  /* ---------- 跨页保持 ----------
+   * 同一标签页内导航时，萤火虫的位置与呼吸节奏通过 sessionStorage 延续，
+   * 让整个站点像同一片连续的夜空（新标签页/超时后仍会重新随机出生）。
+   * 只保存基础漂游状态；相遇冷却、鼠标受惊等瞬时状态不跨页。 */
+  const FLY_STORE_KEY = "flitfancy.fireflies.v1";
+  const FLY_STORE_MAX_AGE_MS = 30 * 60 * 1000;
+
+  function saveFlies() {
+    try {
+      if (!w || !h || !flies.length || !sessionStorage) return;
+      const payload = flies.slice(0, 80).map(function (f) {
+        return {
+          nx: f.x / w, ny: f.y / h,          // 归一化坐标：跨视口尺寸仍能对位
+          r: f.r,
+          vx: f.vx, vy: f.vy, vx0: f.vx0, vy0: f.vy0,
+          phase: f.phase, breathOffset: f.breathOffset, breathPeriod: f.breathPeriod
+        };
+      });
+      sessionStorage.setItem(FLY_STORE_KEY, JSON.stringify({
+        t: Date.now(), w: w, h: h, flies: payload
+      }));
+    } catch (e) { /* 存储不可用（隐私模式等）时静默跳过 */ }
+  }
+
+  function restoreFlies() {
+    try {
+      if (!sessionStorage) return false;
+      const raw = sessionStorage.getItem(FLY_STORE_KEY);
+      if (!raw) return false;
+      const snap = JSON.parse(raw);
+      if (!snap || !Array.isArray(snap.flies) || !snap.flies.length) return false;
+      if (!snap.t || Date.now() - snap.t > FLY_STORE_MAX_AGE_MS) return false;
+      if (!snap.w || !snap.h) return false;
+      // 视口宽高比变化过大（换设备/旋转屏幕）时放弃恢复，重新随机出生
+      const ratioNow = w / h;
+      const ratioSnap = snap.w / snap.h;
+      if (!ratioSnap || Math.abs(ratioNow - ratioSnap) / ratioSnap > 0.35) return false;
+      flies.length = 0;
+      const count = Math.min(snap.flies.length, targetFlyCount());
+      for (let i = 0; i < count; i++) {
+        const s = snap.flies[i];
+        if (!s || !isFinite(s.nx) || !isFinite(s.ny)) continue;
+        const vx0 = isFinite(s.vx0) ? s.vx0 : (s.vx || 0);
+        const vy0 = isFinite(s.vy0) ? s.vy0 : (s.vy || 0);
+        flies.push({
+          x: Math.min(Math.max(s.nx, 0), 1) * w,
+          y: Math.min(Math.max(s.ny, 0), 1) * h,
+          r: isFinite(s.r) && s.r > 0 ? s.r : 1 + Math.random() * 1.6,
+          vx: isFinite(s.vx) ? s.vx : vx0,
+          vy: isFinite(s.vy) ? s.vy : vy0,
+          vx0: vx0, vy0: vy0,
+          phase: isFinite(s.phase) ? s.phase : Math.random() * Math.PI * 2,
+          breathOffset: isFinite(s.breathOffset) ? s.breathOffset : Math.random(),
+          breathPeriod: isFinite(s.breathPeriod) && s.breathPeriod > 0
+            ? s.breathPeriod
+            : CFG.flies.breathPeriodMin + Math.random() * CFG.flies.breathPeriodRange,
+          meetCd: 0,
+          mouseGlowUntil: 0
+        });
+      }
+      // 恢复后不足公式数量时补种到目标数（跨页视口可能变大）
+      while (flies.length < targetFlyCount()) flies.push(spawnFly(true));
+      return flies.length > 0;
+    } catch (e) {
+      return false;
+    }
+  }
+
   function hashInt(n) {
     /* 简单整数哈希：同一个周期号永远得到同一个随机数（全球统一的关键） */
     let x = (n ^ 0x9e3779b9) >>> 0;
@@ -224,9 +292,12 @@
 
   function init() {
     resize();
-    const count = targetFlyCount();
     flies.length = 0;
-    for (let i = 0; i < count; i++) flies.push(spawnFly(true));
+    // 跨页保持：同标签页导航时优先恢复上一页的萤火虫状态
+    if (!restoreFlies()) {
+      const count = targetFlyCount();
+      for (let i = 0; i < count; i++) flies.push(spawnFly(true));
+    }
     meteors.length = 0;
     flashes.length = 0;
     nextMeteor = performance.now() + 2500 + Math.random() * 4000;
@@ -743,5 +814,12 @@
   });
   init();
   requestAnimationFrame(tick);
+  /* 跨页保持：离开页面或转入后台时保存萤火虫状态，下次同标签页加载恢复 */
+  window.addEventListener("pagehide", saveFlies);
+  if (document.addEventListener) {
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "hidden") saveFlies();
+    });
+  }
   /* 预览面板每帧节流更新由 tick 内的 updatePreview(t) 负责，此处不再重复定时 */
 })();

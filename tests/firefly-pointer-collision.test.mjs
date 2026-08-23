@@ -53,10 +53,15 @@ const windowMock = {
 const sandbox = {
   window: windowMock,
   document: {
+    addEventListener() {},
     getElementById(id) {
       if (id === "sky") return canvas;
       return { textContent: "" };
     },
+  },
+  sessionStorage: {
+    getItem() { return null; },
+    setItem() {},
   },
   Math: math,
   Date,
