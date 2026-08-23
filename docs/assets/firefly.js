@@ -213,6 +213,12 @@
       const endWall = function (perfUntil) {
         return perfUntil > perfNow ? Date.now() + (perfUntil - perfNow) : 0;
       };
+      /* 渐隐剩余（仅爆发已结束、回落进行中时记录）：
+         恢复端据此继续播完剩余的缩小/变暗动画。 */
+      let fadeEndWall = 0;
+      if (perfNow >= flyBurstUntil && flyFade > 0) {
+        fadeEndWall = Date.now() + flyFade * CFG.flyBurst.fadeMs;
+      }
       sessionStorage.setItem(FLY_STORE_KEY, JSON.stringify({
         t: Date.now(), w: w, h: h, flies: payload,
         burst: {
@@ -222,6 +228,7 @@
           meteorUntilEndWall: endWall(burstUntil),
           level: flyLevel,
           levelEndWall: endWall(flyLevelUntil),
+          fadeEndWall: fadeEndWall,
           stats: { total: burstStats.total, fire: burstStats.fire }
         }
       }));
@@ -260,6 +267,16 @@
       if (levelRemain > 0) {
         flyLevel = burst.level;
         flyLevelUntil = now + levelRemain;
+      }
+    }
+    /* 渐隐进度续播：恢复剩余比例，tick 会按同一斜率继续衰减；
+       无声结算与渐隐终点对齐（替代 restoreFlies 预设的固定延迟）。 */
+    if (burst.fadeEndWall && burst.fadeEndWall > Date.now() && flies.length > targetFlyCount()) {
+      const fadeRemain = remainingFromWall(burst.fadeEndWall, CFG.flyBurst.fadeMs);
+      if (fadeRemain > 0) {
+        flyFade = fadeRemain / CFG.flyBurst.fadeMs;
+        clearTimeout(settleTimer);
+        settleTimer = setTimeout(settleFlies, fadeRemain);
       }
     }
   }

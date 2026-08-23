@@ -6,7 +6,7 @@ const source = fs.readFileSync(
   new URL("../docs/assets/firefly.js", import.meta.url), "utf8"
 ).replace(
   "  window.flitfancy = {",
-  "  window.__fireflyTest = { get flies() { return flies; }, get burst() { return { forcedFlyUntil: forcedFlyUntil, flyBurstUntil: flyBurstUntil }; }, get level() { return flyLevel; } };\n  window.flitfancy = {"
+  "  window.__fireflyTest = { get flies() { return flies; }, get burst() { return { forcedFlyUntil: forcedFlyUntil, flyBurstUntil: flyBurstUntil }; }, get level() { return flyLevel; }, get fade() { return flyFade; } };\n  window.flitfancy = {"
 );
 
 // 跨"页面"共享的 sessionStorage：同一标签页内导航的模型。
@@ -151,5 +151,25 @@ assert.ok(pageG.timeouts.includes(6000),
   "残留人口同样安排延迟结算");
 assert.ok(pageG.test.burst.forcedFlyUntil === 0,
   "已结束的爆发不得被误判为进行中");
+
+// ---- 第 8 页：渐隐进行中的快照 → 恢复剩余比例，结算对齐渐隐终点 ----
+const fading = {
+  t: Date.now(), w: 900, h: 600,
+  flies: Array.from({ length: 20 }, () => ({ nx: 0.3, ny: 0.4 })),
+  burst: {
+    flyForcedEndWall: 0, flyGlobalEndWall: 0,
+    meteorForcedEndWall: 0, meteorUntilEndWall: 0,
+    level: 0, levelEndWall: 0,
+    fadeEndWall: Date.now() + 2000,
+    stats: { total: 0, fire: 0 }
+  }
+};
+store.set("flitfancy.fireflies.v1", JSON.stringify(fading));
+const pageH = makePage(900, 600);
+assert.equal(pageH.flies.length, 20, "渐隐中的超额人口同样全量恢复");
+assert.ok(Math.abs(pageH.test.fade - 0.5) < 0.2,
+  "渐隐比例必须恢复到剩余值（2000ms/4000ms ≈ 0.5）");
+assert.ok(pageH.timeouts.some((ms) => ms >= 1500 && ms <= 2050),
+  "无声结算必须对齐渐隐终点，而不是固定 6 秒");
 
 console.log("firefly cross-page persistence test ok");
