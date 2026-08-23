@@ -179,10 +179,61 @@
           phase: f.phase, breathOffset: f.breathOffset, breathPeriod: f.breathPeriod
         };
       });
+      /* 爆发类状态的剩余时长换算成墙钟绝对时刻保存：
+         performance.now() 每页从零开始，直接存会被导航"卡掉"。 */
+      const perfNow = performance.now();
+      const endWall = function (perfUntil) {
+        return perfUntil > perfNow ? Date.now() + (perfUntil - perfNow) : 0;
+      };
       sessionStorage.setItem(FLY_STORE_KEY, JSON.stringify({
-        t: Date.now(), w: w, h: h, flies: payload
+        t: Date.now(), w: w, h: h, flies: payload,
+        burst: {
+          flyForcedEndWall: endWall(forcedFlyUntil),
+          flyGlobalEndWall: endWall(flyBurstUntil),
+          meteorForcedEndWall: endWall(forcedBurstUntil),
+          meteorUntilEndWall: endWall(burstUntil),
+          level: flyLevel,
+          levelEndWall: endWall(flyLevelUntil),
+          stats: { total: burstStats.total, fire: burstStats.fire }
+        }
       }));
     } catch (e) { /* 存储不可用（隐私模式等）时静默跳过 */ }
+  }
+
+  /* 爆发状态恢复：剩余时长钳制到各 CFG 上限；萤火爆发必须走
+     beginFlyBurst 入口——它同时负责 flyBurstMax 与开场涌入，
+     裸赋值 forcedFlyUntil 会得到一次"没有涌入"的假爆发。 */
+  function applyBurstSnapshot(burst) {
+    if (!burst) return;
+    const now = performance.now();
+    const remainingFromWall = function (endWall, maxMs) {
+      if (!endWall || endWall <= Date.now()) return 0;
+      return Math.min(endWall - Date.now(), maxMs);
+    };
+    const flyEndWall = Math.max(burst.flyForcedEndWall || 0, burst.flyGlobalEndWall || 0);
+    const flyRemain = remainingFromWall(
+      flyEndWall, CFG.flyBurst.durationMin + CFG.flyBurst.durationRange
+    );
+    if (flyRemain > 0) beginFlyBurst(now + flyRemain);
+    const meteorEndWall = Math.max(
+      burst.meteorForcedEndWall || 0, burst.meteorUntilEndWall || 0
+    );
+    const meteorRemain = remainingFromWall(
+      meteorEndWall, CFG.meteorBurst.durationMin + CFG.meteorBurst.durationRange
+    );
+    if (meteorRemain > 0) {
+      startMeteorBurst(now + meteorRemain);
+      if (burst.stats && isFinite(burst.stats.total)) {
+        burstStats = { total: burst.stats.total, fire: burst.stats.fire || 0 };
+      }
+    }
+    if (burst.level > 0 && burst.level <= CFG.flyBright.maxLevel) {
+      const levelRemain = remainingFromWall(burst.levelEndWall, CFG.flyBright.keepMs);
+      if (levelRemain > 0) {
+        flyLevel = burst.level;
+        flyLevelUntil = now + levelRemain;
+      }
+    }
   }
 
   function restoreFlies() {
@@ -223,7 +274,9 @@
       }
       // 恢复后不足公式数量时补种到目标数（跨页视口可能变大）
       while (flies.length < targetFlyCount()) flies.push(spawnFly(true));
-      return flies.length > 0;
+      // 爆发状态不在这里恢复：init 尾部还有一轮瞬态归零，
+      // 必须等归零全部完成后由 init 调用 applyBurstSnapshot。
+      return snap;
     } catch (e) {
       return false;
     }
@@ -293,8 +346,11 @@
   function init() {
     resize();
     flies.length = 0;
-    // 跨页保持：同标签页导航时优先恢复上一页的萤火虫状态
-    if (!restoreFlies()) {
+    // 跨页保持：同标签页导航时优先恢复上一页的萤火虫状态。
+    // 注意这里只恢复萤火虫本体——爆发/亮度档位在 init 尾部
+    // （全部瞬态归零完成之后）由 applyBurstSnapshot 恢复。
+    const restoredSnapshot = restoreFlies();
+    if (!restoredSnapshot) {
       const count = targetFlyCount();
       for (let i = 0; i < count; i++) flies.push(spawnFly(true));
     }
@@ -319,6 +375,8 @@
     flyLevelUntil = 0;
     flyFlashT0 = -99999;
     lastFlySpawn = 0;
+    // 所有瞬态归零完成后，最后一步恢复跨页爆发状态
+    if (restoredSnapshot) applyBurstSnapshot(restoredSnapshot.burst);
     line1 = document.getElementById("burst-line-1");
     line2 = document.getElementById("burst-line-2");
   }

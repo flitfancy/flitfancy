@@ -6,7 +6,7 @@ const source = fs.readFileSync(
   new URL("../docs/assets/firefly.js", import.meta.url), "utf8"
 ).replace(
   "  window.flitfancy = {",
-  "  window.__fireflyTest = { get flies() { return flies; } };\n  window.flitfancy = {"
+  "  window.__fireflyTest = { get flies() { return flies; }, get burst() { return { forcedFlyUntil: forcedFlyUntil, flyBurstUntil: flyBurstUntil }; }, get level() { return flyLevel; } };\n  window.flitfancy = {"
 );
 
 // 跨"页面"共享的 sessionStorage：同一标签页内导航的模型。
@@ -60,6 +60,8 @@ function makePage(width, height) {
   vm.runInNewContext(source, sandbox, { filename: "firefly.js" });
   return {
     flies: windowMock.__fireflyTest.flies,
+    test: windowMock.__fireflyTest,
+    flitfancy: windowMock.flitfancy,
     navigateAway() {
       if (visibilityHandler) visibilityHandler();
       if (windowHandlers.pagehide) windowHandlers.pagehide();
@@ -109,5 +111,25 @@ for (const f of rotated.flies) f.r = 9.99;
 store.set("flitfancy.fireflies.v1", JSON.stringify(rotated));
 const pageD = makePage(400, 900); // ratio ≈ 0.44，偏差远超 35%
 assert.ok(pageD.flies.every((f) => f.r < 3), "宽高比差异过大时必须放弃恢复");
+
+// ---- 第 5/6 页：召唤的萤火爆发与亮度档位必须跨页延续 ----
+const pageE = makePage(900, 600);
+pageE.flitfancy.fireflyBurst();   // 彩蛋召唤爆发（performance.now 时基）
+pageE.flitfancy.fireflyBright();  // 亮度档位 +1
+pageE.navigateAway();
+
+const savedBurst = JSON.parse(store.get("flitfancy.fireflies.v1")).burst;
+assert.ok(savedBurst.flyForcedEndWall > Date.now(),
+  "召唤爆发的结束时刻必须换算成墙钟保存");
+assert.equal(savedBurst.level, 1, "亮度档位必须写入快照");
+
+const pageF = makePage(900, 600);
+assert.ok(pageF.test.burst.forcedFlyUntil > 500,
+  "翻页后召唤爆发必须继续（剩余时长换算回 perf 时基）");
+assert.ok(pageF.test.burst.forcedFlyUntil <= 45000,
+  "恢复的剩余时长必须被钳制在 CFG 上限内");
+assert.equal(pageF.test.level, 1, "亮度档位必须跨页保留");
+assert.ok(pageF.flies.length > 10,
+  "恢复必须走 beginFlyBurst 入口，让开场涌入真实发生");
 
 console.log("firefly cross-page persistence test ok");
