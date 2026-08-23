@@ -6,7 +6,7 @@ const source = fs.readFileSync(
   new URL("../docs/assets/firefly.js", import.meta.url), "utf8"
 ).replace(
   "  window.flitfancy = {",
-  "  window.__fireflyTest = { get flies() { return flies; }, get burst() { return { forcedFlyUntil: forcedFlyUntil, flyBurstUntil: flyBurstUntil }; }, get level() { return flyLevel; }, get fade() { return flyFade; } };\n  window.flitfancy = {"
+  "  window.__fireflyTest = { get flies() { return flies; }, get burst() { return { forcedFlyUntil: forcedFlyUntil, flyBurstUntil: flyBurstUntil }; }, get meteor() { return { forcedBurstUntil: forcedBurstUntil, burstUntil: burstUntil }; }, get level() { return flyLevel; }, get fade() { return flyFade; } };\n  window.flitfancy = {"
 );
 
 // 跨"页面"共享的 sessionStorage：同一标签页内导航的模型。
@@ -118,6 +118,7 @@ assert.ok(pageD.flies.every((f) => f.r < 3), "宽高比差异过大时必须放�
 const pageE = makePage(900, 600);
 pageE.flitfancy.fireflyBurst();   // 彩蛋召唤爆发（performance.now 时基）
 pageE.flitfancy.fireflyBright();  // 亮度档位 +1
+pageE.flitfancy.meteorBurst();    // 彩蛋召唤流星雨（同样跨页延续）
 assert.equal(pageE.flies.length, 20, "召唤爆发后应涌入到 20 只（基础 10 + 涌入 10）");
 pageE.navigateAway();
 
@@ -138,11 +139,16 @@ assert.equal(pageF.flies.length, 20,
   "爆发人口必须原编队恢复：既不能被公式数量裁掉，也不能重复涌入");
 assert.ok(pageF.timeouts.includes(6000),
   "超额人口必须安排 postBurstSettleMs 延迟无声结算");
+assert.ok(pageF.test.meteor.forcedBurstUntil > 500 &&
+  pageF.test.meteor.forcedBurstUntil <= 60000,
+  "召唤的流星雨必须按精确剩余时长恢复（不得凭空延长随机时长）");
 
 // ---- 第 7 页：爆发已结束的快照（超额人口残留）→ 同样全量恢复 + 延迟结算 ----
 const ended = JSON.parse(store.get("flitfancy.fireflies.v1"));
 ended.burst.flyForcedEndWall = 0;
 ended.burst.flyGlobalEndWall = 0;
+ended.burst.meteorForcedEndWall = 0;
+ended.burst.meteorUntilEndWall = 0;
 store.set("flitfancy.fireflies.v1", JSON.stringify(ended));
 const pageG = makePage(900, 600);
 assert.equal(pageG.flies.length, 20,
@@ -151,6 +157,8 @@ assert.ok(pageG.timeouts.includes(6000),
   "残留人口同样安排延迟结算");
 assert.ok(pageG.test.burst.forcedFlyUntil === 0,
   "已结束的爆发不得被误判为进行中");
+assert.ok(pageG.test.meteor.forcedBurstUntil === 0,
+  "已结束的流星雨同样不得被误判为进行中");
 
 // ---- 第 8 页：渐隐进行中的快照 → 恢复剩余比例，结算对齐渐隐终点 ----
 const fading = {

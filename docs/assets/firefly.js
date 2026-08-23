@@ -257,7 +257,7 @@
       meteorEndWall, CFG.meteorBurst.durationMin + CFG.meteorBurst.durationRange
     );
     if (meteorRemain > 0) {
-      startMeteorBurst(now + meteorRemain);
+      startMeteorBurst(now, now + meteorRemain);
       if (burst.stats && isFinite(burst.stats.total)) {
         burstStats = { total: burst.stats.total, fire: burst.stats.fire || 0 };
       }
@@ -434,10 +434,13 @@
     line2 = document.getElementById("burst-line-2");
   }
 
-  function startMeteorBurst(now) {
+  function startMeteorBurst(now, until) {
+    /* until 可选：跨页恢复时传入墙钟换算回的精确绝对结束时刻，
+       避免彩蛋语义的"重新随机时长"把剩余时间凭空拉长 45~60 秒。 */
     const dur = CFG.meteorBurst.durationMin + Math.random() * CFG.meteorBurst.durationRange;
-    burstUntil = now + dur;
-    forcedBurstUntil = now + dur;
+    const end = until !== undefined ? until : now + dur;
+    burstUntil = end;
+    forcedBurstUntil = end;
     burstStats = { total: 0, fire: 0 };
   }
 
