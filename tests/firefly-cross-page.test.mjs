@@ -116,12 +116,15 @@ assert.ok(pageD.flies.every((f) => f.r < 3), "宽高比差异过大时必须放�
 const pageE = makePage(900, 600);
 pageE.flitfancy.fireflyBurst();   // 彩蛋召唤爆发（performance.now 时基）
 pageE.flitfancy.fireflyBright();  // 亮度档位 +1
+assert.equal(pageE.flies.length, 20, "召唤爆发后应涌入到 20 只（基础 10 + 涌入 10）");
 pageE.navigateAway();
 
-const savedBurst = JSON.parse(store.get("flitfancy.fireflies.v1")).burst;
-assert.ok(savedBurst.flyForcedEndWall > Date.now(),
+// 快照必须包含全部爆发人口，而不是只存公式数量的基础个体
+const savedBurst = JSON.parse(store.get("flitfancy.fireflies.v1"));
+assert.equal(savedBurst.flies.length, 20, "快照必须保存全部爆发人口");
+assert.ok(savedBurst.burst.flyForcedEndWall > Date.now(),
   "召唤爆发的结束时刻必须换算成墙钟保存");
-assert.equal(savedBurst.level, 1, "亮度档位必须写入快照");
+assert.equal(savedBurst.burst.level, 1, "亮度档位必须写入快照");
 
 const pageF = makePage(900, 600);
 assert.ok(pageF.test.burst.forcedFlyUntil > 500,
@@ -129,7 +132,7 @@ assert.ok(pageF.test.burst.forcedFlyUntil > 500,
 assert.ok(pageF.test.burst.forcedFlyUntil <= 45000,
   "恢复的剩余时长必须被钳制在 CFG 上限内");
 assert.equal(pageF.test.level, 1, "亮度档位必须跨页保留");
-assert.ok(pageF.flies.length > 10,
-  "恢复必须走 beginFlyBurst 入口，让开场涌入真实发生");
+assert.equal(pageF.flies.length, 20,
+  "爆发人口必须原编队恢复：既不能被公式数量裁掉，也不能重复涌入");
 
 console.log("firefly cross-page persistence test ok");

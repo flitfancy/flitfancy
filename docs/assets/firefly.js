@@ -8,6 +8,20 @@
  *   那时 sitefx 已执行完毕。调整脚本加载顺序时，此契约必须保持：
  *   firefly 先加载 + 读取延迟到 RAF，或改用事件解耦。违反时不会报错，
  *   只会静默失去避让/爆发效果（有 null 守卫）。
+ *
+ * 其他耦合面：
+ *   - glyph.js 彩蛋点击计数 → window.flitfancy.* 五个公开方法
+ *   - debug-firefly.html → window.__ffDebug 只读调试句柄
+ *   - sessionStorage("flitfancy.fireflies.v1") → 萤火虫跨页保持
+ *
+ * 目录：
+ *   CFG 参数 → 运行状态（按域分组）→ 屏幕环境/resize
+ *   → spawnFly + 跨页保持(saveFlies/restoreFlies/applyBurstSnapshot)
+ *   → 全球时钟窗口(hashInt/meteorWindow/flyWindow) → 数量结算(settleFlies)
+ *   → init → 爆发入口(startMeteorBurst/beginFlyBurst) → 流星(spawnMeteor)
+ *   → 特效助手(addFlash/easeOut/breathPulse/updatePreview)
+ *   → tick 主循环(含爆发窗口推进 update*BurstState)
+ *   → 公开 API(flitfancy/__ffDebug) → 事件监听(resize/pagehide/visibility)
  */
 (function () {
   const canvas = document.getElementById("sky");
@@ -103,29 +117,42 @@
     h = window.innerHeight;
     dpr = Math.min(window.devicePixelRatio || 1, 2);
   }
+  /* ---------- 运行状态 ----------
+   * 按域分组的模块内可变量：由 init() 设定初值、tick() 逐帧推进、
+   * resize() 重排视口参考。只在此处声明，不改名不外泄。 */
+
+  /* 萤火虫 */
   let flies = [];
-  let meteors = [];
-  let flashes = [];
-  let nextMeteor = 0;
-  let burstUntil = 0;
-  let forcedBurstUntil = 0;
-  let nextBurst = 0;
-  let burstStats = { total: 0, fire: 0 };
   let flyBurstUntil = 0;
   let forcedFlyUntil = 0;
   let nextFlyBurst = 0;
   let flyBurstMax = 0;
   let flyMeetCount = 0;
   let flyFade = 0;
-  let lastT = 0;
   let flyLevel = 0;
   let flyLevelUntil = 0;
-  let flyFlashT0 = -99999;
   let lastFlySpawn = 0;
+
+  /* 流星雨 */
+  let meteors = [];
+  let burstUntil = 0;
+  let forcedBurstUntil = 0;
+  let nextMeteor = 0;
+  let nextBurst = 0;
+  let burstStats = { total: 0, fire: 0 };
+
+  /* 爆闪特效 */
+  let flashes = [];
+  let flyFlashT0 = -99999;
+
+  /* 帧计时与视口参考 */
+  let lastT = 0;
+  let lastDt = 0;
   let refW = w;              // 比例重排的参考视口（每次重排后立即更新）
   let refH = h;
   let resizeTimer = null;
-  let lastDt = 0;
+
+  /* 预览面板（burst-line-1/2，仅 debug 页存在） */
   let line1 = null;
   let line2 = null;
   let lastPreviewUpdate = 0;
@@ -214,7 +241,7 @@
     const flyRemain = remainingFromWall(
       flyEndWall, CFG.flyBurst.durationMin + CFG.flyBurst.durationRange
     );
-    if (flyRemain > 0) beginFlyBurst(now + flyRemain);
+    if (flyRemain > 0) beginFlyBurst(now + flyRemain, false);
     const meteorEndWall = Math.max(
       burst.meteorForcedEndWall || 0, burst.meteorUntilEndWall || 0
     );
@@ -250,7 +277,17 @@
       const ratioSnap = snap.w / snap.h;
       if (!ratioSnap || Math.abs(ratioNow - ratioSnap) / ratioSnap > 0.35) return false;
       flies.length = 0;
-      const count = Math.min(snap.flies.length, targetFlyCount());
+      /* 恢复上限：快照显示爆发仍在进行时，允许恢复全部爆发人口
+         （上限 flyBurstMax）——公式数量只约束稳态，不约束爆发期；
+         爆发结束后 settleFlies 会照常无声减员回公式数量。 */
+      const burstBlock = snap.burst;
+      const flyEndWall = burstBlock
+        ? Math.max(burstBlock.flyForcedEndWall || 0, burstBlock.flyGlobalEndWall || 0)
+        : 0;
+      const bursting = flyEndWall > Date.now();
+      const count = Math.min(
+        snap.flies.length, bursting ? CFG.flyBurst.maxFlies : targetFlyCount()
+      );
       for (let i = 0; i < count; i++) {
         const s = snap.flies[i];
         if (!s || !isFinite(s.nx) || !isFinite(s.ny)) continue;
@@ -388,13 +425,17 @@
     burstStats = { total: 0, fire: 0 };
   }
 
-  function beginFlyBurst(until) {
+  function beginFlyBurst(until, pop) {
     flyBurstUntil = until;
     forcedFlyUntil = until;
     flyBurstMax = Math.min(CFG.flyBurst.maxFlies, flies.length * 2);
     flyMeetCount = 0;
     flyFade = 1;
-    for (let i = 0; i < CFG.flyBurst.popCount && flies.length < flyBurstMax; i++) flies.push(spawnFly(false));
+    /* pop=false：跨页恢复时萤火虫本体已从快照原编队回来，
+       再涌入一批新个体反而会破坏"爆发还在延续"的观感。 */
+    if (pop !== false) {
+      for (let i = 0; i < CFG.flyBurst.popCount && flies.length < flyBurstMax; i++) flies.push(spawnFly(false));
+    }
   }
 
   function segDist(px, py, ax, ay, bx, by) {
@@ -579,6 +620,35 @@
     }
   }
 
+  /* 爆发窗口推进：把全球时钟窗口与本地召唤状态合并成当前生效状态，
+     并滚动下一次窗口时刻。tick 每帧各调用一次。 */
+  function updateMeteorBurstState(t) {
+    const gw = meteorWindow(t + PERF_TO_WALL);
+    if (gw.active) {
+      if (t >= burstUntil && t >= forcedBurstUntil) {
+        burstUntil = gw.end - PERF_TO_WALL;
+        forcedBurstUntil = 0;
+        burstStats = { total: 0, fire: 0 };
+      }
+    } else if (t >= forcedBurstUntil) {
+      burstUntil = 0;
+    }
+    nextBurst = meteorWindow(gw.start + CFG.meteorBurst.globalCycle).start - PERF_TO_WALL;
+  }
+
+  function updateFlyBurstState(t) {
+    const fgw = flyWindow(t + PERF_TO_WALL);
+    if (fgw.active) {
+      if (t >= flyBurstUntil && t >= forcedFlyUntil) {
+        beginFlyBurst(fgw.end - PERF_TO_WALL);
+        forcedFlyUntil = 0;
+      }
+    } else if (t >= forcedFlyUntil) {
+      flyBurstUntil = 0;
+    }
+    nextFlyBurst = flyWindow(fgw.start + CFG.flyBurst.globalCycle).start - PERF_TO_WALL;
+  }
+
   function tick(t) {
     /* 后台节流交给平台：浏览器会自动降频/暂停隐藏标签页的 RAF。
        我们的职责只有"恢复时无缝"——真实世界时钟重算时间表
@@ -591,33 +661,8 @@
       const dt = lastT ? Math.min(3, Math.max(0.25, (t - lastT) / 16.67)) : 1;
       lastDt = dt;
 
-    const gw = meteorWindow(t + PERF_TO_WALL);
-    if (gw.active) {
-      if (t >= burstUntil && t >= forcedBurstUntil) {
-        burstUntil = gw.end - PERF_TO_WALL;
-        forcedBurstUntil = 0;
-        burstStats = { total: 0, fire: 0 };
-      }
-      nextBurst = meteorWindow(gw.start + CFG.meteorBurst.globalCycle).start - PERF_TO_WALL;
-    } else {
-      if (t >= forcedBurstUntil) {
-        burstUntil = 0;
-      }
-      nextBurst = meteorWindow(gw.start + CFG.meteorBurst.globalCycle).start - PERF_TO_WALL;
-    }
-    const fgw = flyWindow(t + PERF_TO_WALL);
-    if (fgw.active) {
-      if (t >= flyBurstUntil && t >= forcedFlyUntil) {
-        beginFlyBurst(fgw.end - PERF_TO_WALL);
-        forcedFlyUntil = 0;
-      }
-      nextFlyBurst = flyWindow(fgw.start + CFG.flyBurst.globalCycle).start - PERF_TO_WALL;
-    } else {
-      if (t >= forcedFlyUntil) {
-        flyBurstUntil = 0;
-      }
-      nextFlyBurst = flyWindow(fgw.start + CFG.flyBurst.globalCycle).start - PERF_TO_WALL;
-    }
+      updateMeteorBurstState(t);
+      updateFlyBurstState(t);
     if (t < flyBurstUntil && flies.length < flyBurstMax && t - lastFlySpawn > CFG.flyBurst.spawnEvery) {
       flies.push(spawnFly(false));
       lastFlySpawn = t;
@@ -819,6 +864,7 @@
     requestAnimationFrame(tick);
   }
 
+  /* 公开彩蛋 API（唯一调用方：glyph.js 的点击计数彩蛋） */
   window.flitfancy = {
     meteor: function () { spawnMeteor(performance.now()); },
     meteorBurst: function () { startMeteorBurst(performance.now()); },
