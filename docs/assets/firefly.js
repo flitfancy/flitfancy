@@ -48,7 +48,8 @@
       spawnEvery: 120,         // 补充间隔
       sizeMul: 2,              // 体积 ×2
       brightAdd: 0.3,          // 亮度 +30%
-      fadeMs: 4000             // 结束后渐隐时长
+      fadeMs: 4000,            // 结束后渐隐时长
+      postBurstSettleMs: 6000  // 结束后超额人口的无声离场延迟
     },
     flyBright: {
       maxLevel: 2,             // 点 1/2 次的两档
@@ -150,7 +151,7 @@
   let lastDt = 0;
   let refW = w;              // 比例重排的参考视口（每次重排后立即更新）
   let refH = h;
-  let resizeTimer = null;
+  let settleTimer = null;    // 数量结算的防抖/延迟句柄（resize 与爆发结束共用）
 
   /* 预览面板（burst-line-1/2，仅 debug 页存在） */
   let line1 = null;
@@ -277,17 +278,10 @@
       const ratioSnap = snap.w / snap.h;
       if (!ratioSnap || Math.abs(ratioNow - ratioSnap) / ratioSnap > 0.35) return false;
       flies.length = 0;
-      /* 恢复上限：快照显示爆发仍在进行时，允许恢复全部爆发人口
-         （上限 flyBurstMax）——公式数量只约束稳态，不约束爆发期；
-         爆发结束后 settleFlies 会照常无声减员回公式数量。 */
-      const burstBlock = snap.burst;
-      const flyEndWall = burstBlock
-        ? Math.max(burstBlock.flyForcedEndWall || 0, burstBlock.flyGlobalEndWall || 0)
-        : 0;
-      const bursting = flyEndWall > Date.now();
-      const count = Math.min(
-        snap.flies.length, bursting ? CFG.flyBurst.maxFlies : targetFlyCount()
-      );
+      /* 恢复上限：快照人口超过公式数量，说明刚经历过爆发——全部原编队
+         恢复（上限 flyBurstMax），并安排一次延迟无声结算。公式数量只
+         约束稳态；渐隐视觉不跨页，恢复后超额个体以普通亮度延续片刻。 */
+      const count = Math.min(snap.flies.length, CFG.flyBurst.maxFlies);
       for (let i = 0; i < count; i++) {
         const s = snap.flies[i];
         if (!s || !isFinite(s.nx) || !isFinite(s.ny)) continue;
@@ -311,6 +305,11 @@
       }
       // 恢复后不足公式数量时补种到目标数（跨页视口可能变大）
       while (flies.length < targetFlyCount()) flies.push(spawnFly(true));
+      // 超额人口（刚结束的爆发残留）→ 延迟几秒无声结算回公式数量
+      if (flies.length > targetFlyCount()) {
+        clearTimeout(settleTimer);
+        settleTimer = setTimeout(settleFlies, CFG.flyBurst.postBurstSettleMs);
+      }
       // 爆发状态不在这里恢复：init 尾部还有一轮瞬态归零，
       // 必须等归零全部完成后由 init 调用 applyBurstSnapshot。
       return snap;
@@ -644,7 +643,13 @@
         forcedFlyUntil = 0;
       }
     } else if (t >= forcedFlyUntil) {
-      flyBurstUntil = 0;
+      if (flyBurstUntil !== 0) {
+        /* 爆发结束跳变：等渐隐走完后，超额人口无声离场回公式数量
+           （settleFlies 只挑当前最暗的个体，移除不可见）。 */
+        flyBurstUntil = 0;
+        clearTimeout(settleTimer);
+        settleTimer = setTimeout(settleFlies, CFG.flyBurst.postBurstSettleMs);
+      }
     }
     nextFlyBurst = flyWindow(fgw.start + CFG.flyBurst.globalCycle).start - PERF_TO_WALL;
   }
@@ -913,8 +918,8 @@
     }
     refW = window.innerWidth;
     refH = window.innerHeight;
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(settleFlies, 200);
+    clearTimeout(settleTimer);
+    settleTimer = setTimeout(settleFlies, 200);
   });
   init();
   requestAnimationFrame(tick);

@@ -20,6 +20,7 @@ function makePage(width, height) {
   const windowHandlers = {};
   let visibilityHandler = null;
   const animationFrames = [];
+  const timeouts = [];
   const gradient = { addColorStop() {} };
   const context2d = {
     setTransform() {}, clearRect() {}, createLinearGradient() { return gradient; },
@@ -54,7 +55,7 @@ function makePage(width, height) {
     performance: { now: () => 0 },
     requestAnimationFrame(cb) { animationFrames.push(cb); },
     setInterval() { return 1; },
-    setTimeout,
+    setTimeout(fn, ms) { timeouts.push(ms); },
     clearTimeout,
   };
   vm.runInNewContext(source, sandbox, { filename: "firefly.js" });
@@ -62,6 +63,7 @@ function makePage(width, height) {
     flies: windowMock.__fireflyTest.flies,
     test: windowMock.__fireflyTest,
     flitfancy: windowMock.flitfancy,
+    timeouts,
     navigateAway() {
       if (visibilityHandler) visibilityHandler();
       if (windowHandlers.pagehide) windowHandlers.pagehide();
@@ -134,5 +136,20 @@ assert.ok(pageF.test.burst.forcedFlyUntil <= 45000,
 assert.equal(pageF.test.level, 1, "亮度档位必须跨页保留");
 assert.equal(pageF.flies.length, 20,
   "爆发人口必须原编队恢复：既不能被公式数量裁掉，也不能重复涌入");
+assert.ok(pageF.timeouts.includes(6000),
+  "超额人口必须安排 postBurstSettleMs 延迟无声结算");
+
+// ---- 第 7 页：爆发已结束的快照（超额人口残留）→ 同样全量恢复 + 延迟结算 ----
+const ended = JSON.parse(store.get("flitfancy.fireflies.v1"));
+ended.burst.flyForcedEndWall = 0;
+ended.burst.flyGlobalEndWall = 0;
+store.set("flitfancy.fireflies.v1", JSON.stringify(ended));
+const pageG = makePage(900, 600);
+assert.equal(pageG.flies.length, 20,
+  "爆发已结束的残留人口同样原编队恢复，不按公式数量裁剪");
+assert.ok(pageG.timeouts.includes(6000),
+  "残留人口同样安排延迟结算");
+assert.ok(pageG.test.burst.forcedFlyUntil === 0,
+  "已结束的爆发不得被误判为进行中");
 
 console.log("firefly cross-page persistence test ok");
