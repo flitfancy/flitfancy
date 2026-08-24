@@ -76,6 +76,7 @@ export async function handleObservations(env) {
      FROM observation_links link
      JOIN observations source ON source.uid = link.source_uid
      JOIN observations target ON target.uid = link.target_uid
+     WHERE source.published = 1 AND target.published = 1
      ORDER BY link.updated_ts DESC, link.id DESC LIMIT 600`
   ).all();
   return json({

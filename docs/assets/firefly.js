@@ -199,28 +199,33 @@
   function saveFlies() {
     try {
       if (!w || !h || !flies.length || !sessionStorage) return;
+      const perfNow = performance.now();
+      const wallNow = Date.now();
       const payload = flies.slice(0, 80).map(function (f) {
         return {
           nx: f.x / w, ny: f.y / h,          // 归一化坐标：跨视口尺寸仍能对位
           r: f.r,
           vx: f.vx, vy: f.vy, vx0: f.vx0, vy0: f.vy0,
-          phase: f.phase, breathOffset: f.breathOffset, breathPeriod: f.breathPeriod
+          phase: f.phase,
+          phaseAtSave: f.phase + perfNow / 3000,
+          breathOffset: f.breathOffset,
+          breathAtSave: (f.breathOffset + perfNow / f.breathPeriod) % 1,
+          breathPeriod: f.breathPeriod
         };
       });
       /* 爆发类状态的剩余时长换算成墙钟绝对时刻保存：
          performance.now() 每页从零开始，直接存会被导航"卡掉"。 */
-      const perfNow = performance.now();
       const endWall = function (perfUntil) {
-        return perfUntil > perfNow ? Date.now() + (perfUntil - perfNow) : 0;
+        return perfUntil > perfNow ? wallNow + (perfUntil - perfNow) : 0;
       };
       /* 渐隐剩余（仅爆发已结束、回落进行中时记录）：
          恢复端据此继续播完剩余的缩小/变暗动画。 */
       let fadeEndWall = 0;
       if (perfNow >= flyBurstUntil && flyFade > 0) {
-        fadeEndWall = Date.now() + flyFade * CFG.flyBurst.fadeMs;
+        fadeEndWall = wallNow + flyFade * CFG.flyBurst.fadeMs;
       }
       sessionStorage.setItem(FLY_STORE_KEY, JSON.stringify({
-        t: Date.now(), w: w, h: h, flies: payload,
+        t: wallNow, w: w, h: h, flies: payload,
         burst: {
           flyForcedEndWall: endWall(forcedFlyUntil),
           flyGlobalEndWall: endWall(flyBurstUntil),
@@ -294,6 +299,7 @@
       const ratioNow = w / h;
       const ratioSnap = snap.w / snap.h;
       if (!ratioSnap || Math.abs(ratioNow - ratioSnap) / ratioSnap > 0.35) return false;
+      const elapsedSinceSave = Math.max(0, Date.now() - snap.t);
       flies.length = 0;
       /* 恢复上限：快照人口超过公式数量，说明刚经历过爆发——全部原编队
          恢复（上限 flyBurstMax），并安排一次延迟无声结算。公式数量只
@@ -304,6 +310,15 @@
         if (!s || !isFinite(s.nx) || !isFinite(s.ny)) continue;
         const vx0 = isFinite(s.vx0) ? s.vx0 : (s.vx || 0);
         const vy0 = isFinite(s.vy0) ? s.vy0 : (s.vy || 0);
+        const breathPeriod = isFinite(s.breathPeriod) && s.breathPeriod > 0
+          ? s.breathPeriod
+          : CFG.flies.breathPeriodMin + Math.random() * CFG.flies.breathPeriodRange;
+        const phase = isFinite(s.phaseAtSave)
+          ? s.phaseAtSave + elapsedSinceSave / 3000
+          : (isFinite(s.phase) ? s.phase : Math.random() * Math.PI * 2);
+        const breathOffset = isFinite(s.breathAtSave)
+          ? (s.breathAtSave + elapsedSinceSave / breathPeriod) % 1
+          : (isFinite(s.breathOffset) ? s.breathOffset : Math.random());
         flies.push({
           x: Math.min(Math.max(s.nx, 0), 1) * w,
           y: Math.min(Math.max(s.ny, 0), 1) * h,
@@ -311,11 +326,9 @@
           vx: isFinite(s.vx) ? s.vx : vx0,
           vy: isFinite(s.vy) ? s.vy : vy0,
           vx0: vx0, vy0: vy0,
-          phase: isFinite(s.phase) ? s.phase : Math.random() * Math.PI * 2,
-          breathOffset: isFinite(s.breathOffset) ? s.breathOffset : Math.random(),
-          breathPeriod: isFinite(s.breathPeriod) && s.breathPeriod > 0
-            ? s.breathPeriod
-            : CFG.flies.breathPeriodMin + Math.random() * CFG.flies.breathPeriodRange,
+          phase: phase,
+          breathOffset: breathOffset,
+          breathPeriod: breathPeriod,
           meetCd: 0,
           mouseGlowUntil: 0
         });
@@ -442,12 +455,16 @@
     burstUntil = end;
     forcedBurstUntil = end;
     burstStats = { total: 0, fire: 0 };
+    // 新触发和跨页恢复都立即接上一颗，后续间隔由 spawnMeteor 统一调度。
+    nextMeteor = Math.min(nextMeteor, now);
   }
 
   function beginFlyBurst(until, pop) {
     flyBurstUntil = until;
     forcedFlyUntil = until;
-    flyBurstMax = Math.min(CFG.flyBurst.maxFlies, flies.length * 2);
+    flyBurstMax = pop === false
+      ? flies.length
+      : Math.min(CFG.flyBurst.maxFlies, flies.length * 2);
     flyMeetCount = 0;
     flyFade = 1;
     /* pop=false：跨页恢复时萤火虫本体已从快照原编队回来，

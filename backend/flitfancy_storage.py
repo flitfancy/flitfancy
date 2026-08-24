@@ -10,6 +10,31 @@ from flitfancy_core import CST
 from flitfancy_sensors import SENSOR_VALUE_FIELDS
 
 
+# 公网补传只允许这些固定表；调用方传入的名称永远不参与 SQL 拼接。
+_SYNC_PENDING_SQL = {
+    "anchors": (
+        "SELECT * FROM anchors WHERE synced = 0 ORDER BY id LIMIT ?",
+        "UPDATE anchors SET synced = 1 WHERE uid = ?",
+    ),
+    "memories": (
+        "SELECT * FROM memories WHERE synced = 0 ORDER BY id LIMIT ?",
+        "UPDATE memories SET synced = 1 WHERE uid = ?",
+    ),
+    "essays": (
+        "SELECT * FROM essays WHERE synced = 0 ORDER BY id LIMIT ?",
+        "UPDATE essays SET synced = 1 WHERE uid = ?",
+    ),
+    "observations": (
+        "SELECT * FROM observations WHERE synced = 0 ORDER BY id LIMIT ?",
+        "UPDATE observations SET synced = 1 WHERE uid = ?",
+    ),
+    "observation_links": (
+        "SELECT * FROM observation_links WHERE synced = 0 ORDER BY id LIMIT ?",
+        "UPDATE observation_links SET synced = 1 WHERE uid = ?",
+    ),
+}
+
+
 class SQLiteStore:
     def __init__(self, path, sensor_retention_days=14, prune_interval_seconds=3600):
         self.path = os.path.abspath(path)
@@ -241,6 +266,33 @@ class SQLiteStore:
         ).fetchall()
         connection.close()
         return [dict(row) for row in rows]
+
+    @staticmethod
+    def _sync_pending_statements(table):
+        try:
+            return _SYNC_PENDING_SQL[table]
+        except KeyError:
+            raise ValueError("unknown sync table: %s" % table) from None
+
+    def pending_rows(self, table, limit):
+        """读取允许补传的固定表；返回普通字典，避免连接生命周期外泄。"""
+        select_sql, _ = self._sync_pending_statements(table)
+        connection = self.connect()
+        try:
+            rows = connection.execute(select_sql, (limit,)).fetchall()
+            return [dict(row) for row in rows]
+        finally:
+            connection.close()
+
+    def mark_synced(self, table, uid):
+        """把一条已成功推送的固定表记录标为已同步。"""
+        _, mark_sql = self._sync_pending_statements(table)
+        connection = self.connect()
+        try:
+            connection.execute(mark_sql, (uid,))
+            connection.commit()
+        finally:
+            connection.close()
 
     def prune_sensor_history(self):
         """只清理 SQLite 查询副本；原始 CSV 归档不归本类管理。"""

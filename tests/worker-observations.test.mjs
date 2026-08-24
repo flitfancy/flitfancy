@@ -53,9 +53,17 @@ class FakeStatement {
       return { results: [...this.db.observations.values()].filter((row) => row.published === 1) };
     }
     if (this.sql.includes("FROM observation_links") && this.sql.includes("JOIN observations")) {
+      const requiresPublishedEndpoints =
+        this.sql.includes("source.published = 1") &&
+        this.sql.includes("target.published = 1");
       return {
         results: [...this.db.links.values()].filter((link) =>
-          this.db.observations.has(link.source_uid) && this.db.observations.has(link.target_uid)),
+          this.db.observations.has(link.source_uid) &&
+          this.db.observations.has(link.target_uid) &&
+          (!requiresPublishedEndpoints || (
+            this.db.observations.get(link.source_uid).published === 1 &&
+            this.db.observations.get(link.target_uid).published === 1
+          ))),
       };
     }
     return { results: [] };
@@ -123,6 +131,16 @@ let publicData = await (await worker.fetch(
 assert.equal(publicData.rows.length, 2);
 assert.deepEqual(publicData.rows[0].tags, ["时间", "发现"]);
 assert.equal(publicData.links[0].relation, "类比");
+
+// 纵深防御：即使清理事务异常、留下指向未公开星球的孤立弦，公网也不能泄露端点 UID。
+const hiddenEndpoint = env.DB.observations.get("observation-star-beta-0002");
+hiddenEndpoint.published = 0;
+publicData = await (await worker.fetch(
+  new Request("https://api.flitfancy.com/observations"), env
+)).json();
+assert.deepEqual(publicData.links, [],
+  "任一端点未公开时，残留弦也不得出现在公开接口里");
+hiddenEndpoint.published = 1;
 
 const invalidSource = await post("/admin/observations", {
   uid: "observation-star-gamma-003",

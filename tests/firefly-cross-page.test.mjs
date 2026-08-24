@@ -6,7 +6,7 @@ const source = fs.readFileSync(
   new URL("../docs/assets/firefly.js", import.meta.url), "utf8"
 ).replace(
   "  window.flitfancy = {",
-  "  window.__fireflyTest = { get flies() { return flies; }, get burst() { return { forcedFlyUntil: forcedFlyUntil, flyBurstUntil: flyBurstUntil }; }, get meteor() { return { forcedBurstUntil: forcedBurstUntil, burstUntil: burstUntil }; }, get level() { return flyLevel; }, get fade() { return flyFade; } };\n  window.flitfancy = {"
+  "  window.__fireflyTest = { get flies() { return flies; }, get burst() { return { forcedFlyUntil: forcedFlyUntil, flyBurstUntil: flyBurstUntil }; }, get meteor() { return { forcedBurstUntil: forcedBurstUntil, burstUntil: burstUntil, next: nextMeteor, count: meteors.length }; }, get level() { return flyLevel; }, get fade() { return flyFade; } };\n  window.flitfancy = {"
 );
 
 // 跨"页面"共享的 sessionStorage：同一标签页内导航的模型。
@@ -15,12 +15,14 @@ const storage = {
   getItem(key) { return store.has(key) ? store.get(key) : null; },
   setItem(key, value) { store.set(key, String(value)); },
 };
+let wallNow = Date.now();
 
 function makePage(width, height) {
   const windowHandlers = {};
   let visibilityHandler = null;
   const animationFrames = [];
   const timeouts = [];
+  let perfNow = 0;
   const gradient = { addColorStop() {} };
   const context2d = {
     setTransform() {}, clearRect() {}, createLinearGradient() { return gradient; },
@@ -51,8 +53,8 @@ function makePage(width, height) {
       visibilityState: "visible",
     },
     sessionStorage: storage,
-    Math, Date, console,
-    performance: { now: () => 0 },
+    Math, Date: { now: () => wallNow }, console,
+    performance: { now: () => perfNow },
     requestAnimationFrame(cb) { animationFrames.push(cb); },
     setInterval() { return 1; },
     setTimeout(fn, ms) { timeouts.push(ms); },
@@ -64,6 +66,12 @@ function makePage(width, height) {
     test: windowMock.__fireflyTest,
     flitfancy: windowMock.flitfancy,
     timeouts,
+    runFrame(t) {
+      perfNow = t;
+      const callback = animationFrames.shift();
+      assert.ok(callback, "动画循环必须已经安排下一帧");
+      callback(t);
+    },
     navigateAway() {
       if (visibilityHandler) visibilityHandler();
       if (windowHandlers.pagehide) windowHandlers.pagehide();
@@ -116,10 +124,14 @@ assert.ok(pageD.flies.every((f) => f.r < 3), "宽高比差异过大时必须放�
 
 // ---- 第 5/6 页：召唤的萤火爆发与亮度档位必须跨页延续 ----
 const pageE = makePage(900, 600);
+pageE.flies[0].phase = 0.25;
+pageE.flies[0].breathOffset = 0.2;
+pageE.flies[0].breathPeriod = 6000;
 pageE.flitfancy.fireflyBurst();   // 彩蛋召唤爆发（performance.now 时基）
 pageE.flitfancy.fireflyBright();  // 亮度档位 +1
 pageE.flitfancy.meteorBurst();    // 彩蛋召唤流星雨（同样跨页延续）
 assert.equal(pageE.flies.length, 20, "召唤爆发后应涌入到 20 只（基础 10 + 涌入 10）");
+pageE.runFrame(3000);
 pageE.navigateAway();
 
 // 快照必须包含全部爆发人口，而不是只存公式数量的基础个体
@@ -129,6 +141,7 @@ assert.ok(savedBurst.burst.flyForcedEndWall > Date.now(),
   "召唤爆发的结束时刻必须换算成墙钟保存");
 assert.equal(savedBurst.burst.level, 1, "亮度档位必须写入快照");
 
+wallNow += 125;
 const pageF = makePage(900, 600);
 assert.ok(pageF.test.burst.forcedFlyUntil > 500,
   "翻页后召唤爆发必须继续（剩余时长换算回 perf 时基）");
@@ -137,11 +150,21 @@ assert.ok(pageF.test.burst.forcedFlyUntil <= 45000,
 assert.equal(pageF.test.level, 1, "亮度档位必须跨页保留");
 assert.equal(pageF.flies.length, 20,
   "爆发人口必须原编队恢复：既不能被公式数量裁掉，也不能重复涌入");
+assert.ok(Math.abs(pageF.flies[0].phase - (0.25 + 3000 / 3000 + 125 / 3000)) < 1e-6,
+  "漂游周期必须从离开页的相位继续，而不是随 performance.now 重置");
+assert.ok(Math.abs(pageF.flies[0].breathOffset - (0.2 + 3000 / 6000 + 125 / 6000)) < 1e-6,
+  "呼吸亮度必须从离开页的相位继续");
 assert.ok(pageF.timeouts.includes(6000),
   "超额人口必须安排 postBurstSettleMs 延迟无声结算");
 assert.ok(pageF.test.meteor.forcedBurstUntil > 500 &&
   pageF.test.meteor.forcedBurstUntil <= 60000,
   "召唤的流星雨必须按精确剩余时长恢复（不得凭空延长随机时长）");
+pageF.runFrame(200);
+assert.ok(pageF.test.meteor.count > 0,
+  "恢复中的流星雨必须立即接上首颗流星，不能等待普通模式的随机延迟");
+for (let t = 400; t <= 3000; t += 200) pageF.runFrame(t);
+assert.equal(pageF.flies.length, 20,
+  "恢复后的爆发人口不得按当前数量再次翻倍增长");
 
 // ---- 第 7 页：爆发已结束的快照（超额人口残留）→ 同样全量恢复 + 延迟结算 ----
 const ended = JSON.parse(store.get("flitfancy.fireflies.v1"));

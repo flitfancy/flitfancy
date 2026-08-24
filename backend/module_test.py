@@ -212,6 +212,27 @@ def test_storage():
         connection.close()
         assert "idx_sensors_channel_ts" in indexes
 
+        connection = store.connect()
+        connection.execute(
+            """INSERT INTO anchors(
+                uid, created_at, anchor_time, time_precision, horizon, project,
+                title, content, synced
+            ) VALUES(?,?,?,?,?,?,?,?,0)""",
+            ("pending-anchor-0001", now_iso(), now_iso(), "second", "now",
+             "flitfancy", "待补传", "测试存储层补传白名单"),
+        )
+        connection.commit()
+        connection.close()
+        pending = store.pending_rows("anchors", 10)
+        assert [row["uid"] for row in pending] == ["pending-anchor-0001"]
+        store.mark_synced("anchors", "pending-anchor-0001")
+        assert store.pending_rows("anchors", 10) == []
+        try:
+            store.pending_rows("not_allowed", 10)
+            raise AssertionError("未知表名必须被补传白名单拒绝")
+        except ValueError as exc:
+            assert "unknown sync table" in str(exc)
+
     with tempfile.TemporaryDirectory(prefix="flitfancy-anchor-migration-") as temp_dir:
         path = os.path.join(temp_dir, "legacy.db")
         connection = sqlite3.connect(path)
