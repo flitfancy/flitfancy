@@ -74,8 +74,9 @@
    不会被简写重置，类的先后顺序无关紧要——"彩色方块"这类 clip 失效
    事故在结构上不再可能发生。 */
 .grad-clip {
-  -webkit-background-clip: text;
-  background-clip: text;
+  /* 全站唯一合法的 clip 三件套（守卫规则的单行豁免点） */
+  -webkit-background-clip: text; /* stylelint-disable-line declaration-property-value-disallowed-list -- 渐变文字唯一源头 */
+  background-clip: text; /* stylelint-disable-line declaration-property-value-disallowed-list -- 渐变文字唯一源头 */
   color: transparent;
   text-shadow: none;
 }
