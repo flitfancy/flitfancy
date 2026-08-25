@@ -265,7 +265,6 @@ def create_handler(app):
                         "backend": True,
                         "listener": heartbeat["listener"],
                         "tunnel": heartbeat["tunnel"],
-                        "dsh": heartbeat.get("dsh", False),
                     },
                     "sensor_rows": n_sensors,
                     "sensor_retention_days": SENSOR_RETENTION_DAYS,

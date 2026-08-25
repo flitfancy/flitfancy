@@ -8,7 +8,7 @@ param(
     [Parameter(Mandatory = $true)]
     [ValidateSet('is-alive', 'backend-health', 'backend-stale-kill', 'stop-process',
         'start-backend', 'wait-backend', 'listener-health', 'start-watchdog',
-        'start-tunnel', 'start-dsh')]
+        'start-tunnel')]
     [string]$Action,
     # NOTE: not $Pid -- that collides with PowerShell's read-only automatic $PID.
     [string]$ProcessId = '',
@@ -95,14 +95,6 @@ switch ($Action) {
     'start-tunnel' {
         if (-not $Exe -or -not $Config) { exit 1 }
         $proc = Start-Process -FilePath $Exe -ArgumentList '--config', $Config, 'tunnel', 'run' -WorkingDirectory $WorkDir -WindowStyle Hidden -RedirectStandardOutput $OutLog -RedirectStandardError $ErrLog -PassThru
-        if ($PidFile) { Set-Content -Path $PidFile -Value $proc.Id }
-        exit 0
-    }
-    'start-dsh' {
-        # Exe 传入 pnpm.cmd 全路径；隐藏窗口常驻，日志重定向，
-        # pid 文件记录 cmd 外壳进程（node 为其子进程）。
-        if (-not $Exe -or -not $WorkDir) { exit 1 }
-        $proc = Start-Process -FilePath $Exe -ArgumentList 'dsh', 'web' -WorkingDirectory $WorkDir -WindowStyle Hidden -RedirectStandardOutput $OutLog -RedirectStandardError $ErrLog -PassThru
         if ($PidFile) { Set-Content -Path $PidFile -Value $proc.Id }
         exit 0
     }
