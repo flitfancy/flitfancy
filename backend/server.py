@@ -128,7 +128,7 @@ MEMORIES_SELECT = (
 )
 
 _service_cache_lock = threading.Lock()
-_service_cache = {"t": 0.0, "listener": False, "tunnel": False}
+_service_cache = {"t": 0.0, "listener": False, "tunnel": False, "dsh": False}
 
 _status_counts_cache = {"t": 0.0, "sensors": 0, "notes": 0}
 _status_counts_lock = threading.Lock()
@@ -151,11 +151,16 @@ def _status_counts():
 
 
 def service_status():
-    """轻量心跳：感知板监听器（新鲜快照）与隧道进程；结果缓存 3 秒。"""
+    """轻量心跳：感知板监听器（新鲜快照）、隧道进程与大鲸鱼（DSH 3080 端口）；
+    结果缓存 3 秒。"""
     now = time.monotonic()
     with _service_cache_lock:
         if now - _service_cache["t"] < 3:
-            return {"listener": _service_cache["listener"], "tunnel": _service_cache["tunnel"]}
+            return {
+                "listener": _service_cache["listener"],
+                "tunnel": _service_cache["tunnel"],
+                "dsh": _service_cache["dsh"],
+            }
     # 注意：绝不能主动连 7777 探测——监听器把任何新 TCP 连接都当作
     # “新板接入”并切换会话，探测会反复打断真实板端的数据流。
     # 只以“最近 30 秒内有新鲜快照”作为监听器健康的依据。
@@ -183,9 +188,18 @@ def service_status():
         tunnel = "cloudflared" in out
     except Exception:
         pass
+    dsh = False
+    try:
+        # DeepSeek Harness 开发面板固定监听 127.0.0.1:3080
+        with socket.create_connection(("127.0.0.1", 3080), timeout=0.5):
+            dsh = True
+    except OSError:
+        pass
     with _service_cache_lock:
-        _service_cache.update({"t": now, "listener": listener, "tunnel": tunnel})
-    return {"listener": listener, "tunnel": tunnel}
+        _service_cache.update(
+            {"t": now, "listener": listener, "tunnel": tunnel, "dsh": dsh}
+        )
+    return {"listener": listener, "tunnel": tunnel, "dsh": dsh}
 
 
 def db():

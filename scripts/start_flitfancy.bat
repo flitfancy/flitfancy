@@ -4,7 +4,7 @@ chcp 65001 >nul
 
 rem ============================================================
 rem  云萤 FFS 服务启动器（协议触发经 start_flitfancy.ps1 白名单校验后调用）
-rem  动作：backend | listener | tunnel | all（缺省 all）
+rem  动作：backend | listener | tunnel | dsh | all（缺省 all；dsh 不并入 all）
 rem  幂等：已在运行的服务自动跳过；日志写到 logs\starter.log
 rem ============================================================
 rem  目录假设（迁移机器时必须复刻）：
@@ -31,8 +31,9 @@ if /i "%~1"==""       goto :do_all
 if /i "%~1"=="backend"  goto :do_backend
 if /i "%~1"=="listener" goto :do_listener
 if /i "%~1"=="tunnel"   goto :do_tunnel
+if /i "%~1"=="dsh"      goto :do_dsh
 if /i "%~1"=="all"      goto :do_all
-call :log "未知动作：已忽略（可用 backend / listener / tunnel / all）"
+call :log "未知动作：已忽略（可用 backend / listener / tunnel / dsh / all）"
 goto :end
 
 :do_all
@@ -176,6 +177,46 @@ if "%TN_NEED_START%"=="1" (
   call :log "隧道：已启动（新进程）"
 ) else (
   call :log "隧道：已在运行，跳过"
+)
+goto :eof
+
+rem ============ DeepSeek Harness 大鲸鱼（3080） ============
+rem  目录硬编码为本机安装位；换机器时需同步修改。
+:do_dsh
+call :log "=== starter 开始（dsh） ==="
+set "DSH_DIR=S:\DeepSeek\deepseek-harness"
+if not exist "%DSH_DIR%\package.json" (
+  call :log "警告：未找到 DeepSeek Harness：%DSH_DIR%"
+  goto :eof
+)
+set "PNPM_CMD="
+for /f "delims=" %%P in ('where pnpm.cmd 2^>nul') do if not defined PNPM_CMD set "PNPM_CMD=%%P"
+if not defined PNPM_CMD (
+  call :log "错误：找不到 pnpm.cmd（PATH 中无 pnpm）"
+  goto :eof
+)
+rem --- 幂等：pid 文件活着 → 跳过；否则端口 3080 已监听也跳过 ---
+set "DS_PIDFILE=%LOG_DIR%\dsh.pid"
+set "DS_NEED_START=1"
+if exist "%DS_PIDFILE%" (
+  for /f "usebackq delims=" %%Q in ("%DS_PIDFILE%") do (
+    %PSH% -Action is-alive -ProcessId %%Q
+    if not errorlevel 1 set "DS_NEED_START=0"
+  )
+)
+if "%DS_NEED_START%"=="1" (
+  netstat -ano | findstr ":3080" | findstr "LISTENING" >nul 2>nul
+  if not errorlevel 1 set "DS_NEED_START=0"
+)
+if "%DS_NEED_START%"=="1" (
+  if exist "%DS_PIDFILE%" (
+    for /f "usebackq delims=" %%Q in ("%DS_PIDFILE%") do %PSH% -Action stop-process -ProcessId %%Q
+    del "%DS_PIDFILE%" >nul 2>nul
+  )
+  %PSH% -Action start-dsh -Exe "%PNPM_CMD%" -WorkDir "%DSH_DIR%" -OutLog "%LOG_DIR%\dsh.out.log" -ErrLog "%LOG_DIR%\dsh.err.log" -PidFile "%DS_PIDFILE%"
+  call :log "大鲸鱼：已启动（http://127.0.0.1:3080）"
+) else (
+  call :log "大鲸鱼：已在运行，跳过"
 )
 goto :eof
 

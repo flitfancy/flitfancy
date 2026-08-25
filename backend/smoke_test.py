@@ -212,7 +212,7 @@ def main():
             status = request(base, "/api/status")
             assert status["sensor_retention_days"] == 14
             services = status["services"]
-            for key in ("backend", "listener", "tunnel"):
+            for key in ("backend", "listener", "tunnel", "dsh"):
                 assert isinstance(services[key], bool), "心跳状态必须是布尔"
             assert services["backend"] is True
             print("RETENTION: SQLite keeps 14 days")
