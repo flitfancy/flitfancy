@@ -291,7 +291,7 @@ try {
   assert.equal(deniedAdminPreflight.headers.get("Access-Control-Allow-Origin"), null);
 }
 
-// 生产环境优先使用原生 Rate Limiting 绑定；失败时才退回 KV。
+// 生产环境必须使用原生 Rate Limiting 绑定，不能退回高频 KV 计数。
 {
   let limiterCalls = 0;
   const response = await worker.fetch(new Request("https://api.flitfancy.com/chat", {
@@ -313,9 +313,91 @@ try {
   assert.equal(limiterCalls, 1);
 }
 
+// 正确的高频传感器同步不得反复把不存在的失败记录写成 0。
+{
+  let sensorPuts = 0;
+  const sensorEnv = {
+    ADMIN_TOKEN,
+    CONFIG: {
+      async get() { return null; },
+      async put() { sensorPuts += 1; },
+    },
+    DB: {
+      prepare() {
+        return {
+          bind() { return this; },
+          async run() { return {}; },
+          async all() { return { results: [] }; },
+        };
+      },
+      async batch(statements) { return statements.map(() => ({})); },
+    },
+  };
+  for (let i = 0; i < 3; i++) {
+    const response = await worker.fetch(new Request(
+      "https://api.flitfancy.com/admin/sensors", {
+        method: "POST",
+        body: JSON.stringify({
+          rows: [{ board: "test", channel: "CH0", sensor: "SHT41", ok: 1 }],
+        }),
+        headers: {
+          "Authorization": "Bearer " + ADMIN_TOKEN,
+          "Content-Type": "application/json",
+          "CF-Connecting-IP": "192.0.2.40",
+        },
+      }
+    ), sensorEnv);
+    assert.equal(response.status, 200);
+  }
+  assert.equal(sensorPuts, 0,
+    "无失败记录的正确传感器同步不得产生 KV put");
+}
+
+// 正确令牌只在确有失败记录时清零一次，之后的正常管理请求不再写 KV。
+{
+  const ip = "192.0.2.42";
+  const store = new Map([["fail:" + ip, "2"]]);
+  let resetPuts = 0;
+  const env = {
+    ADMIN_TOKEN,
+    CONFIG: {
+      async get(key) { return store.get(key) || null; },
+      async put(key, value) {
+        resetPuts += 1;
+        store.set(key, String(value));
+      },
+    },
+    DB: {
+      prepare() {
+        return {
+          bind() { return this; },
+          async run() { return {}; },
+          async all() { return { results: [] }; },
+          async first() { return { n: 0 }; },
+        };
+      },
+    },
+  };
+  for (let i = 0; i < 2; i++) {
+    const response = await worker.fetch(new Request(
+      "https://api.flitfancy.com/sensors/history?channel=CH0", {
+        headers: {
+          "Authorization": "Bearer " + ADMIN_TOKEN,
+          "CF-Connecting-IP": ip,
+        },
+      }
+    ), env);
+    assert.equal(response.status, 200);
+  }
+  assert.equal(resetPuts, 1,
+    "正确令牌应清除既有失败记录一次，后续正常请求不得重复写 KV");
+}
+
 // /track 限流：每 IP 每分钟最多 120 次；DDL 记忆化：125 次请求只建表一次。
 {
   let prepareCalls = 0;
+  let limiterCalls = 0;
+  let trackPuts = 0;
   const trackEnv = {
     DB: {
       prepare(sql) {
@@ -330,7 +412,16 @@ try {
     CONFIG: {
       store: new Map(),
       async get(key) { return this.store.get(key) || null; },
-      async put(key, value) { this.store.set(key, String(value)); },
+      async put(key, value) {
+        trackPuts += 1;
+        this.store.set(key, String(value));
+      },
+    },
+    TRACK_RATE_LIMITER: {
+      async limit() {
+        limiterCalls += 1;
+        return { success: limiterCalls <= 120 };
+      },
     },
   };
   const statuses = [];
@@ -345,16 +436,59 @@ try {
     "/track 限流窗口内必须 200");
   assert.ok(statuses.slice(120).every((status) => status === 429),
     "/track 超过 120 次/分钟后必须 429");
+  assert.equal(trackPuts, 0, "正常 /track 限流不得写 KV");
   assert.equal(prepareCalls, 1,
     "ensureVisitsTable 必须按 isolate 记忆化，125 次请求只建表一次");
+}
+
+// 访问统计是非关键功能：原生限流器缺失或报错时停止统计，不得退回 KV。
+{
+  for (const limiter of [
+    undefined,
+    { async limit() { throw new Error("limiter unavailable"); } },
+  ]) {
+    let fallbackPuts = 0;
+    let inserts = 0;
+    const env = {
+      CONFIG: {
+        async get() { return null; },
+        async put() { fallbackPuts += 1; },
+      },
+      DB: {
+        prepare(sql) {
+          if (String(sql).includes("INSERT INTO visits")) inserts += 1;
+          return {
+            bind() { return this; },
+            async run() { return {}; },
+            async all() { return { results: [] }; },
+          };
+        },
+      },
+    };
+    if (limiter) env.TRACK_RATE_LIMITER = limiter;
+    const response = await worker.fetch(
+      new Request("https://api.flitfancy.com/track?p=/", {
+        headers: { "CF-Connecting-IP": "192.0.2.41" },
+      }),
+      env
+    );
+    assert.equal(response.status, 503,
+      "原生 /track 限流器不可用时应停止非关键统计");
+    assert.equal(fallbackPuts, 0, "原生 /track 限流器不可用时不得写 KV");
+    assert.equal(inserts, 0, "原生 /track 限流器不可用时不得写访问记录");
+  }
 }
 
 // admin 端点爆破锁定：错误 Authorization 连续 5 次后必须 429。
 {
   const failStore = new Map();
+  let failPuts = 0;
   const lockConfig = {
     async get(key) { return failStore.get(key) || null; },
-    async put(key, value) { failStore.set(key, String(value)); },
+    async put(key, value) {
+      failPuts += 1;
+      failStore.set(key, String(value));
+    },
   };
   const badAuth = new Request("https://api.flitfancy.com/admin/sensors", {
     method: "POST", body: "{}",
@@ -375,6 +509,8 @@ try {
     if (i < 5) assert.equal(lastStatus, 401, "前 5 次错误令牌必须 401 并计数");
   }
   assert.equal(lastStatus, 429, "第 6 次必须被锁定返回 429");
+  assert.equal(failPuts, 5,
+    "每次错误令牌只能写一份持久失败计数，不得再用 KV 做突发限流兜底");
   const locked = await worker.fetch(new Request("https://api.flitfancy.com/admin/sensors", {
     method: "POST", body: "{}",
     headers: {

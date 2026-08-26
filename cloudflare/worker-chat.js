@@ -25,9 +25,11 @@ export async function handleChat(request, env) {
   }
 
   const ip = clientIp(request);
-  if (await rateLimitExceeded(
-    env, "CHAT_RATE_LIMITER", ip, "chat:", RATE.chatMax, RATE.chatTtl
-  )) {
+  const limited = await rateLimitExceeded(env, "CHAT_RATE_LIMITER", ip);
+  if (limited === null) {
+    return json({ ok: false, error: "AI 限流服务暂不可用" }, 503);
+  }
+  if (limited) {
     return json({ ok: false, error: "请求过于频繁，请稍后再试" }, 429);
   }
 

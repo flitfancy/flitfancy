@@ -1,9 +1,6 @@
 import {
   adminAuthError,
-  clearFails,
-  clientIp,
   json,
-  readFails,
   readJsonBody,
 } from "./worker-core.js";
 
@@ -114,9 +111,6 @@ export async function handleToggle(request, env) {
     const rows = normalizeReflections(body.reflections);
     await env.CONFIG.put("reflections", JSON.stringify(rows));
     result.reflections = rows;
-  }
-  if ((await readFails(env, clientIp(request))) > 0) {
-    await clearFails(env, clientIp(request));
   }
   await clearConfigCache(request);
   return json(result);

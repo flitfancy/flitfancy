@@ -1,7 +1,5 @@
 import {
   adminAuthError,
-  clearFails,
-  clientIp,
   json,
   readJsonBody,
 } from "./worker-core.js";
@@ -119,7 +117,6 @@ export async function handleAnchorCreate(request, env) {
   )
     .bind(uid, createdTs, anchorTime, timePrecision, horizon, project, title, content)
     .run();
-  await clearFails(env, clientIp(request));
   return json({ ok: true, uid });
 }
 
@@ -140,7 +137,6 @@ export async function handleEssayCreate(request, env) {
   await runDdlOnce(env, TABLE_ESSAYS);
   if (body.published !== true) {
     await env.DB.prepare("DELETE FROM essays WHERE uid = ?").bind(uid).run();
-    await clearFails(env, clientIp(request));
     return json({ ok: true, uid, published: false });
   }
   const title = String(body.title || "").trim();
@@ -173,7 +169,6 @@ export async function handleEssayCreate(request, env) {
        title = excluded.title,
        content = excluded.content`
   ).bind(uid, createdTs, updatedTs, displayOrder, title, content).run();
-  await clearFails(env, clientIp(request));
   return json({ ok: true, uid, published: true });
 }
 
@@ -231,6 +226,5 @@ export async function handleMemoryCreate(request, env) {
       perspective, source, "", content
     )
     .run();
-  await clearFails(env, clientIp(request));
   return json({ ok: true, uid });
 }

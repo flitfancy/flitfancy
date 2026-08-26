@@ -1,10 +1,6 @@
 const RATE = {
   failTtl: 600,
   failMax: 5,
-  chatTtl: 60,
-  chatMax: 15,
-  trackTtl: 60,
-  trackMax: 120,
   maxMessageLen: 4000,
 };
 
@@ -56,17 +52,17 @@ function configuredAdminSecret(value) {
   return token.length >= MIN_ADMIN_TOKEN_LENGTH ? token : "";
 }
 
-export async function rateLimitExceeded(env, binding, key, fallbackKey, max, ttl) {
+// 返回 true=已限流、false=放行、null=绑定缺失或暂不可用。
+export async function rateLimitExceeded(env, binding, key) {
   const limiter = env[binding];
-  if (limiter && typeof limiter.limit === "function") {
-    try {
-      const result = await limiter.limit({ key });
-      return !result.success;
-    } catch (e) {
-      // 绑定临时不可用时保留 KV 兜底，避免整条业务链路失效。
-    }
+  if (!limiter || typeof limiter.limit !== "function") return null;
+  try {
+    const result = await limiter.limit({ key });
+    return !result.success;
+  } catch (e) {
+    // 限流状态不可知时交给业务路由决定是否停止，不能退回高频 KV 计数。
+    return null;
   }
-  return (await countKey(env, fallbackKey + key, ttl)) > max;
 }
 
 // 恒定时间比较：避免令牌长度/前缀差异被时序侧信道利用。
@@ -80,7 +76,7 @@ function timingSafeEqual(a, b) {
   return diff === 0;
 }
 
-export async function readFails(env, ip) {
+async function readFails(env, ip) {
   return env.CONFIG
     ? parseInt((await env.CONFIG.get("fail:" + ip)) || "0", 10) || 0
     : 0;
@@ -88,13 +84,13 @@ export async function readFails(env, ip) {
 
 async function bumpFails(env, ip) {
   const burstLimited = await rateLimitExceeded(
-    env, "ADMIN_FAILED_AUTH_LIMITER", ip, "fail-burst:", RATE.failMax, 60
+    env, "ADMIN_FAILED_AUTH_LIMITER", ip
   );
   await countKey(env, "fail:" + ip, RATE.failTtl);
-  return burstLimited;
+  return burstLimited === true;
 }
 
-export async function clearFails(env, ip) {
+async function clearFails(env, ip) {
   if (env.CONFIG) {
     await env.CONFIG.put("fail:" + ip, "0", { expirationTtl: RATE.failTtl });
   }
@@ -122,6 +118,7 @@ export async function adminAuthError(request, env) {
     }
     return json({ ok: false, error: "unauthorized" }, 401);
   }
+  if (fails > 0) await clearFails(env, ip);
   return null;
 }
 

@@ -1,5 +1,4 @@
 import {
-  RATE,
   adminAuthError,
   clientIp,
   json,
@@ -32,9 +31,11 @@ export async function handleTrack(request, env) {
     return json({ ok: false, error: "访问记录未配置（请绑定 D1，绑定名为 DB）" }, 503);
   }
   const ip = clientIp(request);
-  if (await rateLimitExceeded(
-    env, "TRACK_RATE_LIMITER", ip, "track:", RATE.trackMax, RATE.trackTtl
-  )) {
+  const limited = await rateLimitExceeded(env, "TRACK_RATE_LIMITER", ip);
+  if (limited === null) {
+    return json({ ok: false, error: "访问记录限流暂不可用" }, 503);
+  }
+  if (limited) {
     return json({ ok: false, error: "请求过于频繁" }, 429);
   }
   await runDdlOnce(env, TABLE_VISITS);

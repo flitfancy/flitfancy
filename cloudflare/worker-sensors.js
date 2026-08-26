@@ -1,7 +1,5 @@
 import {
   adminAuthError,
-  clearFails,
-  clientIp,
   json,
   readJsonBody,
 } from "./worker-core.js";
@@ -70,7 +68,6 @@ export async function handleHistoryUpdate(request, env) {
   await env.DB.prepare(
     "DELETE FROM sensor_history WHERE updated_ts < ?"
   ).bind(now - 30 * 3600).run();
-  await clearFails(env, clientIp(request));
   return json({ ok: true, updated: rows.length });
 }
 
@@ -134,7 +131,6 @@ export async function handleSensorUpdate(request, env) {
     ).bind(row.board, row.channel, row.ts, row.sensor, row.ok, row.payload)
   );
   await env.DB.batch(statements);
-  await clearFails(env, clientIp(request));
   return json({ ok: true, updated: rows.length });
 }
 

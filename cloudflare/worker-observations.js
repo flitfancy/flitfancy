@@ -1,5 +1,5 @@
 import { adminContentBody } from "./worker-content.js";
-import { clearFails, clientIp, json } from "./worker-core.js";
+import { json } from "./worker-core.js";
 import {
   ensureObservationsTable,
   runDdlOnce,
@@ -96,7 +96,6 @@ export async function handleObservationCreate(request, env) {
       "DELETE FROM observation_links WHERE source_uid = ? OR target_uid = ?"
     ).bind(uid, uid).run();
     await env.DB.prepare("DELETE FROM observations WHERE uid = ?").bind(uid).run();
-    await clearFails(env, clientIp(request));
     return json({ ok: true, uid, published: false });
   }
   const title = String(body.title || "").trim();
@@ -141,7 +140,6 @@ export async function handleObservationCreate(request, env) {
     uid, unixTime(body.created_at), unixTime(body.updated_at), title, category,
     JSON.stringify(tags), summary, content, discoveredAt, sourceName, sourceUrl
   ).run();
-  await clearFails(env, clientIp(request));
   return json({ ok: true, uid, published: true });
 }
 
@@ -152,7 +150,6 @@ export async function handleObservationLinkCreate(request, env) {
   await ensureTables(env);
   if (body.published !== true) {
     await env.DB.prepare("DELETE FROM observation_links WHERE uid = ?").bind(uid).run();
-    await clearFails(env, clientIp(request));
     return json({ ok: true, uid, published: false });
   }
   const sourceUid = String(body.source_uid || "").trim();
@@ -177,6 +174,5 @@ export async function handleObservationLinkCreate(request, env) {
     uid, unixTime(body.created_at), unixTime(body.updated_at),
     sourceUid, targetUid, relation
   ).run();
-  await clearFails(env, clientIp(request));
   return json({ ok: true, uid, published: true });
 }
