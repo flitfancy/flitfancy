@@ -316,7 +316,7 @@ Content-Type: application/json
 除非另有说明，本仓库的程序源代码、脚本与配套技术文档采用
 [MIT License](LICENSE)。
 
-以下内容不属于 MIT 授权范围，版权及相关权利由 Yunwe 保留：
+以下内容不属于 MIT 授权范围，版权及相关权利由 FlitFancy 保留：
 
 - 原创文章、日记、见闻、随笔及其他个人表达；
 - 网站数据、照片、插画、音视频与其他原创媒体；
@@ -328,4 +328,4 @@ Content-Type: application/json
 Unless otherwise noted, the source code, scripts, and accompanying technical
 documentation in this repository are licensed under the MIT License. Original
 editorial content, personal data, media, and FlitFancy brand assets are excluded
-from that license and remain all rights reserved by Yunwe.
+from that license and remain all rights reserved by FlitFancy.
