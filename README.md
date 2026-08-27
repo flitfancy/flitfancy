@@ -310,3 +310,22 @@ Content-Type: application/json
 `time` 可只写日期、到分钟或精确到秒；未写时区时按北京时间处理。本机调用会沿用
 现有的本地信任边界；从公网调用则必须先登录并携带管理员 Bearer 令牌。旧版
 `date/title` 请求不再接受；`source` 仍是现行数据模型字段，缺省为 `manual`。
+
+## 许可证
+
+除非另有说明，本仓库的程序源代码、脚本与配套技术文档采用
+[MIT License](LICENSE)。
+
+以下内容不属于 MIT 授权范围，版权及相关权利由 Yunwe 保留：
+
+- 原创文章、日记、见闻、随笔及其他个人表达；
+- 网站数据、照片、插画、音视频与其他原创媒体；
+- FlitFancy 名称、Logo 及其他品牌标识。
+
+仓库中的第三方依赖与素材继续遵循其各自的许可证。换句话说，你可以依据 MIT
+复用网站程序与界面实现，但不能因此直接复制上述个人内容或冒充 FlitFancy。
+
+Unless otherwise noted, the source code, scripts, and accompanying technical
+documentation in this repository are licensed under the MIT License. Original
+editorial content, personal data, media, and FlitFancy brand assets are excluded
+from that license and remain all rights reserved by Yunwe.

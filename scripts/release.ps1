@@ -21,10 +21,38 @@ $root = Split-Path -Parent $PSScriptRoot
 
 function Step($text) { Write-Host ("==> " + $text) }
 
-# 0) 前置：必须站在 main；列出将纳入本次发布的工作区改动
+# 0) 前置：必须站在 main；版本高于现有标签且目标标签未被占用；
+#    列出将纳入本次发布的工作区改动
 Set-Location $root
 $branch = (git branch --show-current).Trim()
 if ($branch -ne 'main') { throw "必须在 main 分支发版（当前：$branch）" }
+if ($Version -notmatch '^\d+\.\d+\.\d+$') {
+  throw '版本号必须使用 MAJOR.MINOR.PATCH，例如 1.4.2'
+}
+$targetTag = "v$Version"
+
+Step "verify $targetTag"
+git fetch --tags --quiet origin
+if ($LASTEXITCODE -ne 0) { throw '无法同步远端标签，停止发版' }
+
+git rev-parse -q --verify "refs/tags/$targetTag" *> $null
+if ($LASTEXITCODE -eq 0) { throw "标签 $targetTag 已存在，禁止覆盖" }
+
+$remoteTag = @(git ls-remote --tags origin "refs/tags/$targetTag")
+if ($LASTEXITCODE -ne 0) { throw '无法核验远端目标标签，停止发版' }
+if ($remoteTag.Count -gt 0) { throw "远端标签 $targetTag 已存在，禁止覆盖" }
+
+$latestTag = git tag --list 'v*' --sort=-version:refname |
+  Where-Object { $_ -match '^v\d+\.\d+\.\d+$' } |
+  Select-Object -First 1
+if ($latestTag) {
+  $nextVersion = [version]$Version
+  $latestVersion = [version]$latestTag.Substring(1)
+  if ($nextVersion -le $latestVersion) {
+    throw "新版本必须高于当前最新标签 $latestTag"
+  }
+}
+
 $pending = @(git status --porcelain)
 if ($pending.Count -gt 0) {
   Write-Host '以下工作区改动将随本次发布一并提交（git add -A）：'
@@ -39,8 +67,19 @@ if ($LASTEXITCODE -ne 0) { throw 'set-version 失败' }
 # 2) 全量检查（前端/Worker/样式/后端冒烟/版本一致性）
 Step 'check:all'
 Set-Location (Join-Path $root 'cloudflare')
-cmd /c "pnpm run check:all"
-if ($LASTEXITCODE -ne 0) { throw 'check:all 失败' }
+$previousReleaseTag = $env:RELEASE_TAG
+try {
+  $env:RELEASE_TAG = $targetTag
+  cmd /c "pnpm run check:all"
+  $checkExitCode = $LASTEXITCODE
+} finally {
+  if ($null -eq $previousReleaseTag) {
+    Remove-Item Env:RELEASE_TAG -ErrorAction SilentlyContinue
+  } else {
+    $env:RELEASE_TAG = $previousReleaseTag
+  }
+}
+if ($checkExitCode -ne 0) { throw 'check:all 失败' }
 
 # 3) 暂存 + 格式审计 + 密钥扫描
 Set-Location $root
@@ -66,13 +105,13 @@ if ($DryRun) {
 }
 
 # 4) 提交 + 标签 + 原子推送（TLS 瞬断自动重试一次）
-Step "commit & tag v$Version"
+Step "commit & tag $targetTag"
 git commit -m $Message
 if ($LASTEXITCODE -ne 0) { throw 'commit 失败' }
-git tag -a "v$Version" -m "FlitFancy v$Version"
+git tag -a $targetTag -m "FlitFancy $targetTag"
 $pushed = $false
 foreach ($attempt in 1..2) {
-  git push --atomic origin main "v$Version" 2>$null | Out-Null
+  git push --atomic origin main $targetTag 2>$null | Out-Null
   if ($LASTEXITCODE -eq 0) { $pushed = $true; break }
   if ($attempt -eq 1) {
     Write-Host 'push 失败（网络瞬断?），5 秒后重试...'

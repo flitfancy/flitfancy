@@ -22,7 +22,8 @@ site/
 ├── backend/         Python 本地服务：server.py 入口 + flitfancy_*.py 领域模块
 ├── cloudflare/      Worker：worker.js 入口 + worker-*.js 模块
 │   └── package.json ← ★ 版本号单一来源（语义化版本）
-├── scripts/         set-version.mjs（版本联动）/ release.ps1（发版自动化）
+├── scripts/         set-version.mjs（版本联动）/ run-backend-tests.mjs（跨平台测试）/
+│                   release.ps1（发版自动化）
 ├── tests/           Node 单测（含骨架一致性与版本一致性守卫）
 └── data/sensors     运行数据 —— 永不提交
 ```
@@ -108,5 +109,5 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\release.ps1 `
   仅允许 `.grad-clip`（唯一豁免行在 style.css）；重复选择器/空块/
   同块重复声明即报错
 - `tests/html-skeleton.test.mjs`：主页面导航/页脚骨架一致性
-- `tests/version-consistency.test.mjs`：全库 `?v=` 与包版本一致
+- `tests/version-consistency.test.mjs`：包版本、全库 `?v=`、CHANGELOG 与发布标签一致
 - 后端冒烟：隔离临时库 + 独立端口，可重复运行，不碰真实数据
