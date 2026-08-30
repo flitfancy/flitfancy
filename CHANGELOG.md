@@ -3,6 +3,17 @@
 所有对外可见的变更按版本倒序记录。版本号遵循语义化版本：
 **主位** = 大改版 · **次位** = 新功能 · **补丁位** = 修复与打磨。
 
+## v1.4.4 — 2026-08-30
+
+- 修复：后端响应写入不再被浏览器中途断连的异常拖垮（捕获
+  ConnectionAbortedError/ConnectionResetError/BrokenPipeError）
+- 新增：scripts/watch_backend.ps1 后端自守护——每 30 秒探活，
+  进程死亡自动拉起（快速失败退避 5s→60s），启动器改为幂等启动守护者
+- 修复：start_flitfancy.ps1 协议处理器补回 UTF-8 BOM
+  （此前控制台服务按钮点击静默无效）
+- 新增：SQLite 自动备份（scripts/backup_sqlite.py + 每日 03:30 计划任务），
+  README 补充使用说明
+
 ## v1.4.3 — 2026-08-27
 
 - 授权：MIT License 与个人内容权利声明统一使用 FlitFancy 作为公开版权署名

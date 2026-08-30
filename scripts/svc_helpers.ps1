@@ -1,4 +1,4 @@
-# flitfancy service helpers.
+﻿# flitfancy service helpers.
 # Extracted from start_flitfancy.bat's inline PowerShell one-liners so that
 # quoting lives in one file instead of nine fragile cmd lines.
 # Every action exits 0 (success) or 1 (failure); the bat only checks errorlevel.
@@ -7,8 +7,8 @@
 param(
     [Parameter(Mandatory = $true)]
     [ValidateSet('is-alive', 'backend-health', 'backend-stale-kill', 'stop-process',
-        'start-backend', 'wait-backend', 'listener-health', 'start-watchdog',
-        'start-tunnel')]
+        'start-backend', 'start-backend-watchdog', 'wait-backend',
+        'listener-health', 'start-watchdog', 'start-tunnel')]
     [string]$Action,
     # NOTE: not $Pid -- that collides with PowerShell's read-only automatic $PID.
     [string]$ProcessId = '',
@@ -19,6 +19,7 @@ param(
     [string]$PidFile = '',
     [string]$Config = '',
     [string]$Watchdog = '',
+    [string]$Server = '',
     [string]$Listener = '',
     [string]$DataRoot = '',
     [int]$Port = 0,
@@ -81,6 +82,14 @@ switch ($Action) {
         } catch {
             exit 0   # keep original semantics: unknown status is not 'unhealthy'
         }
+    }
+    'start-backend-watchdog' {
+        if (-not $Watchdog -or -not $Server -or -not $Exe -or -not $WorkDir) { exit 1 }
+        # 与 start-watchdog 同款引号写法：路径含空格必须手工嵌双引号。
+        $q = [char]34
+        $argList = "-NoProfile -ExecutionPolicy Bypass -File $q$Watchdog$q -ServerPath $q$Server$q -Exe $q$Exe$q -WorkDir $q$WorkDir$q -OutLog $q$OutLog$q -ErrLog $q$ErrLog$q -PidFile $q$PidFile$q"
+        Start-Process -FilePath 'powershell.exe' -ArgumentList $argList -WindowStyle Hidden -RedirectStandardOutput $OutLog -RedirectStandardError $ErrLog
+        exit 0
     }
     'start-watchdog' {
         if (-not $Watchdog -or -not $Listener) { exit 1 }

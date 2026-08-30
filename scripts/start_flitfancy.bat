@@ -60,30 +60,28 @@ if not defined PYTHON_EXE (
   call :log "错误：找不到 Python（py -3 或 python）"
   goto :eof
 )
-rem --- 智能判定：pid 文件活着且 /api/status 健康 → 跳过；否则杀掉旧进程重启 ---
-set "BE_PIDFILE=%LOG_DIR%\backend.pid"
+rem --- 后端由 watch_backend.ps1 自守护：点一下 = 确保 watchdog 在跑；
+rem    后端进程死了 watchdog 自动拉起（30 秒内自愈），不用再手动干预 ---
+set "BE_WD_PIDFILE=%LOG_DIR%\backend-watchdog.pid"
 set "BE_NEED_START=1"
-if exist "%BE_PIDFILE%" (
-  for /f "usebackq delims=" %%Q in ("%BE_PIDFILE%") do (
+if exist "%BE_WD_PIDFILE%" (
+  for /f "usebackq delims=" %%Q in ("%BE_WD_PIDFILE%") do (
     %PSH% -Action is-alive -ProcessId %%Q
     if not errorlevel 1 (
       %PSH% -Action backend-health
       if not errorlevel 1 set "BE_NEED_START=0"
     )
   )
-) else (
-  %PSH% -Action backend-stale-kill
-  if not errorlevel 1 set "BE_NEED_START=0"
 )
 if "%BE_NEED_START%"=="1" (
-  if exist "%BE_PIDFILE%" (
-    for /f "usebackq delims=" %%Q in ("%BE_PIDFILE%") do %PSH% -Action stop-process -ProcessId %%Q
-    del "%BE_PIDFILE%" >nul 2>nul
+  if exist "%BE_WD_PIDFILE%" (
+    for /f "usebackq delims=" %%Q in ("%BE_WD_PIDFILE%") do %PSH% -Action stop-process -ProcessId %%Q
+    del "%BE_WD_PIDFILE%" >nul 2>nul
   )
-  %PSH% -Action start-backend -Exe "%PYTHON_EXE%" -WorkDir "%BACKEND%" -OutLog "%LOG_DIR%\server.out.log" -ErrLog "%LOG_DIR%\server.err.log" -PidFile "%BE_PIDFILE%"
-  call :log "后端：已启动（新进程）"
+  %PSH% -Action start-backend-watchdog -Watchdog "%ROOT%\site\scripts\watch_backend.ps1" -Server "%SERVER%" -Exe "%PYTHON_EXE%" -WorkDir "%BACKEND%" -OutLog "%LOG_DIR%\backend-watchdog.out.log" -ErrLog "%LOG_DIR%\backend-watchdog.err.log" -PidFile "%LOG_DIR%\backend.pid"
+  call :log "后端：watchdog 已启动（后端进程由它守护）"
 ) else (
-  call :log "后端：已在运行且健康，跳过"
+  call :log "后端：watchdog 已在运行且健康，跳过"
 )
 %PSH% -Action wait-backend
 if errorlevel 1 (

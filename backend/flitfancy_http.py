@@ -101,7 +101,12 @@ def create_handler(app):
             if urllib.parse.urlparse(self.path).path.startswith("/api/"):
                 self.send_header("Cache-Control", "no-store")
             self.end_headers()
-            self.wfile.write(data)
+            try:
+                self.wfile.write(data)
+            except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
+                # 客户端在响应途中断开（刷新/关标签页/轮询超时）：
+                # 静默收尾，绝不让单次断连异常冒泡为整个服务退出。
+                pass
 
         def _read_body(self, limit=1_000_000):
             raw = self.headers.get("Content-Length")

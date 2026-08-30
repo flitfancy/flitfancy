@@ -59,6 +59,23 @@ python server.py
 - `sessions/` 是当前监听会话，`live/` 是实时缓存；监听器下次启动时会把已结束会话移动到 `archive/sessions/`，不会删除。
 - 14 天可用环境变量 `FLITFANCY_SENSOR_RETENTION_DAYS` 调整；默认清理检查每小时一次。
 
+### SQLite 自动备份
+
+`scripts/backup_sqlite.py` 使用 SQLite Backup API，在本地服务运行时也能生成一致副本，
+完成后执行 `PRAGMA quick_check`，并在成功后保留最近 14 份。默认目标是另一块物理磁盘：
+`B:\FlitFancy\data\daily\`。
+
+```powershell
+# 立即手动备份
+py -3.14 scripts\backup_sqlite.py
+
+# 安装或更新每天 03:30 的当前用户计划任务
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install_sqlite_backup_task.ps1
+```
+
+日志写入 `B:\FlitFancy\data\backup.log`。备份只包含 SQLite 数据库，不包含
+`backend/ai_local.json` 中的本地密钥配置。
+
 ## AI 对话（控制台的“对话”面板）
 
 对话由本地服务转发到兼容 OpenAI Chat Completions 格式的 AI 服务，**密钥只存在本地**，
