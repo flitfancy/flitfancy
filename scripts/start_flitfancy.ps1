@@ -29,4 +29,25 @@ try {
 } finally {
     Pop-Location
 }
+
+# 协议点击的窗口不再是"一闪而过"：显示结果并停留 15 秒，
+# 期间按任意键立即关闭；关窗/超时都不影响已启动的服务。
+Write-Host ''
+if ($code -eq 0) {
+    Write-Host 'Done. This window closes in 15 seconds (press any key to close now).'
+} else {
+    Write-Host "Finished with exit code $code. See logs\\starter.log. This window closes in 15 seconds."
+}
+$deadline = [DateTime]::UtcNow.AddSeconds(15)
+try {
+    while ([DateTime]::UtcNow -lt $deadline) {
+        if ([Console]::KeyAvailable) {
+            [Console]::ReadKey($true) | Out-Null
+            break
+        }
+        Start-Sleep -Milliseconds 200
+    }
+} catch {
+    # 控制台输入不可用（重定向等）：直接关闭
+}
 exit $code
