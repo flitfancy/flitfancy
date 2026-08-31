@@ -1,0 +1,19 @@
+[
+  {
+    "id": "res-fireflysense",
+    "group": "naturecraft",
+    "title": "FireFlySense感知板子",
+    "desc": "传感器模块",
+    "details": "6路独立传感器，包含温湿度传感器（SHT41），气压传感器（BMP580），光谱传感器（AS7341），光照及紫外线传感器（LTR390），空气质量传感器（SGP41），二氧化碳浓度传感器（SCD40）",
+    "versions": [
+      {
+        "date": "2026-08-31T23:24:34+08:00",
+        "label": "1.0",
+        "note": "",
+        "file": "files/res-fireflysense/20260831-232434-FFS1.0.zip",
+        "sha256": "2bfed7a639e4b3a2c8635579ea2a8337e88644550bfe2e9f076bc017ab275e70",
+        "size": 325208
+      }
+    ]
+  }
+]
