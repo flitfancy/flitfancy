@@ -40,6 +40,7 @@ class HttpDependencies:
     now_iso: object
     protocol_name: object
     queue_public_sensor_sync: object
+    resource_service: object
     sensor_row_public: object
     service_status: object
     sync_pending_anchors: object
@@ -76,6 +77,7 @@ def create_handler(app):
     now_iso = app.now_iso
     protocol_name = app.protocol_name
     queue_public_sensor_sync = app.queue_public_sensor_sync
+    resource_service = app.resource_service
     sensor_row_public = app.sensor_row_public
     service_status = app.service_status
     sync_pending_anchors = app.sync_pending_anchors
@@ -201,6 +203,14 @@ def create_handler(app):
                 self._api_admin_logout()
             elif parsed.path == "/api/admin/config":
                 self._api_admin_config_set()
+            elif parsed.path == "/api/resources/prepare":
+                self._api_resource_prepare()
+            elif parsed.path == "/api/resources/upload":
+                self._api_resource_upload()
+            elif parsed.path == "/api/resources/delete":
+                self._api_resource_delete()
+            elif parsed.path == "/api/resources/publish":
+                self._api_resource_publish()
             else:
                 self._send(404, {"error": "not found"})
 
@@ -278,6 +288,8 @@ def create_handler(app):
                     "protocol_name": protocol_name(),
                     "msg": "flitfancy 在线 · 已记录 %d 条感知数据 · %d 条笔记" % (n_sensors, n_notes),
                 })
+            elif path == "/api/resources":
+                self._send(200, {"resources": resource_service.list_resources()})
             elif path == "/api/sensors/latest":
                 con = db()
                 rows = con.execute(
@@ -947,6 +959,86 @@ def create_handler(app):
                 self._send(502, payload)
                 return None
             return data
+
+        def _api_resource_prepare(self):
+            if self._require_admin() is None:
+                return
+            data = self._json_body()
+            if data is None:
+                return
+            try:
+                result = resource_service.begin_upload(data)
+            except ValueError as exc:
+                self._send(400, {"ok": False, "error": str(exc)})
+                return
+            self._send(200, {"ok": True, **result})
+
+        def _api_resource_upload(self):
+            if self._require_admin() is None:
+                return
+            query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            token = (query.get("token") or [""])[0].strip()
+            try:
+                target, meta = resource_service.upload_target(token)
+            except ValueError as exc:
+                self._send(400, {"ok": False, "error": str(exc)})
+                return
+            length = int(self.headers.get("Content-Length") or 0)
+            if length > 500 * 1024 * 1024:
+                self._send(400, {"ok": False, "error": "文件超出 500MB 上限"})
+                return
+            # 大文件上传需要远超 do_POST 默认值（10s）的传输时间
+            try:
+                self.connection.settimeout(600)
+            except OSError:
+                pass
+            received = 0
+            try:
+                if target:
+                    os.makedirs(os.path.dirname(target), exist_ok=True)
+                    with open(target, "wb") as f:
+                        while received < length:
+                            chunk = self.rfile.read(min(1024 * 1024, length - received))
+                            if not chunk:
+                                break
+                            f.write(chunk)
+                            received += len(chunk)
+                else:
+                    while received < length:
+                        received += len(self.rfile.read(min(1024 * 1024, length - received)))
+            except OSError as exc:
+                self._send(400, {"ok": False, "error": "接收文件失败：" + str(exc)})
+                return
+            if length and received < length:
+                self._send(400, {"ok": False,
+                                 "error": "传输不完整：%d/%d" % (received, length)})
+                return
+            try:
+                entry = resource_service.finalize_upload(token)
+            except ValueError as exc:
+                self._send(400, {"ok": False, "error": str(exc)})
+                return
+            self._send(200, {"ok": True, "entry": entry})
+
+        def _api_resource_delete(self):
+            if self._require_admin() is None:
+                return
+            data = self._json_body()
+            if data is None:
+                return
+            res_id = str(data.get("id") or "").strip()
+            try:
+                removed = resource_service.delete_card(res_id)
+            except ValueError as exc:
+                self._send(400, {"ok": False, "error": str(exc)})
+                return
+            self._send(200, {"ok": True, "removed_files": removed})
+
+        def _api_resource_publish(self):
+            if self._require_admin() is None:
+                return
+            ok, note = resource_service.publish()
+            self._send(200 if ok else 502, {"ok": ok, "note": note})
 
         def _api_visits(self):
             if self._require_admin() is None:

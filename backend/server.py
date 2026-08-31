@@ -34,6 +34,7 @@ from flitfancy_core import (
 )
 from flitfancy_http import HttpDependencies, create_handler
 from flitfancy_observations import ObservationService, decode_tags
+from flitfancy_resources import ResourceService
 from flitfancy_sensors import (
     normalize_sensor_row,
     parse_sensor_csv_line,
@@ -502,6 +503,8 @@ _observation_service = ObservationService(
     db, now_iso, sync_pending_observations, sync_pending_observation_links,
 )
 
+_resource_service = ResourceService(SITE_ROOT, now_iso)
+
 Handler = create_handler(HttpDependencies(
     ai_opener=AI_OPENER,
     cst=CST,
@@ -529,6 +532,7 @@ Handler = create_handler(HttpDependencies(
     now_iso=now_iso,
     protocol_name=protocol_name,
     queue_public_sensor_sync=queue_public_sensor_sync,
+    resource_service=_resource_service,
     sensor_row_public=sensor_row_public,
     service_status=service_status,
     sync_pending_anchors=sync_pending_anchors,

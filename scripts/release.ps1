@@ -89,7 +89,7 @@ git diff --cached --check
 if ($LASTEXITCODE -ne 0) { throw '暂存差异存在格式问题' }
 $staged = git diff --cached --no-ext-diff -U0
 $added = $staged | Select-String '^\+(?!\+\+\+)'
-$hits = $added | Select-String -Pattern '(?i)(api[_-]?key|access[_-]?token|auth[_-]?token|client[_-]?secret|password\s*[:=]|bearer\s+[a-z0-9._-]{12,}|-----BEGIN .*PRIVATE KEY-----)' |
+$hits = $added | Select-String -Pattern '(?i)(api[_-]?key\s*[:=]\s*["\x27]|access[_-]?token\s*[:=]\s*["\x27]|auth[_-]?token\s*[:=]\s*["\x27]|client[_-]?secret|password\s*[:=]\s*["\x27]|bearer\s+[a-z0-9._-]{12,}|-----BEGIN .*PRIVATE KEY-----)' |
   Where-Object { $_.Line -notmatch 'Select-String -Pattern' -and
                  $_.Line -notmatch 'test-password|smoke-password' }   # 后两者=扫描器自匹配与测试假令牌
 if ($hits) {

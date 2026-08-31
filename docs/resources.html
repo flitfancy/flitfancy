@@ -6,9 +6,9 @@
   <link rel="canonical" href="https://flitfancy.com/resources.html">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='24' fill='%23f5b84b' opacity='0.22'/%3E%3Ccircle cx='32' cy='32' r='12' fill='%23f5b84b'/%3E%3Ccircle cx='32' cy='32' r='5' fill='%23ffe9c4'/%3E%3C/svg%3E">
   <title>资源 — 云萤 · FlitFancy</title>
-  <meta name="description" content="FireFly 天心、SkyWork 天工与 FlitFancy 云萤的资料库：固件、PCB 与物料清单下载。">
-  <link rel="stylesheet" href="assets/style.css?v=1.4.5">
-  <script src="assets/track.js?v=1.4.5" defer></script>
+  <meta name="description" content="FireFly 天心、NatureCraft 天工与 FlitFancy 云萤的资料库：固件、PCB 与物料清单下载。">
+  <link rel="stylesheet" href="assets/style.css?v=1.4.6">
+  <script src="assets/track.js?v=1.4.6" defer></script>
 </head>
 <body>
   <canvas id="sky" aria-hidden="true"></canvas>
@@ -32,10 +32,11 @@
     <div class="resource-columns">
     <section class="section">
       <h2>FireFly · 天心</h2>
+      <div class="dyn-resources" data-column="firefly"></div>
     </section>
 
     <section class="section">
-      <h2>SkyWork · 天工</h2>
+      <h2>NatureCraft · 天工</h2>
 
       <details class="resource-group">
         <summary>FFS 固件</summary>
@@ -67,10 +68,13 @@
           <li>烧录后板子自动复位并恢复采集（无需手动发命令）；数据经 TCP 7777 推送到监听器。</li>
         </ol>
       </details>
+
+      <div class="dyn-resources" data-column="naturecraft"></div>
     </section>
 
     <section class="section">
       <h2>FlitFancy · 云萤</h2>
+      <div class="dyn-resources" data-column="flitfancy"></div>
     </section>
     </div>
   </main>
@@ -79,7 +83,81 @@
     <p class="grad-clip grad-flame"><span>云萤 · FlitFancy</span><span class="sep"> · </span><span>献给我们所热爱的一切</span></p>
   </footer>
 
-  <script src="assets/firefly.js?v=1.4.5"></script>
-  <script src="assets/sitefx.js?v=1.4.5"></script>
+  <button class="editor-expand-tab" data-role="res-expand-tab" hidden>展开管理</button>
+
+  <section class="section memory-editor essay-editor" data-role="res-manager" hidden aria-label="资源管理">
+    <div class="editor-grab" data-role="res-editor-grab" aria-hidden="true"></div>
+    <div class="memory-compose-head">
+      <div>
+        <p class="kicker">RESOURCES</p>
+        <p>资源管理</p>
+      </div>
+      <div class="memory-head-actions">
+        <button class="btn btn-ghost" data-role="res-logout">退出管理</button>
+        <button class="btn btn-ghost" data-role="res-collapse">收起</button>
+      </div>
+    </div>
+    <div class="memory-form-grid">
+      <label>目标资源
+        <select data-role="res-target">
+          <option value="__new__">＋ 新建资源</option>
+        </select>
+      </label>
+      <label>栏目
+        <select data-role="res-group">
+          <option value="naturecraft">NatureCraft · 天工</option>
+          <option value="firefly">FireFly · 天心</option>
+          <option value="flitfancy">FlitFancy · 云萤</option>
+        </select>
+      </label>
+    </div>
+    <label>标题
+      <input type="text" maxlength="120" data-role="res-title" placeholder="资源标题（新建必填）">
+    </label>
+    <label class="memory-content-field">简介
+      <textarea rows="2" maxlength="400" data-role="res-desc" placeholder="一句话简介（可空）"></textarea>
+    </label>
+    <label class="memory-content-field">详情
+      <textarea rows="4" maxlength="6000" data-role="res-details" placeholder="详情文本（可空，卡片内展开）"></textarea>
+    </label>
+    <div class="memory-form-grid">
+      <label>版本标签
+        <input type="text" maxlength="60" data-role="res-label" placeholder="如 1.3.1（可空）">
+      </label>
+      <label>更新说明
+        <input type="text" maxlength="400" data-role="res-note" placeholder="本次更新说明（可空）">
+      </label>
+    </div>
+    <label>文件
+      <input type="file" data-role="res-file">
+    </label>
+    <div class="memory-compose-actions">
+      <button class="btn" data-role="res-save">上传并发布</button>
+      <span class="hint" data-role="res-status" aria-live="polite"></span>
+    </div>
+    <div class="essay-library-toolbar">
+      <span class="hint" data-role="res-list-status" aria-live="polite"></span>
+      <button class="btn btn-ghost" data-role="res-reload">重新加载</button>
+    </div>
+    <div class="essay-admin-list" data-role="res-admin-list"></div>
+  </section>
+
+  <div class="admin-overlay" data-role="res-login-overlay" hidden>
+    <div class="admin-card">
+      <h2>资源管理</h2>
+      <p class="hint">登录后可以上传和管理公开资源。</p>
+      <input type="text" data-role="res-username" placeholder="用户名" autocomplete="username">
+      <input type="password" data-role="res-password" placeholder="管理密码" autocomplete="current-password">
+      <div class="admin-actions">
+        <button class="btn" data-role="res-login">登录</button>
+        <button class="btn btn-ghost" data-role="res-login-cancel">取消</button>
+      </div>
+      <p class="hint status-gap" data-role="res-login-status" aria-live="polite"></p>
+    </div>
+  </div>
+
+  <script src="assets/admin-core.js?v=1.4.6"></script>
+  <script src="assets/admin-panel-shell.js?v=1.4.6"></script>
+  <script src="assets/resources-admin.js?v=1.4.6"></script>
 </body>
 </html>
