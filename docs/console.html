@@ -7,8 +7,8 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='24' fill='%23f5b84b' opacity='0.22'/%3E%3Ccircle cx='32' cy='32' r='12' fill='%23f5b84b'/%3E%3Ccircle cx='32' cy='32' r='5' fill='%23ffe9c4'/%3E%3C/svg%3E">
   <title>控制台 — 云萤 · FlitFancy</title>
   <meta name="description" content="小流萤的控制台：实时数据与对话。">
-  <link rel="stylesheet" href="assets/style.css?v=1.4.6">
-  <script src="assets/track.js?v=1.4.6" defer></script>
+  <link rel="stylesheet" href="assets/style.css?v=1.4.7">
+  <script src="assets/track.js?v=1.4.7" defer></script>
 </head>
 <body class="console-page">
   <canvas id="sky" aria-hidden="true"></canvas>
@@ -64,10 +64,6 @@
 
     </section>
   </main>
-
-  <footer>
-    <p class="grad-clip grad-flame"><span>云萤 · FlitFancy</span><span class="sep"> · </span><span>献给我们所热爱的一切</span></p>
-  </footer>
 
   <div class="console-panel admin-panel" data-role="admin-panel" hidden>
     <div class="editor-grab" data-role="admin-grab" aria-hidden="true"></div>
@@ -142,8 +138,16 @@
           </div>
           <p class="hint status-gap" data-role="visits-empty" hidden>还没有访问记录，页面被访问后会自动出现在这里。</p>
         </div>
+  </div>
 
-            <div class="admin-card">
+  <button class="editor-expand-tab" data-role="admin-expand-tab" hidden>展开管理</button>
+
+  <footer>
+    <p class="grad-clip grad-flame"><span>云萤 · FlitFancy</span><span class="sep"> · </span><span>献给我们所热爱的一切</span></p>
+  </footer>
+
+  <div class="admin-overlay" data-role="admin-overlay" hidden>
+    <div class="admin-card">
       <h2>管理员登录</h2>
       <p class="hint">Who are you</p>
       <input type="text" data-role="admin-username" placeholder="用户名" autocomplete="username">
@@ -158,17 +162,17 @@
 
   <div class="js-error" data-role="js-error" hidden></div>
 
-  <script src="assets/firefly.js?v=1.4.6"></script>
-  <script src="assets/sitefx.js?v=1.4.6"></script>
-  <script src="assets/sensor-state.js?v=1.4.6"></script>
-  <script src="assets/admin-core.js?v=1.4.6"></script>
-  <script src="assets/admin-panel-shell.js?v=1.4.6"></script>
-  <script src="assets/console-visits.js?v=1.4.6"></script>
-  <script src="assets/console-overview.js?v=1.4.6"></script>
-  <script src="assets/console-sensors.js?v=1.4.6"></script>
-  <script src="assets/console-chat.js?v=1.4.6"></script>
-  <script src="assets/console-admin.js?v=1.4.6"></script>
-  <script src="assets/console-services.js?v=1.4.6">
-  <script src="assets/console.js?v=1.4.6"></script>
+  <script src="assets/firefly.js?v=1.4.7"></script>
+  <script src="assets/sitefx.js?v=1.4.7"></script>
+  <script src="assets/sensor-state.js?v=1.4.7"></script>
+  <script src="assets/admin-core.js?v=1.4.7"></script>
+  <script src="assets/admin-panel-shell.js?v=1.4.7"></script>
+  <script src="assets/console-visits.js?v=1.4.7"></script>
+  <script src="assets/console-overview.js?v=1.4.7"></script>
+  <script src="assets/console-sensors.js?v=1.4.7"></script>
+  <script src="assets/console-chat.js?v=1.4.7"></script>
+  <script src="assets/console-admin.js?v=1.4.7"></script>
+  <script src="assets/console-services.js?v=1.4.7"></script>
+  <script src="assets/console.js?v=1.4.7"></script>
 </body>
 </html>

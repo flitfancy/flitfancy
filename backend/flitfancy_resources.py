@@ -58,6 +58,7 @@ class ResourceService:
         self._now_iso = now_iso
         self._log_line = log_line
         self._lock = threading.Lock()
+        self._publish_lock = threading.Lock()
         self._pending = {}   # token -> {"meta":…, "tmp":…, "expires":…}
 
     # ---------- manifest ----------
@@ -118,20 +119,17 @@ class ResourceService:
                 if not title and not filename:
                     raise ValueError("新建资源至少需要标题或文件")
                 slug = _slugify(title)
-                base = slug if slug else ""
-                cand = ("res-" + base) if base else ""
-                n = 2
-                while True:
-                    cand2 = cand if not cand else (cand + "-" + str(n))
-                    if not cand2 or not any(e.get("id") == cand2 for e in entries):
-                        break
-                    n += 1
-                res_id = cand2 or ("res-" + time.strftime("%Y%m%d-%H%M%S"))
+                if slug:
+                    base = "res-" + slug
+                    res_id = base
+                    n = 2
+                    while any(e.get("id") == res_id for e in entries):
+                        res_id = base + "-" + str(n)
+                        n += 1
+                else:
+                    res_id = "res-" + time.strftime("%Y%m%d-%H%M%S")
                 if not title:
                     title = filename or ("资源 " + res_id)
-                card = {"id": res_id, "group": group, "title": title[:120],
-                        "desc": "", "details": "", "versions": []}
-                entries.insert(0, card)
             token = secrets.token_urlsafe(24)
             tmp = ""
             if size > 0:
@@ -145,7 +143,7 @@ class ResourceService:
                 "tmp": tmp, "expires": time.time() + TOKEN_TTL_SECONDS,
             }
             for k in [k for k, v in self._pending.items() if v["expires"] < time.time()]:
-                self._discard_pending(k)
+                self.discard_pending(k)
             return {"token": token, "id": res_id, "group": group, "title": title}
 
     def upload_target(self, token):
@@ -167,7 +165,11 @@ class ResourceService:
             entries = self.load_manifest()
             card = next((e for e in entries if e.get("id") == res_id), None)
             if card is None:
-                raise ValueError("资源不存在：%s" % res_id)
+                # 新建卡片在 begin_upload 只登记了令牌、未持久化；
+                # 这里按 pending 元数据补建，保证两段式上传对新建资源可用。
+                card = {"id": res_id, "group": meta["group"], "title": meta["title"],
+                        "desc": "", "details": "", "versions": []}
+                entries.insert(0, card)
             version = {"date": self._now_iso(), "label": meta["label"],
                        "note": meta["note"], "file": None, "sha256": None,
                        "size": 0}
@@ -184,7 +186,12 @@ class ResourceService:
                 version["sha256"] = h.hexdigest()
                 version["size"] = os.path.getsize(dst)
             else:
-                version["text_only"] = True
+                # 纯文字更新（无文件）：清理可能残留的空临时文件
+                if tmp:
+                    try:
+                        os.remove(tmp)
+                    except OSError:
+                        pass
             card.setdefault("versions", []).insert(0, version)
             if meta["desc"]:
                 card["desc"] = meta["desc"]
@@ -195,7 +202,8 @@ class ResourceService:
         entry["latest"] = version
         return entry
 
-    def _discard_pending(self, token):
+    def discard_pending(self, token):
+        """丢弃一次性上传令牌并清理其临时文件（传输不完整/取消时用）。"""
         slot = self._pending.pop(token, None)
         if slot and slot.get("tmp"):
             try:
@@ -218,9 +226,22 @@ class ResourceService:
                         os.remove(p)
                         removed += 1
             self._save_manifest([e for e in entries if e.get("id") != res_id])
+            try:
+                os.rmdir(os.path.join(self.files_root, res_id))  # 仅当目录为空时成功
+            except OSError:
+                pass
         return removed
 
     # ---------- 发布 ----------
+    def _current_branch(self):
+        r = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=self.repo_root, capture_output=True, text=True,
+            timeout=30, encoding="utf-8", errors="replace",
+        )
+        branch = r.stdout.strip() if r.returncode == 0 else ""
+        return branch or "main"
+
     def publish(self):
         def run(args, timeout=180):
             return subprocess.run(
@@ -229,24 +250,25 @@ class ResourceService:
                 errors="replace",
             )
 
-        added = run(["add", "docs/resources"])
-        if added.returncode != 0:
-            return False, "git add 失败：" + (added.stderr or "").strip()
-        status = run(["status", "--porcelain", "docs/resources"])
-        note_parts = []
-        if status.stdout.strip():
-            title = "resources: update via console"
-            c = run(["commit", "-m", title])
-            if c.returncode != 0:
-                return False, "git commit 失败：" + (c.stderr or "").strip()
-            note_parts.append("本地已提交")
-        else:
-            note_parts.append("无新变更")
-        push = run(["push", "origin", "main"], timeout=300)
-        if push.returncode != 0:
-            return False, ("推送失败（本地提交已保留，稍后重试发布即可）："
-                           + (push.stderr or "").strip()[-200:])
-        note_parts.append("已推送 GitHub，Pages 约 10 分钟生效")
+        with self._publish_lock:
+            added = run(["add", "docs/resources"])
+            if added.returncode != 0:
+                return False, "git add 失败：" + (added.stderr or "").strip()
+            status = run(["status", "--porcelain", "docs/resources"])
+            note_parts = []
+            if status.stdout.strip():
+                title = "resources: update via console"
+                c = run(["commit", "-m", title])
+                if c.returncode != 0:
+                    return False, "git commit 失败：" + (c.stderr or "").strip()
+                note_parts.append("本地已提交")
+            else:
+                note_parts.append("无新变更")
+            push = run(["push", "origin", self._current_branch()], timeout=300)
+            if push.returncode != 0:
+                return False, ("推送失败（本地提交已保留，稍后重试发布即可）："
+                               + (push.stderr or "").strip()[-200:])
+            note_parts.append("已推送 GitHub，Pages 约 10 分钟生效")
         if self._log_line:
             self._log_line("resources published: " + "；".join(note_parts))
         return True, "；".join(note_parts)

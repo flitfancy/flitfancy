@@ -67,11 +67,10 @@
 
   function openManager() {
     if (!adminSurface) {
-      window.location.href = "https://console.flitfancy.com/resources.html";
+      window.location.href = "https://console.flitfancy.com/resources.html#manage";
       return;
     }
     if (!token()) {
-      panelShell.show();
       showLogin("");
       return;
     }
@@ -82,19 +81,26 @@
   async function login() {
     const username = $('[data-role="res-username"]').value.trim();
     const password = $('[data-role="res-password"]').value;
-    setStatus('[data-role="res-login-status"]', "登录中…");
+    const button = $('[data-role="res-login"]');
+    if (!username || !password) {
+      setStatus('[data-role="res-login-status"]', "请输入用户名和密码");
+      return;
+    }
+    button.disabled = true;
+    setStatus('[data-role="res-login-status"]', "正在验证…");
     try {
-      const data = await window.FlitFancyAdmin.request("/api/admin/login", {
+      const data = await api("/api/admin/login", {
         method: "POST",
         authMode: "none",
         body: JSON.stringify({ username: username, password: password }),
       });
       setToken(data.token);
-      $('[data-role="res-login-overlay"]').hidden = true;
       openPanel();
       loadResourcesWithStatus();
     } catch (error) {
       setStatus('[data-role="res-login-status"]', "登录失败：" + (error.message || "未知错误"));
+    } finally {
+      button.disabled = false;
     }
   }
 
@@ -102,6 +108,7 @@
     try { api("/api/admin/logout", { method: "POST" }); } catch (error) { /* ignore */ }
     setToken("");
     $('[data-role="res-manager"]').hidden = true;
+    document.body.classList.remove("editor-open");
     panelShell.clearCollapsed();
   }
 
@@ -336,6 +343,7 @@
   }
 
   /* ---------- 启动 ---------- */
+  window.FlitFancyAdmin.installErrorHandler('[data-role="js-error"]');
   $('[data-role="res-login"]').addEventListener("click", login);
   $('[data-role="res-login-cancel"]').addEventListener("click", function () {
     $('[data-role="res-login-overlay"]').hidden = true;

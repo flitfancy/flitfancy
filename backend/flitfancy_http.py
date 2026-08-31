@@ -267,7 +267,23 @@ def create_handler(app):
                 return
             ext = os.path.splitext(target)[1].lower()
             with open(target, "rb") as f:
-                self._send(200, f.read(), MIME.get(ext, "application/octet-stream"))
+                body = f.read()
+            if ext == ".html":
+                # HTML 文档永不缓存：页面内脚本走 ?v= 版本号控制，
+                # 文档本身必须每次回源，否则浏览器启发式缓存会滞留旧页面
+                self.send_response(200)
+                self.send_header("Content-Type", MIME.get(ext, "application/octet-stream"))
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                try:
+                    self.wfile.write(body)
+                except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
+                    pass
+                return
+            self._send(200, body, MIME.get(ext, "application/octet-stream"))
 
         def _api_get(self, path, query=""):
             if path == "/api/status":
@@ -983,8 +999,12 @@ def create_handler(app):
             except ValueError as exc:
                 self._send(400, {"ok": False, "error": str(exc)})
                 return
-            length = int(self.headers.get("Content-Length") or 0)
-            if length > 500 * 1024 * 1024:
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                self._send(400, {"ok": False, "error": "非法的 Content-Length"})
+                return
+            if length < 0 or length > 500 * 1024 * 1024:
                 self._send(400, {"ok": False, "error": "文件超出 500MB 上限"})
                 return
             # 大文件上传需要远超 do_POST 默认值（10s）的传输时间
@@ -1010,6 +1030,7 @@ def create_handler(app):
                 self._send(400, {"ok": False, "error": "接收文件失败：" + str(exc)})
                 return
             if length and received < length:
+                resource_service.discard_pending(token)
                 self._send(400, {"ok": False,
                                  "error": "传输不完整：%d/%d" % (received, length)})
                 return
