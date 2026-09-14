@@ -23,7 +23,7 @@ function makeButton(action) {
   };
 }
 
-const buttons = [makeButton("backend"), makeButton("listener"), makeButton("tunnel")];
+const buttons = [makeButton("backend"), makeButton("listener"), makeButton("audio"), makeButton("tunnel")];
 buttons.forEach((button) => { button.classList.owner = button; });
 const window = {};
 vm.runInNewContext(source, { window, document: { querySelectorAll: () => buttons } });
@@ -41,16 +41,22 @@ buttons[1].click();
 assert.deepEqual(navigated, []);
 
 services.setProtocolName("bad:name");
-services.update({ listener: true, tunnel: false });
+services.update({ listener: true, audio: true, tunnel: false });
 assert.ok(buttons.every((button) => button.disabled), "非法协议名必须被拒绝");
 
 services.setProtocolName("flitfancy-a1b2c3d4");
-services.update({ listener: true, tunnel: false });
+services.update({ listener: true, audio: true, tunnel: false });
 assert.ok(buttons.every((button) => !button.disabled));
 assert.equal(buttons[0].alive, true, "收到服务状态即代表后端自身在线");
 assert.equal(buttons[1].alive, true);
-assert.equal(buttons[2].alive, false);
+assert.equal(buttons[2].alive, true);
+assert.equal(buttons[3].alive, false);
 buttons[1].click();
 assert.deepEqual(navigated, ["flitfancy-a1b2c3d4://start/listener"]);
+buttons[2].click();
+assert.deepEqual(navigated, [
+  "flitfancy-a1b2c3d4://start/listener",
+  "flitfancy-a1b2c3d4://start/audio",
+]);
 
 console.log("console services module test ok");

@@ -2,16 +2,23 @@
   "use strict";
 
   const WORLD = { width: 2800, height: 1900 };
+  const planetBodies = ["mercury", "venus", "earth", "mars", "jupiter", "saturn", "uranus", "neptune", "pluto", "moon"];
+  const assetVersion = document.currentScript ? new URL(document.currentScript.src, location.href).search : "";
   const API = (location.hostname === "localhost" || location.hostname === "127.0.0.1")
     ? "/api/observations"
     : "https://api.flitfancy.com/observations";
   const categoryColors = {
-    "宇宙与自然": "#78c8e8",
-    "生命与感知": "#8bd3aa",
-    "技术与造物": "#f5b84b",
-    "历史与文明": "#d7a6e8",
-    "语言与艺术": "#ef9eb5",
-    "思想与日常": "#9daee8"
+    "事": "#b4a084",
+    "理": "#91a6b4",
+    "物": "#92a497",
+    "人": "#b39a9f",
+    "地": "#a19bb2",
+    "宇宙与自然": "#91a6b4",
+    "生命与感知": "#92a497",
+    "技术与造物": "#b4a084",
+    "历史与文明": "#a19bb2",
+    "语言与艺术": "#b39a9f",
+    "思想与日常": "#929eb0"
   };
   const root = document.querySelector('[data-role="observations-root"]');
   if (!root) return;
@@ -71,7 +78,7 @@
     return {
       uid: String(row.uid || ""),
       title: String(row.title || "未命名星球"),
-      category: String(row.category || "思想与日常"),
+      category: String(row.category || "事"),
       tags: Array.isArray(row.tags) ? row.tags.map(String) : [],
       summary: String(row.summary || ""),
       content: String(row.content || ""),
@@ -89,7 +96,8 @@
       uid: String(row.uid || sourceUid + "-" + targetUid),
       source_uid: sourceUid,
       target_uid: targetUid,
-      relation: String(row.relation || "相关")
+      relation: String(row.relation || "相关"),
+      strength: ["weak", "medium", "strong"].includes(row.strength) ? row.strength : "medium"
     };
   }
 
@@ -104,27 +112,30 @@
     button.type = "button";
     button.className = "obs-planet";
     button.dataset.star = star.uid;
+    const body = planetBodies[hash(star.uid + ":body") % planetBodies.length];
+    button.dataset.body = body;
     button.setAttribute("aria-label", star.title + "；" + star.category + "；" + star.summary);
-    button.style.setProperty("--planet-color", categoryColors[star.category] || "#f5b84b");
-
-    const ringOne = document.createElement("span");
-    ringOne.className = "obs-ring obs-ring-one";
-    const ringTwo = document.createElement("span");
-    ringTwo.className = "obs-ring obs-ring-two";
+    button.style.setProperty("--planet-color", categoryColors[star.category] || "#b4a084");
     const core = document.createElement("span");
     core.className = "obs-planet-core";
-    core.textContent = star.title;
-    const category = document.createElement("span");
-    category.className = "obs-orbit-label";
-    category.textContent = star.category;
+    core.setAttribute("aria-hidden", "true");
+    const surface = document.createElement("img");
+    surface.src = "assets/planets/" + body + ".webp" + assetVersion;
+    surface.alt = "";
+    surface.width = 512;
+    surface.height = 512;
+    surface.decoding = "async";
+    surface.draggable = false;
+    core.appendChild(surface);
+    const name = document.createElement("span");
+    name.className = "obs-planet-name";
+    name.textContent = star.title;
     const summary = document.createElement("span");
-    summary.className = "obs-orbit-label obs-orbit-summary";
+    summary.className = "obs-orbit-summary";
     summary.textContent = star.summary;
 
-    button.appendChild(ringTwo);
-    button.appendChild(ringOne);
     button.appendChild(core);
-    button.appendChild(category);
+    button.appendChild(name);
     button.appendChild(summary);
     button.addEventListener("click", function (event) {
       event.stopPropagation();
@@ -168,7 +179,8 @@
       const active = selectedUid === connection.source_uid || selectedUid === connection.target_uid;
       const line = svgElement("line", {
         x1: start.x, y1: start.y, x2: end.x, y2: end.y,
-        class: "obs-string" + (active ? " is-active" : "")
+        class: "obs-string" + (active ? " is-active" : ""),
+        "data-strength": connection.strength
       });
       const label = svgElement("text", {
         x: (start.x + end.x) / 2,

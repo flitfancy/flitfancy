@@ -2,11 +2,12 @@ import { adminContentBody } from "./worker-content.js";
 import { json } from "./worker-core.js";
 import {
   ensureObservationsTable,
-  runDdlOnce,
-  TABLE_OBSERVATION_LINKS,
+  ensureObservationLinksTable,
 } from "./worker-storage.js";
 
 const CATEGORIES = new Set([
+  "事", "理", "物", "人", "地",
+  // 兼容既有星球；不按旧学科分类猜测新的内容类型。
   "宇宙与自然",
   "生命与感知",
   "技术与造物",
@@ -18,7 +19,7 @@ const UID_RE = /^[a-zA-Z0-9_-]{16,80}$/;
 
 async function ensureTables(env) {
   await ensureObservationsTable(env);
-  await runDdlOnce(env, TABLE_OBSERVATION_LINKS);
+  await ensureObservationLinksTable(env);
 }
 
 function parseTags(value) {
@@ -72,7 +73,7 @@ export async function handleObservations(env) {
   ).all();
   const links = await env.DB.prepare(
     `SELECT link.uid, link.created_ts, link.updated_ts, link.source_uid,
-            link.target_uid, link.relation
+            link.target_uid, link.relation, link.strength
      FROM observation_links link
      JOIN observations source ON source.uid = link.source_uid
      JOIN observations target ON target.uid = link.target_uid
@@ -155,24 +156,30 @@ export async function handleObservationLinkCreate(request, env) {
   const sourceUid = String(body.source_uid || "").trim();
   const targetUid = String(body.target_uid || "").trim();
   const relation = String(body.relation || "").trim();
+  const strength = body.strength === undefined ? "medium" : body.strength;
   if (!UID_RE.test(sourceUid) || !UID_RE.test(targetUid) || sourceUid === targetUid) {
     return json({ ok: false, error: "invalid observation link endpoints" }, 400);
   }
   if (!relation || relation.length > 80) {
     return json({ ok: false, error: "invalid observation relation" }, 400);
   }
+  if (!["weak", "medium", "strong"].includes(strength)) {
+    return json({ ok: false, error: "invalid observation link strength" }, 400);
+  }
   await env.DB.prepare(
     `INSERT INTO observation_links(
-       uid, created_ts, updated_ts, source_uid, target_uid, relation
-     ) VALUES(?,?,?,?,?,?)
+       uid, created_ts, updated_ts, source_uid, target_uid, relation, strength
+     ) VALUES(?,?,?,?,?,?,?)
      ON CONFLICT(uid) DO UPDATE SET
        updated_ts = excluded.updated_ts,
        source_uid = excluded.source_uid,
        target_uid = excluded.target_uid,
-       relation = excluded.relation`
+       relation = excluded.relation,
+       strength = COALESCE(?, observation_links.strength)`
   ).bind(
     uid, unixTime(body.created_at), unixTime(body.updated_at),
-    sourceUid, targetUid, relation
+    sourceUid, targetUid, relation, strength, body.strength === undefined ? null : strength
   ).run();
-  return json({ ok: true, uid, published: true });
+  return json({ ok: true, uid, published: true,
+    ...(body.strength === undefined ? {} : { strength }) });
 }

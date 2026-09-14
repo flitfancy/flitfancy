@@ -83,6 +83,24 @@ export async function handleConfig(request, env, ctx) {
   return response;
 }
 
+function validFeaturedEssay(value) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    && typeof value.uid === "string" && /^[a-zA-Z0-9_-]{16,80}$/.test(value.uid)
+    && typeof value.title === "string" && value.title.trim().length > 0 && value.title.length <= 120
+    && typeof value.content === "string" && value.content.trim().length > 0 && value.content.length <= 12000
+    && typeof value.updated_at === "string" && value.updated_at.length <= 40;
+}
+
+export async function handleFeaturedEssay(env) {
+  if (!env.CONFIG) return json({ ok: false, error: "config unavailable" }, 503);
+  const raw = await env.CONFIG.get("featured_essay");
+  let essay = null;
+  try { essay = raw ? JSON.parse(raw) : null; } catch (error) { /* 缺失或损坏时显示原序章。 */ }
+  return json({ ok: true, essay: validFeaturedEssay(essay) ? essay : null }, 200, {
+    "Cache-Control": "no-store",
+  });
+}
+
 export async function handleToggle(request, env) {
   const authError = await adminAuthError(request, env);
   if (authError) return authError;
@@ -97,7 +115,11 @@ export async function handleToggle(request, env) {
   if (hasReflections && !Array.isArray(body.reflections)) {
     return json({ ok: false, error: "reflections must be an array" }, 400);
   }
-  if (!hasChatEnabled && !hasReflections) {
+  const hasFeaturedEssay = Object.prototype.hasOwnProperty.call(body, "featured_essay");
+  if (hasFeaturedEssay && !validFeaturedEssay(body.featured_essay)) {
+    return json({ ok: false, error: "invalid featured essay" }, 400);
+  }
+  if (!hasChatEnabled && !hasReflections && !hasFeaturedEssay) {
     return json({ ok: false, error: "no supported config field" }, 400);
   }
   const result = { ok: true };
@@ -111,6 +133,12 @@ export async function handleToggle(request, env) {
     const rows = normalizeReflections(body.reflections);
     await env.CONFIG.put("reflections", JSON.stringify(rows));
     result.reflections = rows;
+  }
+  if (hasFeaturedEssay) {
+    const { uid, title, content, updated_at } = body.featured_essay;
+    const essay = { uid, title, content, updated_at };
+    await env.CONFIG.put("featured_essay", JSON.stringify(essay));
+    result.featured_essay = essay;
   }
   await clearConfigCache(request);
   return json(result);

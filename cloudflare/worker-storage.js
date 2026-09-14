@@ -91,8 +91,24 @@ export const TABLE_OBSERVATION_LINKS = `CREATE TABLE IF NOT EXISTS observation_l
         updated_ts INTEGER NOT NULL,
         source_uid TEXT NOT NULL,
         target_uid TEXT NOT NULL,
-        relation TEXT NOT NULL
+        relation TEXT NOT NULL,
+        strength TEXT NOT NULL DEFAULT 'medium'
       )`;
+
+export function ensureObservationLinksTable(env) {
+  return runOnce(env, "observation_links:strength", async () => {
+    await env.DB.prepare(TABLE_OBSERVATION_LINKS).run();
+    const columns = await env.DB.prepare("PRAGMA table_info(observation_links)").all();
+    if (!(columns.results || []).some((column) => column.name === "strength")) {
+      try {
+        await env.DB.prepare("ALTER TABLE observation_links ADD COLUMN strength TEXT NOT NULL DEFAULT 'medium'").run();
+      } catch (error) {
+        const latest = await env.DB.prepare("PRAGMA table_info(observation_links)").all();
+        if (!(latest.results || []).some((column) => column.name === "strength")) throw error;
+      }
+    }
+  });
+}
 
 export function ensureAnchorsTable(env) {
   return runOnce(env, "anchors:migration", () => ensureAnchorsTableOnce(env));

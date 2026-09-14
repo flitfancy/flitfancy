@@ -1,0 +1,56 @@
+/* 见闻录入独享；沿用旅途管理外壳。 */
+.observation-compose { min-width: 0; }
+.observation-compose label {
+  display: block;
+  margin: 16px 0;
+  color: var(--muted);
+  font-size: var(--fs-ui);
+}
+.observation-compose input:not([type="hidden"]),
+.observation-compose textarea,
+.observation-compose select {
+  display: block;
+  width: 100%;
+  margin-top: 7px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+  font: inherit;
+  line-height: 1.7;
+}
+.observation-compose select option { background: #101520; }
+.observation-compose textarea { resize: vertical; }
+.observation-compose input:focus-visible,
+.observation-compose textarea:focus-visible,
+.observation-compose select:focus-visible,
+.observation-kinds button:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+.observation-kinds { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 7px; }
+.observation-kinds button {
+  min-height: 44px;
+  padding: 7px 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.025);
+  font: inherit;
+  font-size: var(--fs-sub);
+  cursor: pointer;
+}
+.observation-kinds button[aria-pressed="true"] {
+  border-color: var(--amber);
+  color: var(--amber-soft);
+  background: rgba(245, 184, 75, 0.09);
+}
+.observation-more { margin: 18px 0; border-top: 1px solid var(--border); }
+.observation-more > summary { padding: 14px 0; color: var(--muted); font-size: var(--fs-ui); cursor: pointer; }
+.observation-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.observation-compose .observation-actions .btn { min-height: 40px; }
+.observation-saved { margin-top: 24px; }
+.observation-saved .observation-admin-row { grid-template-columns: minmax(0, 1fr); }
+.observation-link-editor .observation-admin-head strong { overflow-wrap: anywhere; }
+.observation-link-editor .observation-admin-head .btn { flex-shrink: 0; }

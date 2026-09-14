@@ -3,18 +3,23 @@
 这里保存 FIREFLY R1.1 感知板的纯传感器数据，可随 FlitFancy 仓库备份。
 后端的 `backend/data/flitfancy.db` 仍然忽略，因为它还包含日记等非传感器内容。
 
-此目录是完整原始数据的永久保存位置：监听器和 FlitFancy 后端都没有按天数删除这里文件的逻辑。
+此目录是原始数据的永久保存位置：监听器不会按天数删除 CSV；启动时会把上一次
+已经结束的会话移入 `archive/sessions/`。
 SQLite 仅保留 14 天，是为了控制网页查询库增长；它的清理不会影响这里的 CSV。
+永久保存只表示已经收到的数据不会因保留期限被删除；板子断电、监听器未运行或
+网络中断的时段仍会形成明确的数据空档。
 
 ## 目录
 
 - `archive/daily/`：此前按电脑日期合并的数据，带 `pc_time`。
-- `archive/raw-no-time/`：从板载 LittleFS 或早期工具导出的原始数据，没有可靠绝对时间。
+- `archive/raw-no-time/`：从板载 LittleFS、早期工具或时间修复前备份的原始数据，
+  没有可靠绝对时间。
 - `archive/sessions/`：此前每次 Wi-Fi 监听会话的原样副本。
 - `archive/legacy/`：旧实时缓存的只读快照，可能与 sessions/daily 重复。
 - `sessions/`：监听器正在写入的会话 CSV，Git 忽略。下次启动监听器时，上次已结束的文件会自动移入 `archive/sessions/`。
 - `live/`：仪表盘实时缓存；会不断变化，因此被 Git 忽略。
 - `manifest.csv`：`archive/` 内文件的大小、行数和 SHA-256。
+- `repair-reports/`：历史数据修复报告，记录哪些行得到可靠时间锚点、哪些仍然未知。
 
 ## 时间与字段
 
@@ -49,6 +54,12 @@ sraw_nox, co2_ppm, pressure_pa`
 在站点仓库根目录运行
 `powershell -ExecutionPolicy Bypass -File scripts/update_sensor_manifest.ps1` 可重建清单。
 正在写入的 session 不会进入清单；监听器下次启动将它归档后，再重建即可。
+
+2026-08-28 至 2026-09-12 使用过的一版监听器曾把固定字符串 `pc_time` 写入数据行。
+`scripts/repair_sensor_timestamps.py` 可利用 SQLite 接收时间和板端 `uptime_ms` 恢复有
+可靠锚点的片段；无法可靠恢复的行保持 `pc_time`，不会伪造精确时间。加 `--apply`
+才会写入，并会先把原文件逐字节备份到
+`archive/raw-no-time/pc-time-literal/`。
 
 ## 当前数据链路
 

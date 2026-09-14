@@ -189,8 +189,12 @@ class SQLiteStore:
                 source_uid TEXT NOT NULL,
                 target_uid TEXT NOT NULL,
                 relation TEXT NOT NULL,
+                strength TEXT NOT NULL DEFAULT 'medium',
                 synced INTEGER NOT NULL DEFAULT 0)"""
         )
+        link_columns = {row[1] for row in connection.execute("PRAGMA table_info(observation_links)")}
+        if "strength" not in link_columns:
+            connection.execute("ALTER TABLE observation_links ADD COLUMN strength TEXT NOT NULL DEFAULT 'medium'")
         connection.execute(
             """CREATE TABLE IF NOT EXISTS commands(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

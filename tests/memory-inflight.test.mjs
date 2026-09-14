@@ -17,6 +17,7 @@ const pending = [];
 const handlers = {};
 
 const streamEl = {
+  children: [],
   querySelectorAll() { return []; },
   appendChild() {},
 };

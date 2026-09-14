@@ -33,7 +33,7 @@ if (!python) {
 }
 
 console.log(`backend tests: ${python.command} ${python.args.join(" ")}`.trim());
-for (const relativePath of ["backend/module_test.py", "backend/smoke_test.py"]) {
+for (const relativePath of ["backend/connection_test.py", "backend/module_test.py", "backend/launcher_test.py", "backend/smoke_test.py"]) {
   const result = spawnSync(
     python.command,
     [...python.args, path.join(root, relativePath)],

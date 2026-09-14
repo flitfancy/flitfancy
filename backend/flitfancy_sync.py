@@ -28,7 +28,7 @@ class WorkerClient:
         url, token = self._credentials()
         return bool(url and len(token) >= MIN_WORKER_ADMIN_TOKEN_LENGTH)
 
-    def post(self, endpoint, payload, timeout=8, error_label="公网接口"):
+    def post(self, endpoint, payload, timeout=8, error_label="公网接口", *, expected_response=None):
         """向 Worker 发 POST，返回 ``(是否成功, 提示)``。"""
         url, token = self._credentials()
         if not url or not token:
@@ -49,6 +49,10 @@ class WorkerClient:
             with self.opener.open(request, timeout=timeout) as response:
                 result = json.loads(response.read().decode("utf-8"))
                 if response.status == 200 and result.get("ok"):
+                    if expected_response and any(
+                        result.get(key) != value for key, value in expected_response.items()
+                    ):
+                        return False, "%s尚未确认新字段，已保留待同步，需更新公网接口" % error_label
                     return True, ""
                 return False, "公网返回状态 %d" % response.status
         except urllib.error.HTTPError as exc:

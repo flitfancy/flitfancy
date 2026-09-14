@@ -13,6 +13,7 @@ const PUBLIC_CORS_PATHS = new Set([
   "/memories",
   "/anchors",
   "/essays",
+  "/essays/featured",
   "/observations",
   "/sensors/latest",
   "/chat",

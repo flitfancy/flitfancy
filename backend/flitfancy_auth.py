@@ -153,19 +153,20 @@ class AdminAuth:
         with self.lock:
             self.failures[ip] = [0, 0]
             token = secrets.token_hex(24)
-            self.tokens[token] = time.time() + ADMIN_TOKEN_TTL
+            self.tokens[token] = (time.time() + ADMIN_TOKEN_TTL, ip)
             return True, token
 
-    def token_valid(self, token):
+    def token_valid(self, token, ip):
         now = time.time()
         with self.lock:
-            expires = self.tokens.get(token)
-            if not expires:
+            record = self.tokens.get(token)
+            if not record:
                 return False
+            expires, session_ip = record
             if expires < now:
                 self.tokens.pop(token, None)
                 return False
-            return True
+            return secrets.compare_digest(str(session_ip), str(ip))
 
     def logout(self, token):
         with self.lock:

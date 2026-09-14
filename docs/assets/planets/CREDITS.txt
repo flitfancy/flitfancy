@@ -1,0 +1,31 @@
+FlitFancy · Solar-system planet materials
+
+Mercury, Venus, Earth, Mars, Jupiter, Saturn (including its ring), Uranus,
+Neptune and Moon texture maps: Solar System Scope / INOVE.
+Source: https://edu.solarsystemscope.com/textures/
+License: Creative Commons Attribution 4.0 International (CC BY 4.0)
+https://creativecommons.org/licenses/by/4.0/
+
+These maps are based on NASA imagery and elevation data. They include adjusted
+colors and reconstructed areas, so these website illustrations are not raw
+spacecraft photographs. Venus uses its cloud-covered atmosphere map.
+The public source mirror used for the build is recorded in sources.json.
+
+Pluto color map (PIA11707): NASA / Johns Hopkins University Applied Physics
+Laboratory / Southwest Research Institute. New Horizons MVIC mosaic, 2017.
+https://www.jpl.nasa.gov/images/pia11707-pluto-color-map/
+Image use policy: https://www.jpl.nasa.gov/jpl-image-use-policy/
+Pluto is included as a visual theme as requested, alongside the eight planets
+and the Moon. This interface is not a scientific classification or scale model.
+
+Changes by FlitFancy: orthographic spherical projection, chosen viewing angles,
+diffuse directional lighting, Earth cloud composition, Saturn ring geometry and
+occlusion, transparent background, downsampling and WebP encoding. Globe sizes
+are adapted for readability, not astronomical scale. Pluto is viewed from the
+northern hemisphere to avoid the source map's unmapped southern polar region.
+
+Rebuild: node scripts/render-planets.cjs <texture-cache-directory>
+Requires Node.js with sharp available. Build-time processing only; the website
+loads local WebP files without third-party network requests or live 3D rendering.
+Per-source download locations and SHA-256 checksums: sources.json.
+No endorsement by NASA, JPL, INOVE or the source contributors is implied.

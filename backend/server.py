@@ -24,6 +24,8 @@ from datetime import datetime
 from http.server import ThreadingHTTPServer
 
 from flitfancy_auth import AdminAuth, MIN_NEW_PASSWORD_LENGTH
+from flitfancy_launcher import LauncherService
+from flitfancy_audio import AudioService
 from flitfancy_core import (
     CST,
     base_url_for_model,
@@ -129,7 +131,7 @@ MEMORIES_SELECT = (
 )
 
 _service_cache_lock = threading.Lock()
-_service_cache = {"t": 0.0, "listener": False, "tunnel": False}
+_service_cache = {"t": 0.0, "listener": False, "audio": False, "tunnel": False}
 
 _status_counts_cache = {"t": 0.0, "sensors": 0, "notes": 0}
 _status_counts_lock = threading.Lock()
@@ -152,12 +154,16 @@ def _status_counts():
 
 
 def service_status():
-    """轻量心跳：感知板监听器（新鲜快照）、隧道进程与大鲸鱼（DSH 3080 端口）；
+    """轻量心跳：感知板监听器、音频服务与隧道进程；
     结果缓存 3 秒。"""
     now = time.monotonic()
     with _service_cache_lock:
         if now - _service_cache["t"] < 3:
-            return {"listener": _service_cache["listener"], "tunnel": _service_cache["tunnel"]}
+            return {
+                "listener": _service_cache["listener"],
+                "audio": _service_cache["audio"],
+                "tunnel": _service_cache["tunnel"],
+            }
     # 注意：绝不能主动连 7777 探测——监听器把任何新 TCP 连接都当作
     # “新板接入”并切换会话，探测会反复打断真实板端的数据流。
     # 只以“最近 30 秒内有新鲜快照”作为监听器健康的依据。
@@ -176,6 +182,12 @@ def service_status():
             listener = 0 <= age <= 30
         except ValueError:
             listener = False
+    audio = False
+    try:
+        with socket.create_connection(("127.0.0.1", 7865), timeout=0.2):
+            audio = True
+    except OSError:
+        pass
     tunnel = False
     try:
         out = subprocess.run(
@@ -186,8 +198,10 @@ def service_status():
     except Exception:
         pass
     with _service_cache_lock:
-        _service_cache.update({"t": now, "listener": listener, "tunnel": tunnel})
-    return {"listener": listener, "tunnel": tunnel}
+        _service_cache.update({
+            "t": now, "listener": listener, "audio": audio, "tunnel": tunnel,
+        })
+    return {"listener": listener, "audio": audio, "tunnel": tunnel}
 
 
 def db():
@@ -382,8 +396,13 @@ def sync_public_observation_link(link):
             "source_uid": link["source_uid"],
             "target_uid": link["target_uid"],
             "relation": link["relation"],
+            "strength": link.get("strength", "medium"),
         })
-    return worker_post("/admin/observation-links", payload, 8, "公网星弦接口")
+    # 旧 Worker 会忽略 strength；只有明确确认后才能清除本地待同步标记。
+    return _worker_client.post(
+        "/admin/observation-links", payload, 8, "公网星弦接口",
+        expected_response={"strength": payload["strength"]} if published else None,
+    )
 
 
 def _sync_pending_rows(table, pusher, limit):
@@ -451,8 +470,8 @@ def admin_login(ip, username, password):
     return _admin_auth.login(ip, username, password)
 
 
-def admin_token_valid(token):
-    return _admin_auth.token_valid(token)
+def admin_token_valid(token, ip):
+    return _admin_auth.token_valid(token, ip)
 
 
 def admin_logout(token):
@@ -504,8 +523,11 @@ _observation_service = ObservationService(
 )
 
 _resource_service = ResourceService(SITE_ROOT, now_iso)
+_audio_service = AudioService()
 
 Handler = create_handler(HttpDependencies(
+    audio_service=_audio_service,
+    launcher_service=LauncherService(os.path.join(os.path.dirname(DB_PATH), "launcher")),
     ai_opener=AI_OPENER,
     cst=CST,
     memories_select=MEMORIES_SELECT,
@@ -544,7 +566,19 @@ class FlitFancyServer(ThreadingHTTPServer):
     """带并发上限的线程服务器：超出 32 个活动连接时直接断开新连接，
     防止 slowloris/连接风暴耗尽线程与句柄。"""
     daemon_threads = True
+    # HTTP/2/3 gateways fan a page's parallel assets into new HTTP/1 connections.
+    # The stdlib backlog of 5 rejects these bursts before worker slots are used.
+    request_queue_size = 128
+    # Windows SO_REUSEADDR allows two live backends to answer the same port.
+    # Exclusive binding makes a duplicate launch fail instead of serving old code.
+    allow_reuse_address = os.name != "nt"
+    allow_reuse_port = False
     _slots = threading.BoundedSemaphore(32)
+
+    def server_bind(self):
+        if os.name == "nt":
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
 
     def process_request(self, request, client_address):
         if not self._slots.acquire(blocking=False):

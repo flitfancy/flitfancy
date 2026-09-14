@@ -27,14 +27,14 @@ assert.match(aboutHtml, /<a href="about\.html" class="active[^>]*>关于<\/a>/,
 assert.doesNotMatch(aboutHtml, /data-role="essay-manage-open"/,
   "访客正文不应再放置单独的短文管理按钮");
 assert.match(aboutHtml, /序章[\s\S]*data-role="essay-list"/,
-  "原文章必须固定保留为序章，新短文另列展示");
+  "原序章保留为默认卡牌，选中其他文章后替换展示");
 assert.match(essaysSource, /https:\/\/api\.flitfancy\.com\/essays/,
   "公网短文必须从独立公开接口读取");
 assert.match(aboutAdminSource, /\/api\/admin\/essays/,
   "短文管理必须读取包含草稿和归档的独立记录库");
 assert.match(aboutAdminSource, /\/api\/essays/,
   "短文保存必须走独立写入接口，不能复用 120 字随笔");
-assert.match(aboutHtml, /value="draft"[\s\S]*value="public"[\s\S]*value="archived"/,
-  "短文必须支持草稿、公开和归档状态");
+assert.match(aboutAdminSource, /draft:[\s\S]*public:[\s\S]*archived:/,
+  "卡牌库继续兼容草稿、公开和归档状态");
 
 console.log("content taxonomy and essay UI contract test ok");

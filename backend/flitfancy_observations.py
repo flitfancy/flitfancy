@@ -8,6 +8,8 @@ from datetime import date
 
 
 OBSERVATION_CATEGORIES = (
+    "事", "理", "物", "人", "地",
+    # 旧分类保留兼容，已有内容由作者自行重新归类。
     "宇宙与自然",
     "生命与感知",
     "技术与造物",
@@ -104,16 +106,20 @@ def normalize_observation_link(data):
     source_uid = str(data.get("source_uid") or "").strip()
     target_uid = str(data.get("target_uid") or "").strip()
     relation = str(data.get("relation") or "").strip()
+    strength = data.get("strength", "medium")
     if not valid_uid(source_uid) or not valid_uid(target_uid):
         return None, "弦的起点或目标星球不正确"
     if source_uid == target_uid:
         return None, "弦不能连接同一颗星球"
     if not relation or len(relation) > 80:
         return None, "关系词不能为空且不能超过 80 字"
+    if strength not in ("weak", "medium", "strong"):
+        return None, "弦的强度须为弱、中或强"
     return {
         "source_uid": source_uid,
         "target_uid": target_uid,
         "relation": relation,
+        "strength": strength,
     }, None
 
 
@@ -136,7 +142,7 @@ class ObservationService:
         ).fetchall()
         links = con.execute(
             """SELECT link.uid, link.created_at, link.updated_at, link.source_uid,
-                      link.target_uid, link.relation
+                      link.target_uid, link.relation, link.strength
                FROM observation_links link
                JOIN observations source ON source.uid = link.source_uid
                JOIN observations target ON target.uid = link.target_uid
@@ -167,7 +173,7 @@ class ObservationService:
         con = self.db()
         rows = con.execute(
             """SELECT uid, created_at, updated_at, source_uid, target_uid,
-                      relation, synced
+                      relation, strength, synced
                FROM observation_links ORDER BY updated_at DESC, id DESC LIMIT 1000"""
         ).fetchall()
         con.close()
@@ -260,10 +266,10 @@ class ObservationService:
         if edit_uid:
             cur = con.execute(
                 """UPDATE observation_links SET updated_at=?, source_uid=?, target_uid=?,
-                          relation=?, synced=0 WHERE uid=?""",
+                          relation=?, strength=COALESCE(?, strength), synced=0 WHERE uid=?""",
                 (
                     updated_at, normalized["source_uid"], normalized["target_uid"],
-                    normalized["relation"], edit_uid,
+                    normalized["relation"], normalized["strength"] if "strength" in data else None, edit_uid,
                 ),
             )
             if cur.rowcount == 0:
@@ -275,11 +281,11 @@ class ObservationService:
             uid_value = secrets.token_hex(16)
             con.execute(
                 """INSERT INTO observation_links(
-                       uid, created_at, updated_at, source_uid, target_uid, relation, synced
-                   ) VALUES(?,?,?,?,?,?,0)""",
+                       uid, created_at, updated_at, source_uid, target_uid, relation, strength, synced
+                   ) VALUES(?,?,?,?,?,?,?,0)""",
                 (
                     uid_value, updated_at, updated_at, normalized["source_uid"],
-                    normalized["target_uid"], normalized["relation"],
+                    normalized["target_uid"], normalized["relation"], normalized["strength"],
                 ),
             )
             updated = False
@@ -289,7 +295,7 @@ class ObservationService:
         con = self.db()
         saved = con.execute(
             """SELECT uid, created_at, updated_at, source_uid, target_uid,
-                      relation, synced FROM observation_links WHERE uid=?""",
+                      relation, strength, synced FROM observation_links WHERE uid=?""",
             (uid_value,),
         ).fetchone()
         con.close()

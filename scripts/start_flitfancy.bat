@@ -4,7 +4,7 @@ setlocal EnableExtensions
 rem ============================================================
 rem  FlitFancy FFS service starter (invoked by the protocol handler
 rem  start_flitfancy.ps1 after whitelist validation, or directly).
-rem  Actions: backend | listener | tunnel | all (default all)
+rem  Actions: backend | listener | audio | tunnel | all (default all)
 rem  Idempotent: running+healthy services are skipped; all logs go
 rem  to logs\starter.log. ASCII-only on purpose: this file must
 rem  parse identically under any console codepage.
@@ -28,9 +28,10 @@ rem --- action check: literal comparison only, %1 is untrusted input ---
 if /i "%~1"==""        goto :do_all
 if /i "%~1"=="backend"  goto :do_backend
 if /i "%~1"=="listener" goto :do_listener
+if /i "%~1"=="audio"    goto :do_audio
 if /i "%~1"=="tunnel"   goto :do_tunnel
 if /i "%~1"=="all"      goto :do_all
-call :log "Unknown action ignored (use backend / listener / tunnel / all)"
+call :log "Unknown action ignored (use backend / listener / audio / tunnel / all)"
 goto :end
 
 :do_all
@@ -50,6 +51,8 @@ if not exist "%SERVER%" (
   goto :eof
 )
 set "PYTHON_EXE="
+if defined FLITFANCY_PYTHON if exist "%FLITFANCY_PYTHON%" set "PYTHON_EXE=%FLITFANCY_PYTHON%"
+if defined PYTHON_EXE goto :backend_python_ready
 for /f "delims=" %%P in ('py -3 -c "import sys; print(sys.executable)" 2^>nul') do set "PYTHON_EXE=%%P"
 if not defined PYTHON_EXE (
   for /f "delims=" %%P in ('python -c "import sys; print(sys.executable)" 2^>nul') do set "PYTHON_EXE=%%P"
@@ -58,6 +61,7 @@ if not defined PYTHON_EXE (
   call :log "ERROR: Python not found (py -3 or python)"
   goto :eof
 )
+:backend_python_ready
 rem --- the backend is guarded by watch_backend.ps1: one click ensures
 rem --- the watchdog runs; a dead backend is revived by it within ~30s.
 set "BE_WD_PIDFILE=%LOG_DIR%\backend-watchdog.pid"
@@ -87,6 +91,7 @@ if errorlevel 1 (
   goto :eof
 )
 call :log "Backend ready: http://localhost:2671"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0start_local_gateway.ps1"
 goto :eof
 
 rem ================= sensor listener (7777) =================
@@ -136,6 +141,43 @@ if "%WD_NEED_START%"=="1" (
 )
 goto :eof
 
+rem ================= FIREFLY AUDIO (7865) =================
+:do_audio
+call :log "=== starter begin (audio) ==="
+for %%I in ("%ROOT%\..\NatureCraft\FIREFLY AUDIO\FFV-transfer") do set "AUDIO_DIR=%%~fI"
+for %%I in ("%ROOT%\..\Fireflys\Miniconda3\venv\venv_voxcpm\python.exe") do set "AUDIO_PY=%%~fI"
+if not exist "%AUDIO_DIR%\app.py" (
+  call :log "ERROR: audio app.py not found: %AUDIO_DIR%"
+  goto :eof
+)
+if not exist "%AUDIO_PY%" (
+  call :log "ERROR: audio Python not found: %AUDIO_PY%"
+  goto :eof
+)
+%PSH% -Action audio-health -Url "http://127.0.0.1:7865/status"
+if not errorlevel 1 (
+  call :log "Audio: already running and healthy; skipping"
+  goto :eof
+)
+set "AUDIO_PIDFILE=%LOG_DIR%\audio.pid"
+if exist "%AUDIO_PIDFILE%" (
+  for /f "usebackq delims=" %%Q in ("%AUDIO_PIDFILE%") do %PSH% -Action stop-process -ProcessId %%Q
+  del "%AUDIO_PIDFILE%" >nul 2>nul
+)
+%PSH% -Action start-audio -Exe "%AUDIO_PY%" -WorkDir "%AUDIO_DIR%" -OutLog "%LOG_DIR%\audio.out.log" -ErrLog "%LOG_DIR%\audio.err.log" -PidFile "%AUDIO_PIDFILE%"
+if errorlevel 1 (
+  call :log "ERROR: audio service could not be started"
+  goto :eof
+)
+%PSH% -Action wait-audio -Url "http://127.0.0.1:7865/status"
+if errorlevel 1 (
+  call :log "ERROR: audio service not ready within 60s (see %LOG_DIR%\audio.err.log)"
+  goto :eof
+)
+%PSH% -Action write-port-pid -Port 7865 -PidFile "%AUDIO_PIDFILE%"
+call :log "Audio ready: http://127.0.0.1:7865"
+goto :eof
+
 rem ================= Cloudflare tunnel =================
 :do_tunnel
 call :log "=== starter begin (tunnel) ==="
@@ -149,27 +191,11 @@ if not exist "%CF_CONFIG%" (
   call :log "WARNING: tunnel config not found: %CF_CONFIG% (tunnel not started)"
   goto :eof
 )
-rem --- pid file alive -> skip; no pid file -> tasklist fallback ---
-set "TN_PIDFILE=%LOG_DIR%\cloudflared.pid"
-set "TN_NEED_START=1"
-if exist "%TN_PIDFILE%" (
-  for /f "usebackq delims=" %%Q in ("%TN_PIDFILE%") do (
-    %PSH% -Action is-alive -ProcessId %%Q
-    if not errorlevel 1 set "TN_NEED_START=0"
-  )
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0start_tunnel.ps1"
+if errorlevel 1 (
+  call :log "ERROR: tunnel watchdog did not start (see tunnel-watchdog.err.log)"
 ) else (
-  tasklist /FI "IMAGENAME eq cloudflared.exe" /NH 2>nul | findstr /I "cloudflared" >nul
-  if not errorlevel 1 set "TN_NEED_START=0"
-)
-if "%TN_NEED_START%"=="1" (
-  if exist "%TN_PIDFILE%" (
-    for /f "usebackq delims=" %%Q in ("%TN_PIDFILE%") do %PSH% -Action stop-process -ProcessId %%Q
-    del "%TN_PIDFILE%" >nul 2>nul
-  )
-  %PSH% -Action start-tunnel -Exe "%CLOUDFLARED%" -Config "%CF_CONFIG%" -WorkDir "%ROOT%" -OutLog "%LOG_DIR%\cloudflared.out.log" -ErrLog "%LOG_DIR%\cloudflared.err.log" -PidFile "%TN_PIDFILE%"
-  call :log "Tunnel: started (new process)"
-) else (
-  call :log "Tunnel: already running; skipping"
+  call :log "Tunnel: automatic recovery enabled"
 )
 goto :eof
 

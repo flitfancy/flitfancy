@@ -1,0 +1,110 @@
+/* 关于页独享：文章卡牌与管理卡组。 */
+:root { --editor-panel-w: clamp(340px, 38vw, 580px); }
+.about-reading-card {
+  padding: clamp(24px, 5vw, 56px);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  background: linear-gradient(145deg, rgba(245, 184, 75, 0.045), rgba(255, 255, 255, 0.015));
+  overflow-wrap: anywhere;
+}
+.about-reading-card time {
+  display: block;
+  margin-bottom: 24px;
+  color: var(--muted);
+  font-size: var(--fs-fine);
+}
+.about-reading-body { white-space: pre-wrap; }
+.essay-deck-help { color: var(--muted); font-size: var(--fs-ui); }
+.essay-deck-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 18px 0 8px;
+}
+.essay-card-deck {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: calc(100% - 28px);
+  align-items: start;
+  gap: 14px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: 4px;
+  padding: 8px 4px 20px;
+  scrollbar-width: thin;
+}
+.essay-library-card {
+  min-width: 0;
+  min-height: 350px;
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: linear-gradient(155deg, rgba(245, 184, 75, 0.07), rgba(255, 255, 255, 0.025));
+  scroll-snap-align: start;
+  overflow-wrap: anywhere;
+}
+.essay-library-card[data-featured="true"] {
+  border-color: var(--amber);
+  box-shadow: inset 0 0 0 1px rgba(245, 184, 75, 0.12);
+}
+.essay-card-number {
+  display: block;
+  margin-bottom: 20px;
+  color: var(--amber-soft);
+  font-size: var(--fs-fine);
+  letter-spacing: 0.1em;
+}
+.essay-library-card h3 {
+  margin: 0 0 12px;
+  font-family: var(--font-display);
+  font-size: var(--fs-sub);
+  font-weight: 400;
+}
+.essay-card-text {
+  max-height: 300px;
+  overflow-y: auto;
+  margin: 20px 0;
+  white-space: pre-wrap;
+  color: var(--text);
+  font-size: var(--fs-ui);
+  line-height: 1.9;
+}
+.essay-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 22px;
+}
+.essay-card-actions .btn { padding: 7px 12px; }
+.essay-card-compose label { display: block; margin-bottom: 16px; color: var(--muted); font-size: var(--fs-ui); }
+.essay-card-compose input,
+.essay-card-compose textarea {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 12px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font: inherit;
+  line-height: 1.8;
+}
+.essay-card-compose input:focus,
+.essay-card-compose textarea:focus { outline: 2px solid var(--amber); outline-offset: 2px; }
+.essay-library-card[data-editing="true"] > h3,
+.essay-library-card[data-editing="true"] > .essay-card-text,
+.essay-library-card[data-editing="true"] > .essay-card-actions,
+.essay-new-card[data-editing="true"] > .hint,
+.essay-new-card[data-editing="true"] > .btn { display: none; }
+.essay-card-compose textarea { min-height: 260px; resize: vertical; }
+.essay-card-compose .memory-compose-actions { flex-wrap: wrap; }
+.essay-new-card { border-style: dashed; }
+.essay-new-card .btn { margin-top: 24px; }
+.essay-card-deck:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; }
+@media (max-width: 640px) {
+  .essay-library-card { padding: 18px; }
+  .essay-editor .memory-head-actions { flex-wrap: wrap; }
+}

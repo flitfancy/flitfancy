@@ -5,15 +5,20 @@ import json
 import os
 import re
 import secrets
+import sqlite3
+import subprocess
 import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler
+from flitfancy_launcher import LauncherError
 
 @dataclass(frozen=True)
 class HttpDependencies:
+    audio_service: object
+    launcher_service: object
     ai_opener: object
     cst: object
     memories_select: str
@@ -51,6 +56,8 @@ class HttpDependencies:
 
 def create_handler(app):
     """创建只可访问已声明领域能力的请求处理器。"""
+    audio_service = app.audio_service
+    launcher_service = app.launcher_service
     AI_OPENER = app.ai_opener
     CST = app.cst
     MEMORIES_SELECT = app.memories_select
@@ -175,7 +182,9 @@ def create_handler(app):
                     return
             if not self._remote_guard(parsed.path):
                 return
-            if parsed.path == "/api/ingest":
+            if parsed.path.startswith("/api/launcher/"):
+                self._api_launcher_post(parsed.path)
+            elif parsed.path == "/api/ingest":
                 self._api_ingest()
             elif parsed.path == "/api/command":
                 self._api_command()
@@ -185,6 +194,8 @@ def create_handler(app):
                 self._api_memory_create()
             elif parsed.path == "/api/anchors":
                 self._api_anchor_create()
+            elif parsed.path == "/api/essays/featured":
+                self._api_essay_feature()
             elif parsed.path == "/api/essays":
                 self._api_essay_create()
             elif parsed.path == "/api/observations":
@@ -211,6 +222,14 @@ def create_handler(app):
                 self._api_resource_delete()
             elif parsed.path == "/api/resources/publish":
                 self._api_resource_publish()
+            elif parsed.path == "/api/audio/control":
+                self._api_audio_control()
+            elif parsed.path == "/api/dialogue/messages":
+                self._api_dialogue_message()
+            elif parsed.path == "/api/audio/play-file":
+                self._api_audio_play_file(parsed.query)
+            elif parsed.path == "/api/audio/firmware":
+                self._api_audio_firmware()
             else:
                 self._send(404, {"error": "not found"})
 
@@ -252,7 +271,8 @@ def create_handler(app):
                 return True
             if path == "/api/admin/login":
                 return True
-            if admin_token_valid(self._admin_token_from_request()):
+            if admin_token_valid(
+                    self._admin_token_from_request(), self._login_client_ip()):
                 return True
             self._send(401, {"ok": False, "error": "远程访问需要先登录"})
             return False
@@ -276,6 +296,14 @@ def create_handler(app):
                 self.send_header("Content-Length", str(len(body)))
                 self.send_header("X-Content-Type-Options", "nosniff")
                 self.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
+                self.send_header("X-Frame-Options", "DENY")
+                self.send_header(
+                    "Content-Security-Policy",
+                    "object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+                )
+                self.send_header(
+                    "Permissions-Policy", "camera=(), microphone=(), geolocation=()",
+                )
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
                 try:
@@ -286,7 +314,13 @@ def create_handler(app):
             self._send(200, body, MIME.get(ext, "application/octet-stream"))
 
         def _api_get(self, path, query=""):
-            if path == "/api/status":
+            if path == "/api/launcher":
+                if self._require_admin():
+                    try:
+                        self._send(200, launcher_service.catalog())
+                    except (OSError, RuntimeError, sqlite3.Error, subprocess.SubprocessError):
+                        self._send(503, {"ok": False, "error": "本机启动区暂时不可用"})
+            elif path == "/api/status":
                 n_sensors, n_notes = _status_counts()
                 heartbeat = service_status()
                 self._send(200, {
@@ -295,15 +329,30 @@ def create_handler(app):
                     "services": {
                         "backend": True,
                         "listener": heartbeat["listener"],
+                        "audio": heartbeat["audio"],
                         "tunnel": heartbeat["tunnel"],
                     },
                     "sensor_rows": n_sensors,
                     "sensor_retention_days": SENSOR_RETENTION_DAYS,
                     "notes": n_notes,
                     "chat_enabled": cfg_bool(_read_local_cfg().get("chat_enabled"), True),
+                    "dialogue_enabled": cfg_bool(_read_local_cfg().get("dialogue_enabled"), True),
                     "protocol_name": protocol_name(),
                     "msg": "flitfancy 在线 · 已记录 %d 条感知数据 · %d 条笔记" % (n_sensors, n_notes),
                 })
+            elif path == "/api/audio/status":
+                self._send(200, audio_service.status())
+            elif path == "/api/audio/history":
+                params = urllib.parse.parse_qs(query)
+                try:
+                    self._send(200, audio_service.history(
+                        (params.get('span') or ['24h'])[0],
+                        (params.get('end') or [None])[0]))
+                except Exception as exc:
+                    self._send(getattr(exc, 'status', 502), {'error': str(exc)})
+            elif path == "/api/audio/recording":
+                params = urllib.parse.parse_qs(query)
+                self._api_audio_recording((params.get("name") or [""])[0])
             elif path == "/api/resources":
                 self._send(200, {"resources": resource_service.list_resources()})
             elif path == "/api/sensors/latest":
@@ -364,6 +413,8 @@ def create_handler(app):
                 ).fetchall()
                 con.close()
                 self._send(200, {"ok": True, "rows": [dict(r) for r in rows]})
+            elif path == "/api/essays/featured":
+                self._send(200, {"ok": True, "essay": _read_local_cfg().get("featured_essay")})
             elif path == "/api/essays":
                 con = db()
                 rows = con.execute(
@@ -385,7 +436,10 @@ def create_handler(app):
                                 display_order ASC, updated_at DESC, id DESC LIMIT 200"""
                 ).fetchall()
                 con.close()
-                self._send(200, {"ok": True, "rows": [dict(r) for r in rows]})
+                self._send(200, {
+                    "ok": True, "rows": [dict(r) for r in rows],
+                    "featured_essay": _read_local_cfg().get("featured_essay"),
+                })
             elif path == "/api/observations":
                 self._send(200, observation_service.public_catalog())
             elif path == "/api/admin/observations":
@@ -736,6 +790,31 @@ def create_handler(app):
                 "public_sync_note": sync_note,
             })
 
+        def _api_essay_feature(self):
+            if self._require_admin() is None:
+                return
+            data = self._json_body()
+            if data is None:
+                return
+            con = db()
+            row = con.execute(
+                "SELECT uid, title, content, updated_at, status FROM essays WHERE uid=?",
+                (str(data.get("uid") or ""),),
+            ).fetchone()
+            con.close()
+            if row is None:
+                self._send(404, {"ok": False, "error": "请先保存这张卡牌"})
+                return
+            if row["status"] != "public":
+                self._send(400, {"ok": False, "error": "请先将卡牌设为公开"})
+                return
+            # 保存选中时的正文快照；后续编辑不会未经确认改变访客正在看的文章。
+            essay = {key: row[key] for key in ("uid", "title", "content", "updated_at")}
+            ai_config_save({"featured_essay": essay})
+            ok, note = sync_public_config({"featured_essay": essay})
+            self._send(200, {"ok": True, "essay": essay,
+                             "public_sync": ok, "public_sync_note": note})
+
         def _api_essay_create(self):
             data = self._json_body()
             if data is None:
@@ -762,8 +841,23 @@ def create_handler(app):
             if edit_uid and not re.match(r"^[a-zA-Z0-9_-]{16,80}$", edit_uid):
                 self._send(400, {"ok": False, "error": "invalid uid"})
                 return
+            featured_uid = (_read_local_cfg().get("featured_essay") or {}).get(
+                "uid", "builtin-prologue-0001"
+            )
+            if edit_uid == featured_uid and (status == "archived" or (
+                    _read_local_cfg().get("featured_essay") and status != "public")):
+                self._send(409, {"ok": False, "error": "请先展示另一张卡牌，再归档当前文章"})
+                return
             updated_at = now_iso()
             con = db()
+            # 原序章来自页面，第一次保存时通过管理 API 正式存入卡牌库。
+            if edit_uid == "builtin-prologue-0001":
+                con.execute(
+                    """INSERT OR IGNORE INTO essays(
+                           uid, created_at, updated_at, title, content, status, display_order, synced
+                       ) VALUES(?,?,?,?,?,?,?,0)""",
+                    (edit_uid, updated_at, updated_at, title, content, status, display_order),
+                )
             if edit_uid:
                 cur = con.execute(
                     """UPDATE essays SET updated_at=?, title=?, content=?, status=?,
@@ -807,6 +901,32 @@ def create_handler(app):
                 "public_sync": bool(saved["synced"]),
                 "public_sync_note": sync_note,
             })
+
+        def _api_launcher_post(self, path):
+            if not self._require_admin():
+                return
+            data = self._json_body()
+            if data is None:
+                return
+            try:
+                if path == "/api/launcher/save":
+                    result = launcher_service.save(data)
+                elif path == "/api/launcher/delete":
+                    result = launcher_service.delete(str(data.get("id") or ""))
+                elif path == "/api/launcher/run":
+                    result = launcher_service.enqueue("launch", str(data.get("id") or ""))
+                elif path == "/api/launcher/pick":
+                    result = launcher_service.enqueue("pick")
+                elif path == "/api/launcher/resolve":
+                    result = launcher_service.resolve_drop(data.get("name", ""))
+                else:
+                    self._send(404, {"ok": False, "error": "not found"})
+                    return
+                self._send(200, result)
+            except LauncherError as error:
+                self._send(error.status, {"ok": False, "error": str(error)})
+            except (OSError, RuntimeError, sqlite3.Error, subprocess.SubprocessError):
+                self._send(503, {"ok": False, "error": "本机启动区暂时不可用，请检查桌面助手"})
 
         def _api_observation_create(self):
             data = self._json_body()
@@ -927,7 +1047,7 @@ def create_handler(app):
 
         def _require_admin(self):
             token = self._admin_token_from_request()
-            if not token or not admin_token_valid(token):
+            if not token or not admin_token_valid(token, self._login_client_ip()):
                 self._send(401, {"ok": False, "error": "未登录或登录已过期"})
                 return None
             return token
@@ -1060,6 +1180,102 @@ def create_handler(app):
                 return
             ok, note = resource_service.publish()
             self._send(200 if ok else 502, {"ok": ok, "note": note})
+
+        def _api_audio_control(self):
+            data = self._json_body()
+            if data is None:
+                return
+            action = str(data.get("action") or "")
+            value = data.get("value")
+            try:
+                result = audio_service.control(action, value)
+            except Exception as exc:
+                status = getattr(exc, "status", 502)
+                message = str(exc) if hasattr(exc, "status") else "音频控制失败"
+                self._send(status, {"ok": False, "error": message})
+                return
+            self._send(200, {"ok": True, **result})
+
+        def _api_dialogue_message(self):
+            if not cfg_bool(_read_local_cfg().get("dialogue_enabled"), True):
+                self._send(403, {"error": "AI 对话已由管理员关闭"})
+                return
+            data = self._json_body()
+            if data is None:return
+            try:
+                result = audio_service.send_dialogue(data.get("text"), data.get("request_id"))
+                self._send(202, result)
+            except Exception as exc:
+                self._send(getattr(exc, "status", 502), {"error": str(exc) if hasattr(exc, "status") else "对话服务暂不可用"})
+
+        def _api_audio_play_file(self, query):
+            params = urllib.parse.parse_qs(query)
+            filename = (params.get("filename") or [""])[0]
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                self._send(400, {"ok": False, "error": "非法的 Content-Length"})
+                return
+            try:
+                # Limit an idle read, not the total duration of a progressing upload.
+                self.connection.settimeout(30)
+            except OSError:
+                pass
+            try:
+                result = audio_service.upload(self.rfile, length, filename)
+            except Exception as exc:
+                status = getattr(exc, "status", 502)
+                message = str(exc) if hasattr(exc, "status") else "音频文件转发失败"
+                self._send(status, {"ok": False, "error": message})
+                return
+            self._send(200, {"ok": True, **result})
+
+        def _api_audio_firmware(self):
+            if self._require_admin() is None:
+                return
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+                self.connection.settimeout(30)
+                result = audio_service.upload_firmware(self.rfile, length)
+                self._send(202, {"ok": True, **result})
+            except ValueError:
+                self._send(400, {"ok": False, "error": "非法文件长度"})
+            except Exception as exc:
+                self._send(getattr(exc, "status", 502), {"ok": False, "error":
+                    str(exc) if hasattr(exc, "status") else "固件上传失败"})
+
+        def _api_audio_recording(self, name):
+            connection = None
+            response_started = False
+            try:
+                connection, response = audio_service.open_recording(name)
+                length = int(response.getheader("Content-Length") or 0)
+                if length <= 0 or length > 64 * 1024 * 1024:
+                    raise ValueError("录音文件大小异常")
+                self.send_response(200)
+                self.send_header("Content-Type", "audio/wav")
+                self.send_header("Content-Length", str(length))
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                response_started = True
+                remaining = length
+                while remaining:
+                    chunk = response.read(min(64 * 1024, remaining))
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    remaining -= len(chunk)
+            except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
+                pass
+            except Exception as exc:
+                if not response_started and not self.wfile.closed:
+                    status = getattr(exc, "status", 502)
+                    message = str(exc) if hasattr(exc, "status") else "录音文件读取失败"
+                    self._send(status, {"ok": False, "error": message})
+            finally:
+                if connection is not None:
+                    connection.close()
 
         def _api_visits(self):
             if self._require_admin() is None:

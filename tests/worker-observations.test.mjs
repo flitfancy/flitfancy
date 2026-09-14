@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { DatabaseSync } from "node:sqlite";
 
 const worker = (await import(new URL("../cloudflare/worker.js", import.meta.url))).default;
 const OBSERVATIONS_CONTRACT = JSON.parse(
@@ -31,10 +32,12 @@ class FakeStatement {
     } else if (this.sql.includes("DELETE FROM observations")) {
       this.db.observations.delete(this.values[0]);
     } else if (this.sql.includes("INSERT INTO observation_links")) {
-      const [uid, createdTs, updatedTs, sourceUid, targetUid, relation] = this.values;
+      const [uid, createdTs, updatedTs, sourceUid, targetUid, relation, strength, updateStrength] = this.values;
+      const existing = this.db.links.get(uid);
       this.db.links.set(uid, {
         uid, created_ts: createdTs, updated_ts: updatedTs,
         source_uid: sourceUid, target_uid: targetUid, relation,
+        strength: existing ? updateStrength ?? existing.strength : strength,
       });
     } else if (this.sql.includes("DELETE FROM observation_links WHERE uid")) {
       this.db.links.delete(this.values[0]);
@@ -131,6 +134,49 @@ let publicData = await (await worker.fetch(
 assert.equal(publicData.rows.length, 2);
 assert.deepEqual(publicData.rows[0].tags, ["时间", "发现"]);
 assert.equal(publicData.links[0].relation, "类比");
+assert.equal(publicData.links[0].strength, "medium");
+
+const linkPayload = { uid: linkUid, published: true,
+  source_uid: "observation-star-alpha-001", target_uid: "observation-star-beta-0002", relation: "类比" };
+for (const strength of ["weak", "medium", "strong"]) {
+  const result = await post("/admin/observation-links", { ...linkPayload, strength });
+  assert.equal(result.status, 200);
+  assert.equal((await result.json()).strength, strength, "同步回执确认新字段");
+}
+await post("/admin/observation-links", linkPayload);
+assert.equal(env.DB.links.get(linkUid).strength, "strong", "旧客户端省略强度时保留已有值");
+for (const strength of ["bright", "", null, 1]) {
+  assert.equal((await post("/admin/observation-links", { ...linkPayload, strength })).status, 400);
+}
+
+// 用真实 SQLite 验证 D1 的增量迁移和 upsert 参数，保留旧弦和省略字段的兼容行为。
+const sqlite = new DatabaseSync(":memory:");
+try {
+  const { ensureObservationLinksTable } = await import("../cloudflare/worker-storage.js?strength-migration-test");
+  sqlite.exec(`CREATE TABLE observation_links (
+    uid TEXT PRIMARY KEY, created_ts INTEGER NOT NULL, updated_ts INTEGER NOT NULL,
+    source_uid TEXT NOT NULL, target_uid TEXT NOT NULL, relation TEXT NOT NULL);
+    INSERT INTO observation_links VALUES ('legacy-link',1,1,'a','b','延伸')`);
+  const sqlEnv = { ...env, DB: { prepare(sql) {
+    const statement = sqlite.prepare(sql);
+    let params = [];
+    return { bind(...values) { params = values; return this; },
+      async run() { statement.run(...params); return { success: true }; },
+      async all() { return { results: statement.all(...params) }; } };
+  } } };
+  await ensureObservationLinksTable(sqlEnv);
+  await ensureObservationLinksTable(sqlEnv);
+  assert.equal(sqlite.prepare("SELECT strength FROM observation_links WHERE uid='legacy-link'").get().strength, "medium");
+  const sqlPost = body => worker.fetch(new Request("https://api.flitfancy.com/admin/observation-links", {
+    method: "POST", headers, body: JSON.stringify(body),
+  }), sqlEnv);
+  for (const strength of ["weak", "medium", "strong"]) {
+    assert.equal((await sqlPost({ ...linkPayload, strength })).status, 200);
+    assert.equal(sqlite.prepare("SELECT strength FROM observation_links WHERE uid=?").get(linkUid).strength, strength);
+  }
+  assert.equal((await sqlPost(linkPayload)).status, 200);
+  assert.equal(sqlite.prepare("SELECT strength FROM observation_links WHERE uid=?").get(linkUid).strength, "strong");
+} finally { sqlite.close(); }
 
 // 纵深防御：即使清理事务异常、留下指向未公开星球的孤立弦，公网也不能泄露端点 UID。
 const hiddenEndpoint = env.DB.observations.get("observation-star-beta-0002");

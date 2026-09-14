@@ -53,6 +53,7 @@ function createHarness({ adminSurface = true, essayError = null } = {}) {
     },
     window: {
       location,
+      addEventListener() {},
       confirm: () => true,
       FlitFancyAdmin: {
         isAdminHost: () => adminSurface,

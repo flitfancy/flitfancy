@@ -8,7 +8,8 @@ param(
     [Parameter(Mandatory = $true)]
     [ValidateSet('is-alive', 'backend-health', 'backend-stale-kill', 'stop-process',
         'start-backend', 'start-backend-watchdog', 'wait-backend',
-        'listener-health', 'start-watchdog', 'start-tunnel')]
+        'listener-health', 'audio-health', 'start-audio', 'wait-audio', 'write-port-pid',
+        'start-watchdog')]
     [string]$Action,
     # NOTE: not $Pid -- that collides with PowerShell's read-only automatic $PID.
     [string]$ProcessId = '',
@@ -83,6 +84,31 @@ switch ($Action) {
             exit 0   # keep original semantics: unknown status is not 'unhealthy'
         }
     }
+    'audio-health' {
+        if (Test-Status $Url 2) { exit 0 } else { exit 1 }
+    }
+    'start-audio' {
+        if (-not $Exe -or -not $WorkDir) { exit 1 }
+        $proc = Start-Process -FilePath $Exe -ArgumentList '-u', '-X', 'utf8', 'app.py' -WorkingDirectory $WorkDir -WindowStyle Hidden -RedirectStandardOutput $OutLog -RedirectStandardError $ErrLog -PassThru
+        if ($PidFile) { Set-Content -Path $PidFile -Value $proc.Id }
+        exit 0
+    }
+    'wait-audio' {
+        $deadline = (Get-Date).AddSeconds(60)
+        do {
+            if (Test-Status $Url 2) { exit 0 }
+            Start-Sleep -Seconds 1
+        } while ((Get-Date) -lt $deadline)
+        exit 1
+    }
+    'write-port-pid' {
+        if (-not $Port -or -not $PidFile) { exit 1 }
+        $conn = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+        if (-not $conn) { exit 1 }
+        Set-Content -Path $PidFile -Value $conn.OwningProcess
+        exit 0
+    }
     'start-backend-watchdog' {
         if (-not $Watchdog -or -not $Server -or -not $Exe -or -not $WorkDir) { exit 1 }
         # 与 start-watchdog 同款引号写法：路径含空格必须手工嵌双引号。
@@ -99,12 +125,6 @@ switch ($Action) {
         $q = [char]34
         $argList = "-NoProfile -ExecutionPolicy Bypass -File $q$Watchdog$q -ListenerPath $q$Listener$q -Port $Port -DataRoot $q$DataRoot$q"
         Start-Process -FilePath 'powershell.exe' -ArgumentList $argList -WindowStyle Hidden -RedirectStandardOutput $OutLog -RedirectStandardError $ErrLog
-        exit 0
-    }
-    'start-tunnel' {
-        if (-not $Exe -or -not $Config) { exit 1 }
-        $proc = Start-Process -FilePath $Exe -ArgumentList '--config', $Config, 'tunnel', 'run' -WorkingDirectory $WorkDir -WindowStyle Hidden -RedirectStandardOutput $OutLog -RedirectStandardError $ErrLog -PassThru
-        if ($PidFile) { Set-Content -Path $PidFile -Value $proc.Id }
         exit 0
     }
 }

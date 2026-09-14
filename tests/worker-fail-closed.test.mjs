@@ -24,6 +24,9 @@ const consoleHtmlSource = fs.readFileSync(
 const adminCoreSource = fs.readFileSync(
   new URL("../docs/assets/admin-core.js", import.meta.url), "utf8"
 );
+const protocolHandlerSource = fs.readFileSync(
+  new URL("../scripts/start_flitfancy.ps1", import.meta.url), "utf8"
+);
 const ADMIN_TOKEN = "test-admin-token-0123456789abcdef0123456789";
 
 assert.match(consoleSource, /SENSOR_REFRESH_MS\s*=\s*5000/,
@@ -37,6 +40,11 @@ assert.doesNotMatch(consoleChatSource, /const\s+urls\s*=\s*\["\/api\/chat"/,
   "聊天不得把同一内容依次重试到两个后端");
 assert.match(consoleServicesSource, /let\s+protocolName\s*=\s*""/,
   "自定义协议必须等待后端随机名称，不得回退到固定名称");
+assert.match(protocolHandlerSource,
+  /\^\[A-Za-z0-9_-\]\+:\/\/start\/\(backend\|listener\|audio\|tunnel\|all\)\$/,
+  "音频启动动作必须留在协议处理器的完整正则白名单内");
+assert.match(consoleHtmlSource, /data-action="audio"/,
+  "控制台必须提供经过随机协议处理器的音频服务入口");
 assert.match(consoleAdminSource, /noopener,noreferrer/,
   "外部快捷入口必须隔离 window.opener 与来源信息");
 assert.match(adminCoreSource, /response\.status\s*===\s*401\s*&&\s*token/,
@@ -50,6 +58,7 @@ let previousScriptIndex = -1;
   "console-chat.js",
   "console-admin.js",
   "console-services.js",
+  "console-audio.js",
   "console.js",
 ].forEach(function (name) {
   const index = consoleHtmlSource.indexOf(name);

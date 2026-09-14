@@ -1,11 +1,77 @@
-/* 关于页短文记录库：本地草稿、公开排序和归档管理。 */
+/* 关于页卡牌库：浏览与编辑留在本地，明确选择后才更新展示文章。 */
 (function () {
   "use strict";
   const $ = function (selector) { return document.querySelector(selector); };
   const ADMIN_KEY = "flitfancy.admin.token";
   const adminSurface = window.FlitFancyAdmin.isAdminHost();
   const statusNames = { draft: "草稿", public: "公开", archived: "归档" };
+  const PROLOGUE_UID = "builtin-prologue-0001";
+  const deck = $('[data-role="essay-admin-list"]');
+  const compose = $('[data-role="essay-compose"]');
+  const panel = $('[data-role="essay-editor"]');
   let rows = [];
+  let featured = null;
+  let editing = null;
+  let initialForm = "";
+  let busy = false;
+  let position = 0;
+
+  function prologue() {
+    const original = $('[data-role="essay-prologue"]');
+    return {
+      uid: PROLOGUE_UID,
+      title: original.querySelector("h2").textContent,
+      content: Array.from(original.querySelectorAll(":scope > p")).map(function (p) {
+        return p.textContent;
+      }).join("\n\n"),
+      status: "draft", display_order: 100, builtin: true
+    };
+  }
+  function currentUid() { return featured ? featured.uid : PROLOGUE_UID; }
+  function formValue() {
+    return JSON.stringify([$('[data-role="essay-title"]').value, $('[data-role="essay-content"]').value]);
+  }
+  function canLeave() {
+    return !busy && (!editing || formValue() === initialForm || window.confirm("这张卡牌有尚未保存的文字，要放弃这些修改吗？"));
+  }
+  function parkForm() {
+    if (compose.parentNode) delete compose.parentNode.dataset.editing;
+    compose.hidden = true;
+    panel.appendChild(compose);
+    editing = null;
+  }
+  function moveTo(index) {
+    position = Math.max(0, Math.min(index, deck.children.length - 1));
+    const card = deck.children[position];
+    if (card) deck.scrollTo({ left: card.offsetLeft - deck.children[0].offsetLeft, behavior: "auto" });
+    updatePosition();
+  }
+  function updatePosition() {
+    if (!deck.children.length) return;
+    let distance = Infinity;
+    Array.from(deck.children).forEach(function (card, index) {
+      const delta = Math.abs(card.offsetLeft - deck.children[0].offsetLeft - deck.scrollLeft);
+      if (delta < distance) { distance = delta; position = index; }
+    });
+    setStatus('[data-role="essay-position"]', (position + 1) + " / " + deck.children.length);
+    $('[data-role="essay-prev"]').disabled = position === 0;
+    $('[data-role="essay-next"]').disabled = position === deck.children.length - 1;
+  }
+  function startEditing(row, card) {
+    if (!canLeave()) return;
+    parkForm();
+    editing = row;
+    $('[data-role="essay-uid"]').value = row.uid || "";
+    $('[data-role="essay-title"]').value = row.title || "";
+    $('[data-role="essay-content"]').value = row.content || "";
+    initialForm = formValue();
+    card.dataset.editing = "true";
+    card.appendChild(compose);
+    compose.hidden = false;
+    moveTo(Array.from(deck.children).indexOf(card));
+    setStatus('[data-role="essay-write-status"]', row.uid ? "正在编辑卡牌；保存不会切换展示文章" : "正在写一张新卡牌");
+    $('[data-role="essay-title"]').focus({ preventScroll: true });
+  }
 
   function token() { return window.FlitFancyAdmin.token(ADMIN_KEY); }
   function setToken(value) { window.FlitFancyAdmin.setToken(ADMIN_KEY, value); }
@@ -28,81 +94,109 @@
     max: 900
   });
 
-  function clearForm(message) {
-    $('[data-role="essay-uid"]').value = "";
-    $('[data-role="essay-title"]').value = "";
-    $('[data-role="essay-content"]').value = "";
-    $('[data-role="essay-status"]').value = "draft";
-    $('[data-role="essay-order"]').value = "100";
-    setStatus('[data-role="essay-write-status"]', message || "正在写一篇新短文");
-    $('[data-role="essay-title"]').focus();
+  function newCard() {
+    if (!deck.lastElementChild) { setStatus('[data-role="essay-write-status"]', "请先重新加载卡牌库"); return; }
+    startEditing({ uid: "", title: "", content: "", status: "draft", display_order: 100 }, deck.lastElementChild);
   }
 
-  function fillForm(row) {
-    $('[data-role="essay-uid"]').value = row.uid || "";
-    $('[data-role="essay-title"]').value = row.title || "";
-    $('[data-role="essay-content"]').value = row.content || "";
-    $('[data-role="essay-status"]').value = statusNames[row.status] ? row.status : "draft";
-    $('[data-role="essay-order"]').value = String(row.display_order == null ? 100 : row.display_order);
-    setStatus('[data-role="essay-write-status"]', "正在编辑既有短文，保存后原地更新");
-    $('[data-role="essay-title"]').focus();
+  function action(label, handler) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "btn btn-ghost";
+    button.textContent = label;
+    button.addEventListener("click", handler);
+    return button;
   }
 
-  function rowActions(row) {
-    const actions = document.createElement("div");
-    actions.className = "essay-admin-actions";
-    const edit = document.createElement("button");
-    edit.type = "button";
-    edit.className = "btn btn-ghost";
-    edit.textContent = "编辑";
-    edit.addEventListener("click", function () { fillForm(row); });
-    actions.appendChild(edit);
-    if (row.status !== "archived") {
-      const archive = document.createElement("button");
-      archive.type = "button";
-      archive.className = "btn btn-ghost";
-      archive.textContent = "归档";
-      archive.addEventListener("click", function () {
-        if (!window.confirm("归档后不会删除，仍可从记录库重新编辑。确定归档吗？")) return;
-        savePayload(Object.assign({}, row, { status: "archived" })).catch(function (error) {
-          setStatus('[data-role="essay-write-status"]', error.message || "归档失败");
-        });
+  async function featureCard(row) {
+    if (!canLeave()) return;
+    busy = true;
+    setStatus('[data-role="essay-write-status"]', "正在更新展示文章…");
+    try {
+      if (row.builtin || row.status !== "public") {
+        const saved = await savePayload(Object.assign({}, row, { status: "public" }));
+        row = saved.essay;
+      }
+      const data = await api("/api/essays/featured", {
+        method: "POST", body: JSON.stringify({ uid: row.uid })
       });
-      actions.appendChild(archive);
-    }
-    return actions;
+      featured = data.essay;
+      parkForm();
+      await loadRowsWithStatus(row.uid);
+      document.dispatchEvent(new CustomEvent("flitfancy:essay-saved"));
+      setStatus('[data-role="essay-write-status"]', data.public_sync
+        ? "已设为展示；公网可能需要片刻更新"
+        : "本机已选定，公网尚未更新。请稍后点“更新展示”重试。");
+    } catch (error) {
+      setStatus('[data-role="essay-write-status"]', error.message || "展示更新失败，请重试");
+    } finally { busy = false; }
   }
 
-  function renderRows() {
-    const list = $('[data-role="essay-admin-list"]');
-    list.textContent = "";
-    rows.forEach(function (row) {
-      const item = document.createElement("div");
-      item.className = "essay-admin-row";
-      const info = document.createElement("div");
-      const title = document.createElement("strong");
+  async function archiveCard(row) {
+    if (!canLeave() || !window.confirm("归档后卡牌仍会保留，之后可以恢复。确定归档吗？")) return;
+    busy = true;
+    try {
+      await savePayload(Object.assign({}, row, { status: "archived" }));
+      parkForm();
+      await loadRowsWithStatus(row.uid);
+      setStatus('[data-role="essay-write-status"]', "卡牌已归档");
+    } catch (error) {
+      setStatus('[data-role="essay-write-status"]', error.message || "归档失败");
+    } finally { busy = false; }
+  }
+
+  function renderRows(focusUid) {
+    parkForm();
+    deck.textContent = "";
+    rows.forEach(function (row, index) {
+      const card = document.createElement("article");
+      card.className = "essay-library-card";
+      card.dataset.featured = String(row.uid === currentUid());
+      card.setAttribute("aria-label", row.title || "未命名短文");
+      const number = document.createElement("span");
+      number.className = "essay-card-number";
+      number.textContent = "CARD " + String(index + 1).padStart(2, "0") + (row.uid === currentUid() ? " · 当前展示" : " · " + (statusNames[row.status] || "草稿"));
+      const title = document.createElement("h3");
       title.textContent = row.title || "未命名短文";
-      const meta = document.createElement("span");
-      meta.className = "essay-admin-meta";
-      meta.textContent = (statusNames[row.status] || row.status) + " · 顺序 " + row.display_order;
-      info.appendChild(title);
-      info.appendChild(meta);
-      item.appendChild(info);
-      item.appendChild(rowActions(row));
-      list.appendChild(item);
+      const content = document.createElement("p");
+      content.className = "essay-card-text";
+      content.textContent = row.content || "";
+      const actions = document.createElement("div");
+      actions.className = "essay-card-actions";
+      actions.appendChild(action(row.status === "archived" ? "恢复并编辑" : "编辑卡牌", function () {
+        startEditing(Object.assign({}, row, { status: row.status === "archived" ? "draft" : row.status }), card);
+      }));
+      if (row.status !== "archived") {
+        actions.appendChild(action(row.uid === currentUid() ? "更新展示" : "设为展示", function () { return featureCard(row); }));
+        if (row.uid !== currentUid()) actions.appendChild(action("归档", function () { return archiveCard(row); }));
+      }
+      card.appendChild(number);
+      card.appendChild(title);
+      card.appendChild(content);
+      card.appendChild(actions);
+      deck.appendChild(card);
     });
-    if (!rows.length) {
-      const empty = document.createElement("p");
-      empty.className = "hint";
-      empty.textContent = "记录库还是空的。";
-      list.appendChild(empty);
-    }
+    const blank = document.createElement("article");
+    blank.className = "essay-library-card essay-new-card";
+    const label = document.createElement("h3");
+    label.textContent = "下一篇，留给此刻的你";
+    const help = document.createElement("p");
+    help.className = "hint";
+    help.textContent = "新建一张卡牌，装下新的文字。";
+    blank.appendChild(label);
+    blank.appendChild(help);
+    blank.appendChild(action("＋ 新建卡牌", newCard));
+    deck.appendChild(blank);
+    const target = rows.findIndex(function (row) { return row.uid === (focusUid || currentUid()); });
+    moveTo(target < 0 ? 0 : target);
   }
 
-  async function loadRows() {
+  async function loadRows(focusUid) {
     const data = await api("/api/admin/essays", { method: "GET" });
     rows = data.rows || [];
-    renderRows();
+    if (!rows.some(function (row) { return row.uid === PROLOGUE_UID; })) rows.unshift(prologue());
+    featured = data.featured_essay || null;
+    renderRows(focusUid);
   }
 
   function openPanel() {
@@ -110,10 +204,10 @@
     $('[data-role="essay-login-overlay"]').hidden = true;
   }
 
-  async function loadRowsWithStatus() {
+  async function loadRowsWithStatus(focusUid) {
     setStatus('[data-role="essay-library-status"]', "正在加载短文库…");
     try {
-      await loadRows();
+      await loadRows(focusUid);
       setStatus('[data-role="essay-library-status"]', "短文库已加载");
       return true;
     } catch (error) {
@@ -150,7 +244,7 @@
       return;
     }
     openPanel();
-    await loadRowsWithStatus();
+    if (canLeave()) await loadRowsWithStatus();
   }
 
   async function login() {
@@ -179,7 +273,7 @@
   }
 
   async function savePayload(payload) {
-    setStatus('[data-role="essay-write-status"]', "正在保存到本机并更新公网…");
+    setStatus('[data-role="essay-write-status"]', "正在保存卡牌…");
     const data = await api("/api/essays", {
       method: "POST",
       body: JSON.stringify({
@@ -190,41 +284,38 @@
         display_order: Number.parseInt(payload.display_order, 10) || 0
       })
     });
-    await loadRowsWithStatus();
-    document.dispatchEvent(new CustomEvent("flitfancy:essay-saved"));
-    setStatus('[data-role="essay-write-status"]', data.public_sync
-      ? "短文已保存，公开列表正在更新"
-      : "已保存在本机，公网稍后自动补传");
     return data;
   }
 
   async function save() {
-    const button = $('[data-role="essay-save"]');
-    const payload = {
-      uid: $('[data-role="essay-uid"]').value.trim(),
+    if (busy || !editing) return;
+    const payload = Object.assign({}, editing, {
       title: $('[data-role="essay-title"]').value.trim(),
-      content: $('[data-role="essay-content"]').value.trim(),
-      status: $('[data-role="essay-status"]').value,
-      display_order: $('[data-role="essay-order"]').value
-    };
+      content: $('[data-role="essay-content"]').value.trim()
+    });
     if (!payload.title || !payload.content) {
       setStatus('[data-role="essay-write-status"]', "标题和正文都要填写");
       return;
     }
-    button.disabled = true;
+    busy = true;
+    $('[data-role="essay-save"]').disabled = true;
     try {
       const data = await savePayload(payload);
-      clearForm(data.public_sync
-        ? "短文已保存，公开列表正在更新"
-        : "已保存在本机，公网稍后自动补传");
+      parkForm();
+      await loadRowsWithStatus(data.essay.uid);
+      setStatus('[data-role="essay-write-status"]', "卡牌已保存。想让访客看到这篇，请点“设为展示”或“更新展示”。");
     } catch (error) {
       if (window.FlitFancyAdmin.isUnauthorized(error)) setToken("");
       setStatus('[data-role="essay-write-status"]', error.message || "保存失败");
+    } finally {
+      busy = false;
+      $('[data-role="essay-save"]').disabled = false;
     }
-    button.disabled = false;
   }
 
   async function logout() {
+    if (!canLeave()) return;
+    parkForm();
     try { await api("/api/admin/logout", { method: "POST" }); } catch (error) { /* ignore */ }
     setToken("");
     $('[data-role="essay-editor"]').hidden = true;
@@ -245,8 +336,21 @@
     if (event.key === "Enter") { event.preventDefault(); login(); }
   });
   $('[data-role="essay-save"]').addEventListener("click", save);
-  $('[data-role="essay-new"]').addEventListener("click", clearForm);
-  $('[data-role="essay-reload"]').addEventListener("click", loadRowsWithStatus);
+  $('[data-role="essay-new"]').addEventListener("click", newCard);
+  $('[data-role="essay-reload"]').addEventListener("click", function () { if (canLeave()) loadRowsWithStatus(); });
+  $('[data-role="essay-cancel"]').addEventListener("click", function () { if (canLeave()) parkForm(); });
+  $('[data-role="essay-prev"]').addEventListener("click", function () { moveTo(position - 1); });
+  $('[data-role="essay-next"]').addEventListener("click", function () { moveTo(position + 1); });
+  deck.addEventListener("scroll", updatePosition, { passive: true });
+  deck.addEventListener("keydown", function (event) {
+    if (event.target !== deck) return;
+    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+      event.preventDefault(); moveTo(position + (event.key === "ArrowRight" ? 1 : -1));
+    }
+  });
+  window.addEventListener("beforeunload", function (event) {
+    if (editing && formValue() !== initialForm) { event.preventDefault(); event.returnValue = ""; }
+  });
   $('[data-role="essay-logout"]').addEventListener("click", logout);
   if (window.location.hash === "#write") openManager();
 })();

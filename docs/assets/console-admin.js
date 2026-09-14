@@ -32,6 +32,7 @@
 
     function clearToken() {
       adminCore.setToken(ADMIN_KEY, "");
+      if (opts.onSignedOut) opts.onSignedOut();
     }
 
     async function adminFetch(url, options) {
@@ -72,6 +73,10 @@
 
     function closeLogin() {
       query('[data-role="admin-overlay"]').hidden = true;
+    }
+
+    function setLoginRequired(required) {
+      if (required) showPanel(false);
     }
 
     function modelSelectValue() {
@@ -327,6 +332,7 @@
       } catch (e) { /* ignore */ }
       clearToken();
       showPanel(false);
+      onAuthenticated();
     }
 
     function bindEvents() {
@@ -405,6 +411,7 @@
       token: token,
       loadConfig: loadConfig,
       showPanel: showPanel,
+      setLoginRequired: setLoginRequired,
     };
   }
 

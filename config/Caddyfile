@@ -1,0 +1,25 @@
+{
+	admin 127.0.0.1:2019
+	auto_https disable_redirects
+}
+
+# The tunnel forwards only ACME validation paths to this loopback HTTP server.
+# All ordinary public requests continue to the existing website backend.
+http://console.flitfancy.com {
+	bind 127.0.0.1
+	respond 404
+}
+
+https://console.flitfancy.com {
+	bind 127.0.0.1
+	tls {
+		issuer acme {
+			dir https://acme-v02.api.letsencrypt.org/directory
+			disable_tlsalpn_challenge
+		}
+	}
+	reverse_proxy 127.0.0.1:2671 {
+		# Only the real Cloudflare tunnel may supply its client-IP header.
+		header_up -CF-Connecting-IP
+	}
+}

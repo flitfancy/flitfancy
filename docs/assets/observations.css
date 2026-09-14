@@ -1,11 +1,14 @@
 .observations-page {
   height: 100dvh;
-  min-height: 620px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   padding-bottom: 0;
 }
 
 .observations-site-nav {
+  flex: 0 0 auto;
   position: relative;
   z-index: 80;
 }
@@ -14,8 +17,8 @@
   position: relative;
   z-index: 2;
   width: 100%;
-  height: calc(100dvh - 76px);
-  min-height: 520px;
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -46,10 +49,10 @@
 .obs-map-tools,
 .obs-detail,
 .obs-list-mode {
-  border: 1px solid var(--border);
-  background: rgba(8, 12, 21, 0.78);
-  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.28);
-  backdrop-filter: blur(14px);
+  border: 1px solid rgba(188, 183, 168, 0.1);
+  background: rgba(12, 16, 23, 0.86);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.12);
+  backdrop-filter: blur(12px);
 }
 
 .obs-header {
@@ -59,8 +62,9 @@
   left: 18px;
   display: grid;
   gap: 13px;
-  width: min(430px, calc(100% - 36px));
-  padding: 16px;
+  width: fit-content;
+  max-width: calc(100% - 36px);
+  padding: 18px 20px;
   border-radius: 16px;
 }
 
@@ -96,7 +100,7 @@
   gap: 7px;
 }
 
-.obs-map-actions .btn { padding: 6px 10px; }
+.obs-map-actions .btn { min-height: 40px; padding: 7px 12px; }
 
 .obs-state,
 .obs-load-status {
@@ -125,16 +129,19 @@
 .obs-strings { overflow: visible; pointer-events: none; }
 
 .obs-string {
-  stroke: rgba(128, 194, 224, 0.24);
-  stroke-width: 1.3;
-  stroke-dasharray: 7 8;
+  --string-opacity: 0.28;
+  stroke: rgb(189, 192, 183);
+  stroke-opacity: var(--string-opacity);
+  stroke-width: 1;
   vector-effect: non-scaling-stroke;
 }
 
+.obs-string[data-strength="weak"] { --string-opacity: 0.11; stroke-width: 0.7; }
+.obs-string[data-strength="strong"] { --string-opacity: 0.55; stroke-width: 1.3; }
+
 .obs-string.is-active {
-  stroke: rgba(245, 184, 75, 0.82);
-  stroke-width: 2;
-  filter: drop-shadow(0 0 7px rgba(245, 184, 75, 0.48));
+  stroke: rgb(213, 196, 159);
+  stroke-opacity: calc(var(--string-opacity) + 0.15);
 }
 
 .obs-string-label {
@@ -144,10 +151,13 @@
   paint-order: stroke;
   stroke: rgba(5, 8, 15, 0.92);
   stroke-width: 4px;
+  opacity: 0;
 }
 
+.obs-string.is-active + .obs-string-label { fill: #c8bea9; opacity: 1; }
+
 .obs-planet {
-  --planet-color: #f5b84b;
+  --planet-color: #b4a084;
   --planet-size: clamp(104px, 12vw, 148px);
   position: absolute;
   width: var(--planet-size);
@@ -162,85 +172,88 @@
 
 .obs-planet-core {
   position: absolute;
-  inset: 25%;
-  display: grid;
-  place-items: center;
-  padding: 8px;
-  border: 1px solid color-mix(in srgb, var(--planet-color), white 24%);
+  inset: 8%;
+  pointer-events: none;
+  transition: transform 0.24s ease;
+}
+
+.obs-planet-core img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  user-select: none;
+}
+
+.obs-planet[data-body="saturn"] .obs-planet-core { inset: -22%; }
+
+.obs-planet-core::after {
+  content: "";
+  position: absolute;
+  inset: 11%;
   border-radius: 50%;
-  color: #f7fbff;
-  background:
-    radial-gradient(circle at 36% 30%, rgba(255, 255, 255, 0.8), transparent 13%),
-    radial-gradient(circle at 42% 40%, color-mix(in srgb, var(--planet-color), white 14%), var(--planet-color) 58%, #101520 100%);
-  box-shadow:
-    0 0 24px color-mix(in srgb, var(--planet-color), transparent 48%),
-    inset -13px -11px 18px rgba(0, 0, 0, 0.38);
+  background: var(--planet-color);
+  mix-blend-mode: color;
+  opacity: 0.04;
+}
+
+.obs-planet[data-body="saturn"] .obs-planet-core::after { inset: 27%; }
+
+.obs-planet-name {
+  position: absolute;
+  top: 88%;
+  left: -18%;
+  width: 136%;
+  display: -webkit-box;
+  overflow: hidden;
+  color: #bdbbb3;
   font-size: var(--fs-text-xs);
-  line-height: 1.25;
+  line-height: 1.6;
+  letter-spacing: 0.06em;
   text-align: center;
   text-wrap: balance;
-  transition: transform 0.24s ease, box-shadow 0.24s ease;
-}
-
-.obs-ring {
-  position: absolute;
-  pointer-events: none;
-  border: 1px solid color-mix(in srgb, var(--planet-color), transparent 30%);
-  border-radius: 50%;
-  transform: rotate(-17deg);
-}
-
-.obs-ring-one { inset: 15% 3%; }
-.obs-ring-two {
-  inset: 7% 17%;
-  opacity: 0.54;
-  transform: rotate(24deg);
-}
-
-.obs-orbit-label {
-  position: absolute;
-  top: 4%;
-  left: 62%;
-  max-width: 14em;
-  padding: 3px 7px;
-  border: 1px solid color-mix(in srgb, var(--planet-color), transparent 55%);
-  border-radius: 999px;
-  color: var(--amber-soft);
-  background: rgba(7, 10, 17, 0.88);
-  font-size: var(--fs-caption);
-  line-height: 1.2;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  text-shadow: 0 2px 6px #080d16;
 }
 
 .obs-orbit-summary {
-  top: auto;
-  right: 58%;
-  bottom: -2%;
-  left: auto;
+  position: absolute;
+  bottom: 90%;
+  left: 50%;
   width: max-content;
   max-width: 18em;
+  padding: 5px 9px;
+  border-radius: 5px;
   overflow: hidden;
   color: var(--muted);
+  background: rgba(9, 13, 21, 0.9);
+  font-size: var(--fs-caption);
+  line-height: 1.5;
+  white-space: nowrap;
+  pointer-events: none;
   opacity: 0;
   text-overflow: ellipsis;
-  transform: translateY(4px);
+  transform: translate(-50%, 4px);
   transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
 .obs-planet:hover .obs-planet-core,
 .obs-planet:focus-visible .obs-planet-core,
 .obs-planet.is-selected .obs-planet-core {
-  transform: scale(1.13);
-  box-shadow:
-    0 0 38px color-mix(in srgb, var(--planet-color), transparent 28%),
-    inset -13px -11px 18px rgba(0, 0, 0, 0.34);
+  transform: scale(1.035);
 }
+
+.obs-planet:hover .obs-planet-name,
+.obs-planet:focus-visible .obs-planet-name,
+.obs-planet.is-selected .obs-planet-name { color: #e0d6c1; }
 
 .obs-planet:hover .obs-orbit-summary,
 .obs-planet:focus-visible .obs-orbit-summary,
 .obs-planet.is-selected .obs-orbit-summary {
   opacity: 1;
-  transform: translateY(0);
+  transform: translate(-50%, 0);
 }
 
 .obs-planet:focus-visible { outline: 2px solid var(--amber); outline-offset: 5px; border-radius: 50%; }
@@ -271,15 +284,15 @@
   top: 18px;
   right: 18px;
   bottom: 18px;
-  width: min(370px, calc(100% - 36px));
+  width: min(400px, calc(100% - 36px));
   overflow: auto;
   border-radius: 16px;
 }
 
-.obs-detail-inner { display: grid; gap: 14px; padding: 20px; }
+.obs-detail-inner { display: grid; gap: 20px; padding: 26px; overflow-wrap: anywhere; }
 .obs-detail-head { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
-.obs-detail h2 { margin: 0; color: var(--amber-soft); font-size: var(--fs-h2); }
-.obs-detail p { margin: 0; color: var(--muted); line-height: 1.72; white-space: pre-wrap; }
+.obs-detail h2 { margin: 6px 0 0; color: var(--amber-soft); font-size: var(--fs-h2); line-height: 1.45; text-wrap: balance; }
+.obs-detail p { margin: 0; color: var(--muted); line-height: 1.9; white-space: pre-wrap; }
 .obs-detail-summary { color: var(--text) !important; }
 .obs-detail-tags { display: flex; flex-wrap: wrap; gap: 6px; }
 .obs-detail-tags span {
@@ -323,7 +336,9 @@
   margin-bottom: 18px;
 }
 .obs-list-mode h2 { margin: 3px 0 0; color: var(--amber-soft); }
-.obs-accessible-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.obs-texture-credit { display: inline-block; margin-top: 22px; color: var(--muted); font-size: var(--fs-fine); }
+.obs-texture-credit:hover { color: var(--amber-soft); }
+.obs-accessible-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 16px; }
 .obs-accessible-card {
   display: grid;
   gap: 8px;
@@ -341,15 +356,15 @@
 .obs-accessible-card span { color: var(--muted); font-size: var(--fs-meta); line-height: 1.55; }
 
 @media (max-width: 640px) {
-  .observations-page { min-height: 680px; }
-  .observations-main { height: calc(100dvh - 102px); min-height: 570px; }
-  .obs-header { top: 10px; left: 10px; width: calc(100% - 20px); padding: 12px; gap: 10px; }
+  .obs-header { top: 10px; left: 10px; width: calc(100% - 20px); max-width: none; padding: 12px; gap: 10px; }
   .obs-title-block h1 { font-size: var(--fs-stat); }
   .obs-map-tools { left: 10px; bottom: 10px; max-width: calc(100% - 20px); padding: 9px; }
-  .obs-map-actions .btn { min-height: 36px; padding: 5px 8px; font-size: var(--fs-fine); }
+  .obs-map-actions .btn { min-height: 40px; padding: 6px 9px; font-size: var(--fs-fine); }
   .obs-load-status { right: 12px; bottom: 88px; max-width: calc(100% - 24px); }
-  .obs-detail { top: auto; right: 10px; bottom: 76px; left: 10px; width: auto; max-height: 49%; }
-  .obs-detail-inner { padding: 16px; }
+  .obs-detail { top: auto; right: 10px; bottom: 112px; left: 10px; width: auto; max-height: 46%; }
+  .obs-detail-inner { padding: 20px; gap: 16px; }
+  .obs-detail h2 { font-size: var(--fs-head-2); }
+  .obs-detail-head .btn { flex-shrink: 0; }
   .obs-list-mode { inset: 10px; padding: 15px; }
   .obs-accessible-list { grid-template-columns: 1fr; }
   .obs-orbit-summary { max-width: 13em; }

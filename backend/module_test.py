@@ -3,12 +3,17 @@
 import json
 import os
 import sqlite3
+import socket
 import tempfile
 import threading
 import time
+from io import BytesIO
+from unittest import mock
 from datetime import datetime, timedelta
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from flitfancy_auth import AdminAuth
+from flitfancy_audio import AudioService, AudioServiceError, MAX_AUDIO_BYTES
 from flitfancy_core import (
     CST,
     base_url_for_model,
@@ -59,6 +64,12 @@ def test_core():
         "relation": "类比",
     })
     assert "同一颗" in error
+    link_input = {"source_uid": "observation-alpha-0001", "target_uid": "observation-beta-00002", "relation": "类比"}
+    assert normalize_observation_link(link_input)[0]["strength"] == "medium"
+    for strength in ("weak", "medium", "strong"):
+        assert normalize_observation_link(dict(link_input, strength=strength))[0]["strength"] == strength
+    for strength in (None, "", "bright", 1):
+        assert normalize_observation_link(dict(link_input, strength=strength))[1]
 
 
 def test_sensors():
@@ -110,9 +121,10 @@ def test_auth():
     assert auth.verify_password("owner", password) is True
     ok, token = auth.login("127.0.0.1", "owner", password)
     assert ok is True and len(token) == 48
-    assert auth.token_valid(token) is True
+    assert auth.token_valid(token, "127.0.0.1") is True
+    assert auth.token_valid(token, "127.0.0.2") is False
     auth.logout(token)
-    assert auth.token_valid(token) is False
+    assert auth.token_valid(token, "127.0.0.1") is False
     auth.failures["future-ip"] = [0, time.time() + 24 * 3600]
     ok, message = auth.login("future-ip", "owner", password)
     assert ok is False and "10 分钟" in message
@@ -162,6 +174,11 @@ def test_sync():
     assert request.full_url == "https://worker.example/admin/test"
     assert request.get_header("Authorization") == "Bearer " + token
     assert timeout == 8
+    # 老 Worker 的 ok 不能当成新字段已同步；确认值不符也保留待同步。
+    assert client.post("/admin/observation-links", {}, expected_response={"strength": "weak"})[0] is False
+    with mock.patch.object(FakeResponse, "read", return_value=b'{"ok":true,"strength":"weak"}'):
+        assert client.post("/admin/observation-links", {}, expected_response={"strength": "weak"}) == (True, "")
+        assert client.post("/admin/observation-links", {}, expected_response={"strength": "strong"})[0] is False
 
     sent = []
     delivered = threading.Event()
@@ -255,9 +272,20 @@ def test_storage():
         )
         connection.commit()
         connection.close()
+        connection = sqlite3.connect(path)
+        connection.execute("""CREATE TABLE observation_links(
+            id INTEGER PRIMARY KEY, uid TEXT UNIQUE NOT NULL, created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL, source_uid TEXT NOT NULL, target_uid TEXT NOT NULL,
+            relation TEXT NOT NULL, synced INTEGER NOT NULL DEFAULT 0)""")
+        connection.execute("INSERT INTO observation_links VALUES(1,'legacy-link','now','now','a','b','延伸',1)")
+        connection.commit()
+        connection.close()
         store = SQLiteStore(path)
         store.initialize()
+        store.initialize()
         connection = store.connect()
+        legacy_link = dict(connection.execute("SELECT * FROM observation_links WHERE uid='legacy-link'").fetchone())
+        assert legacy_link["strength"] == "medium" and legacy_link["relation"] == "延伸" and legacy_link["synced"] == 1
         migrated = dict(connection.execute(
             "SELECT horizon, project FROM anchors WHERE uid = ?",
             ("legacy-anchor-0001",),
@@ -278,7 +306,134 @@ def test_storage():
             "uid", "category", "tags_json", "summary", "content", "discovered_at",
             "source_name", "source_url", "status", "synced",
         } <= observation_columns
-        assert {"uid", "source_uid", "target_uid", "relation", "synced"} <= observation_link_columns
+        assert {"uid", "source_uid", "target_uid", "relation", "strength", "synced"} <= observation_link_columns
+
+
+def test_audio():
+    received = {}
+    first_chunk = threading.Event()
+
+    class AudioStub(BaseHTTPRequestHandler):
+        def log_message(self, *_args):
+            pass
+
+        def _json(self, payload, status=200):
+            body = json.dumps(payload).encode("utf-8")
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_GET(self):
+            if self.path == "/status":
+                self._json({"model": "ready", "board_connected": True, "port": "COM5"})
+            elif self.path == "/recordings/test.wav":
+                body = b"RIFF-test-wave"
+                self.send_response(200)
+                self.send_header("Content-Type", "audio/wav")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            else:
+                self._json({"detail": "missing"}, 404)
+
+        def do_POST(self):
+            length = int(self.headers.get("Content-Length") or 0)
+            if "fragmented.wav" in self.path:
+                body = self.rfile.read(256)
+                first_chunk.set()
+                body += self.rfile.read(length - len(body))
+            else:
+                body = self.rfile.read(length)
+            received.update({"path": self.path, "body": body})
+            if len(body) == int(self.headers.get("Content-Length") or 0):
+                self._json({"accepted": True, "bytes": len(body)})
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), AudioStub)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    service = AudioService("http://127.0.0.1:%d" % server.server_port)
+    try:
+        status = service.status()
+        assert status["available"] is True and status["port"] == "COM5"
+        service.control("mic", "both")
+        assert received["path"] == "/mic/both"
+        service.control("aec", True)
+        assert received["path"] == "/aec/1"
+        service.control("aec", False)
+        assert received["path"] == "/aec/0"
+        service.control("wakeword", True)
+        assert received["path"] == "/wakeword/1"
+        service.control("wakeword", False)
+        assert received["path"] == "/wakeword/0"
+        service.control("play-pause")
+        assert received["path"] == "/pause-playback"
+        service.control("play-resume")
+        assert received["path"] == "/resume-playback"
+        service.control("device-reboot")
+        assert received["path"] == "/device/reboot"
+        result = service.upload(BytesIO(b"audio-data"), 10, "../song.flac")
+        assert result["bytes"] == 10
+        assert received["path"].startswith("/play-file?filename=song.flac")
+        assert received["body"] == b"audio-data"
+        result = service.upload_firmware(BytesIO(b"f" * 512), 512)
+        assert result["bytes"] == 512
+        assert received["path"] == "/device/firmware"
+        assert received["body"] == b"f" * 512
+        try:
+            service.upload_firmware(BytesIO(b"short"), 512)
+            raise AssertionError("Truncated firmware must fail")
+        except AudioServiceError as exc:
+            assert exc.status == 400
+        try:
+            service.upload_firmware(BytesIO(b""), 0x640001)
+            raise AssertionError("Oversize firmware must fail before forwarding")
+        except AudioServiceError as exc:
+            assert exc.status == 413
+        reader, writer = socket.socketpair()
+        reader.settimeout(2)
+        def fragmented_sender():
+            with writer:
+                writer.sendall(b"a" * 256)
+                if first_chunk.wait(1):
+                    writer.sendall(b"b" * 256)
+        sender = threading.Thread(target=fragmented_sender)
+        sender.start()
+        try:
+            with reader, reader.makefile("rb") as stream:
+                result = service.upload(stream, 512, "fragmented.wav")
+            assert result["bytes"] == 512
+            assert received["body"] == b"a" * 256 + b"b" * 256
+        finally:
+            sender.join(2)
+        connection, response = service.open_recording("test.wav")
+        try:
+            assert response.read() == b"RIFF-test-wave"
+        finally:
+            connection.close()
+        for action, value in (("mic", "invalid"), ("gain", 3), ("volume", 101),
+                              ("transport", "invalid"), ("aec", "true"), ("aec", 1),
+                              ("wakeword", "true"), ("wakeword", 1), ("wakeword", None)):
+            try:
+                service.control(action, value)
+                raise AssertionError("非法音频控制参数必须被拒绝")
+            except AudioServiceError as exc:
+                assert exc.status == 400
+        try:
+            service.upload(BytesIO(b"x"), MAX_AUDIO_BYTES + 1, "huge.mp3")
+            raise AssertionError("超大音频文件必须被拒绝")
+        except AudioServiceError as exc:
+            assert exc.status == 413
+        try:
+            AudioService("http://example.com:7865")
+            raise AssertionError("音频代理目标必须限制在本机")
+        except ValueError:
+            pass
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
 
 
 def main():
@@ -287,6 +442,7 @@ def main():
     test_auth()
     test_sync()
     test_storage()
+    test_audio()
     print("backend modules test ok")
 
 

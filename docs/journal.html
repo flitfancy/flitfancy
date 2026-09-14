@@ -7,8 +7,9 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='24' fill='%23f5b84b' opacity='0.22'/%3E%3Ccircle cx='32' cy='32' r='12' fill='%23f5b84b'/%3E%3Ccircle cx='32' cy='32' r='5' fill='%23ffe9c4'/%3E%3C/svg%3E">
   <title>旅途 — 云萤 · FlitFancy</title>
   <meta name="description" content="旅途：云萤与我的锚点和日记，时间会记得我们的存在。">
-  <link rel="stylesheet" href="assets/style.css?v=1.4.7">
-  <script src="assets/track.js?v=1.4.7" defer></script>
+  <link rel="stylesheet" href="assets/style.css?v=1.17.1">
+  <link rel="stylesheet" href="assets/observation-editor.css?v=1.17.1">
+  <script src="assets/track.js?v=1.17.1" defer></script>
 </head>
 <body class="journal-page">
   <canvas id="sky" aria-hidden="true"></canvas>
@@ -37,7 +38,7 @@
         </nav>
       </div>
       <p class="sub">时间会记得我们的存在</p>
-      <p class="memory-sync" data-role="memory-sync" aria-live="polite">正在倾听新的记忆…</p>
+      <p class="memory-sync" data-role="memory-sync" aria-live="polite" hidden></p>
     </section>
 
     <section class="section journal-view" data-view-pane="anchors" hidden aria-label="锚点">
@@ -244,93 +245,100 @@
           <button class="btn" data-role="observation-new">新增星球</button>
         </div>
       </div>
-      <input type="hidden" data-role="observation-uid">
-      <div class="memory-form-grid">
+      <div class="observation-compose" data-role="observation-compose">
+        <input type="hidden" data-role="observation-uid">
+        <input type="hidden" data-role="observation-category" value="事">
+        <input type="hidden" data-role="observation-status" value="draft">
+        <div class="observation-kinds" role="group" aria-label="星球类型">
+          <button type="button" data-observation-kind="事" aria-pressed="true" title="事件与经历">事</button>
+          <button type="button" data-observation-kind="理" aria-pressed="false" title="原理与思考">理</button>
+          <button type="button" data-observation-kind="物" aria-pressed="false" title="事物与作品">物</button>
+          <button type="button" data-observation-kind="人" aria-pressed="false" title="人物与故事">人</button>
+          <button type="button" data-observation-kind="地" aria-pressed="false" title="地方与场所">地</button>
+        </div>
+        <p class="hint" data-role="observation-legacy-category" hidden></p>
         <label>标题
           <input type="text" maxlength="120" data-role="observation-title" placeholder="这颗星球叫什么">
         </label>
-        <label>分类
-          <select data-role="observation-category">
-            <option value="宇宙与自然">宇宙与自然</option>
-            <option value="生命与感知">生命与感知</option>
-            <option value="技术与造物">技术与造物</option>
-            <option value="历史与文明">历史与文明</option>
-            <option value="语言与艺术">语言与艺术</option>
-            <option value="思想与日常">思想与日常</option>
-          </select>
+        <label>内容
+          <textarea rows="8" maxlength="12000" data-role="observation-content" placeholder="写下这次见闻…"></textarea>
         </label>
-        <label>状态
-          <select data-role="observation-status">
-            <option value="draft">草稿</option>
-            <option value="public">公开</option>
-            <option value="archived">归档</option>
-          </select>
-        </label>
-        <label>发现时间
-          <input type="date" data-role="observation-discovered">
-        </label>
-      </div>
-      <label class="memory-content-field">标签
-        <input type="text" maxlength="400" data-role="observation-tags" placeholder="用逗号分隔，例如：时间，脉冲星，宇宙">
-      </label>
-      <label class="memory-content-field">短描述
-        <textarea rows="2" maxlength="400" data-role="observation-summary" placeholder="星环上显示的一两句话"></textarea>
-      </label>
-      <label class="memory-content-field">正文
-        <textarea rows="6" maxlength="12000" data-role="observation-content" placeholder="完整记录这件有意思的事情…"></textarea>
-      </label>
-      <div class="memory-form-grid">
-        <label>来源名称
-          <input type="text" maxlength="160" data-role="observation-source-name" placeholder="书、网站、某次谈话…">
-        </label>
-        <label>来源链接
-          <input type="url" maxlength="1000" data-role="observation-source-url" placeholder="https://（可留空）">
-        </label>
-      </div>
-      <div class="memory-compose-actions">
-        <button class="btn" data-role="observation-save">保存星球</button>
-        <span class="hint" data-role="observation-status-text" aria-live="polite"></span>
-      </div>
-      <div class="observation-admin-list" data-role="observation-admin-list"></div>
-
-      <div class="observation-link-editor">
-        <div class="observation-admin-head">
-          <div>
-            <p class="kicker">STRINGS</p>
-            <p>星球之间的弦</p>
+        <details class="observation-more" data-role="observation-more">
+          <summary>更多</summary>
+          <label>标签
+            <input type="text" maxlength="400" data-role="observation-tags" placeholder="例如：天文，时间（逗号分隔）">
+          </label>
+          <label>发现时间
+            <input type="date" data-role="observation-discovered">
+          </label>
+          <label>自定义摘要
+            <textarea rows="2" maxlength="400" data-role="observation-summary" placeholder="留空时自动取正文开头"></textarea>
+          </label>
+          <label>来源名称
+            <input type="text" maxlength="160" data-role="observation-source-name" placeholder="书、网站、某次谈话…">
+          </label>
+          <label>来源链接
+            <input type="url" maxlength="1000" data-role="observation-source-url" placeholder="https://（可留空）">
+          </label>
+          <div class="observation-actions">
+            <button type="button" class="btn btn-ghost" data-role="observation-withdraw" hidden>撤回草稿</button>
+            <button type="button" class="btn btn-ghost" data-role="observation-archive" hidden>归档</button>
           </div>
-          <button class="btn btn-ghost" data-role="observation-link-new">新增弦</button>
+        </details>
+        <div class="observation-actions">
+          <button type="button" class="btn btn-ghost" data-role="observation-save">存草稿</button>
+          <button type="button" class="btn" data-role="observation-publish">公开</button>
+        </div>
+      </div>
+      <p class="hint" data-role="observation-status-text" aria-live="polite"></p>
+      <button type="button" class="btn btn-ghost" data-role="observation-connect" hidden>连接另一颗星球</button>
+
+      <section class="observation-link-editor observation-compose" data-role="observation-link-editor" hidden aria-label="连接星球">
+        <div class="observation-admin-head">
+          <strong data-role="observation-link-origin"></strong>
+          <button type="button" class="btn btn-ghost" data-role="observation-link-close">收起</button>
         </div>
         <input type="hidden" data-role="observation-link-uid">
-        <label>搜索目标星球
-          <input type="search" data-role="observation-link-search" placeholder="按标题、分类或标签筛选">
+        <input type="hidden" data-role="observation-link-source">
+        <label>查找另一颗星球
+          <input type="search" data-role="observation-link-search" placeholder="输入标题、类型或标签">
         </label>
-        <div class="memory-form-grid">
-          <label>起点星球
-            <select data-role="observation-link-source"></select>
-          </label>
-          <label>目标星球
-            <select data-role="observation-link-target"></select>
-          </label>
-          <label>关系词
-            <select data-role="observation-link-relation">
-              <option value="同源">同源</option>
-              <option value="因果">因果</option>
-              <option value="类比">类比</option>
-              <option value="延伸">延伸</option>
-              <option value="custom">自定义</option>
-            </select>
-          </label>
-          <label data-role="observation-link-custom-wrap" hidden>自定义关系
-            <input type="text" maxlength="80" data-role="observation-link-custom" placeholder="例如：计时">
-          </label>
+        <label>连接到
+          <select data-role="observation-link-target"></select>
+        </label>
+        <label>关系
+          <select data-role="observation-link-relation">
+            <option value="同源">同源</option>
+            <option value="因果">因果</option>
+            <option value="类比">类比</option>
+            <option value="延伸">延伸</option>
+            <option value="custom">自定义</option>
+          </select>
+        </label>
+        <label data-role="observation-link-custom-wrap" hidden>自定义关系
+          <input type="text" maxlength="80" data-role="observation-link-custom" placeholder="例如：计时">
+        </label>
+        <label>弦的强度
+          <select data-role="observation-link-strength">
+            <option value="weak">弱 · 若隐若现</option>
+            <option value="medium" selected>中 · 轻轻相连</option>
+            <option value="strong">强 · 清晰可见</option>
+          </select>
+        </label>
+        <div class="observation-actions">
+          <button type="button" class="btn" data-role="observation-link-save">保存弦</button>
+          <button type="button" class="btn btn-ghost" data-role="observation-link-new">再连一颗</button>
         </div>
-        <div class="memory-compose-actions">
-          <button class="btn" data-role="observation-link-save">保存弦</button>
-          <span class="hint" data-role="observation-link-status" aria-live="polite"></span>
-        </div>
+        <p class="hint" data-role="observation-link-status" aria-live="polite"></p>
+      </section>
+      <details class="observation-more observation-saved" open>
+        <summary>已记录的星球</summary>
+        <div class="observation-admin-list" data-role="observation-admin-list"></div>
+      </details>
+      <details class="observation-more observation-saved">
+        <summary>已有的弦</summary>
         <div class="observation-admin-list" data-role="observation-link-list"></div>
-      </div>
+      </details>
     </div>
   </section>
 
@@ -359,14 +367,14 @@
 
   <div class="js-error" data-role="js-error" hidden></div>
 
-  <script src="assets/firefly.js?v=1.4.7"></script>
-  <script src="assets/sitefx.js?v=1.4.7"></script>
-  <script src="assets/admin-core.js?v=1.4.7"></script>
-  <script src="assets/admin-panel-shell.js?v=1.4.7"></script>
-  <script src="assets/memory.js?v=1.4.7"></script>
-  <script src="assets/anchors.js?v=1.4.7"></script>
-  <script src="assets/about.js?v=1.4.7"></script>
-  <script src="assets/journal-admin.js?v=1.4.7"></script>
-  <script src="assets/observations-admin.js?v=1.4.7"></script>
+  <script src="assets/firefly.js?v=1.17.1"></script>
+  <script src="assets/sitefx.js?v=1.17.1"></script>
+  <script src="assets/admin-core.js?v=1.17.1"></script>
+  <script src="assets/admin-panel-shell.js?v=1.17.1"></script>
+  <script src="assets/memory.js?v=1.17.1"></script>
+  <script src="assets/anchors.js?v=1.17.1"></script>
+  <script src="assets/about.js?v=1.17.1"></script>
+  <script src="assets/journal-admin.js?v=1.17.1"></script>
+  <script src="assets/observations-admin.js?v=1.17.1"></script>
 </body>
 </html>

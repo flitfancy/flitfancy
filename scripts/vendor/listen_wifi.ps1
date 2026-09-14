@@ -40,28 +40,43 @@ if ([string]::IsNullOrWhiteSpace($DataRoot)) {
 }
 $sessionsRoot = Join-Path $DataRoot 'sessions'
 $liveDir = Join-Path $DataRoot 'live'
+$archiveSessionsRoot = Join-Path $DataRoot 'archive\sessions'
 [void][System.IO.Directory]::CreateDirectory($sessionsRoot)
 [void][System.IO.Directory]::CreateDirectory($liveDir)
+[void][System.IO.Directory]::CreateDirectory($archiveSessionsRoot)
 
-# 清理 14 天前的旧会话文件（与后端 14 天查询窗口一致）。
-$cutoff = (Get-Date).AddDays(-14)
+# 监听器启动时，sessions 中不可能存在本进程正在写入的文件；其中全部是
+# 上一次或更早的已结束会话。先移入永久归档，再创建本次会话文件。
+# 原始 CSV 不跟随 SQLite 的 14 天查询窗口清理。
 try {
-    $removed = 0
-    foreach ($old in Get-ChildItem -LiteralPath $sessionsRoot -File -Filter 'wifi-*.csv') {
-        if ($old.LastWriteTime -lt $cutoff) {
-            try {
-                Remove-Item -LiteralPath $old.FullName -Force
-                $removed++
-            } catch {
-                Log-Error ('cleanup skip: ' + $old.Name)
+    $archived = 0
+    foreach ($completed in Get-ChildItem -LiteralPath $sessionsRoot -File -Filter 'wifi-*.csv') {
+        try {
+            $destination = Join-Path $archiveSessionsRoot $completed.Name
+            if (Test-Path -LiteralPath $destination -PathType Leaf) {
+                $sourceHash = (Get-FileHash -LiteralPath $completed.FullName -Algorithm SHA256).Hash
+                $destinationHash = (Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash
+                if ($sourceHash -eq $destinationHash) {
+                    # 归档中已有完全相同的副本，删除 sessions 中的重复文件即可。
+                    Remove-Item -LiteralPath $completed.FullName -Force
+                    $archived++
+                    continue
+                }
+                $stem = [System.IO.Path]::GetFileNameWithoutExtension($completed.Name)
+                $destination = Join-Path $archiveSessionsRoot (
+                    $stem + '-collision-' + $sourceHash.Substring(0, 12).ToLowerInvariant() + '.csv')
             }
+            Move-Item -LiteralPath $completed.FullName -Destination $destination
+            $archived++
+        } catch {
+            Log-Error ('archive skip: ' + $completed.Name + ': ' + $_.Exception.Message)
         }
     }
-    if ($removed -gt 0) {
-        Log-Info ("cleaned $removed old session(s)")
+    if ($archived -gt 0) {
+        Log-Info ("archived $archived completed session(s)")
     }
 } catch {
-    Log-Error ('cleanup failed: ' + $_.Exception.Message)
+    Log-Error ('session archive failed: ' + $_.Exception.Message)
 }
 
 # 会话文件：每次监听进程运行一个（$stamp 启动时生成）。
@@ -69,10 +84,9 @@ $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $OutFile = Join-Path $sessionsRoot "wifi-$stamp.csv"
 $LiveFile = Join-Path $liveDir 'firefly_live.csv'
 
-$writer = $null          # 会话文件（UTF-8 BOM，每 5 行 flush）
+$writer = $null          # 会话文件（UTF-8 BOM，逐行 flush，避免异常退出丢尾行）
 $liveWriter = $null      # live 文件（UTF-8 无 BOM，AutoFlush）
 $headerWritten = $false
-$rowsWritten = 0
 
 # 转发客户端（复用连接，避免逐行重建）。
 $http = $null
@@ -132,19 +146,16 @@ function Write-CsvRow([string]$Fields) {
     if ($null -eq $script:writer) {
         $script:writer = [System.IO.StreamWriter]::new(
             $script:OutFile, $false, [System.Text.UTF8Encoding]::new($true))
+        $script:writer.AutoFlush = $true
     }
     if ($null -eq $script:liveWriter) {
         $script:liveWriter = [System.IO.StreamWriter]::new(
             $script:LiveFile, $false, [System.Text.UTF8Encoding]::new($false))
         $script:liveWriter.AutoFlush = $true
     }
-    $row = 'pc_time,' + $Fields
+    $row = $pcTime + ',' + $Fields
     $script:writer.WriteLine($row)
     $script:liveWriter.WriteLine($row)
-    $script:rowsWritten++
-    if ($script:rowsWritten % 5 -eq 0) {
-        $script:writer.Flush()
-    }
 }
 
 function Write-CsvHeader([string]$Fields) {
@@ -154,6 +165,7 @@ function Write-CsvHeader([string]$Fields) {
     if ($null -eq $script:writer) {
         $script:writer = [System.IO.StreamWriter]::new(
             $script:OutFile, $false, [System.Text.UTF8Encoding]::new($true))
+        $script:writer.AutoFlush = $true
     }
     if ($null -eq $script:liveWriter) {
         $script:liveWriter = [System.IO.StreamWriter]::new(

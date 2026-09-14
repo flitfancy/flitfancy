@@ -3,9 +3,9 @@
 小流萤的家 + 控制台。前后端分离：
 
 - `docs/`：公开网站（首页 / 足迹 / 日记 / 控制台 / 关于），GitHub Pages 从**这个目录**发布（命名为 docs 是因为 GitHub Pages 的目录下拉框只认 `/` 和 `/docs`）
-- `backend/`：本地控制台服务（server.py + SQLite），只在你的电脑上跑，不发布
+- `backend/`：本地控制台服务（server.py + SQLite + FIREFLY AUDIO 代理），只在你的电脑上跑，不发布
 
-## 一键启动 FFS（控制台 后端/感知板/隧道 三个按钮）
+## 一键启动 FFS（控制台 后端/感知板/音频/隧道 四个按钮）
 
 浏览器不能直接拉起本机进程，因此用 Windows 自定义协议做桥（协议名随机，见下）：
 
@@ -17,8 +17,48 @@
    确认框，选允许），分别拉起对应服务：
    - "后端"：server.py（端口 2671）
    - "感知板"：watch_sensor_listener.ps1（端口 7777）
-   - "隧道"：cloudflared（console.flitfancy.com）
+   - "音频"：FFV-transfer（端口 7865；本机解码、双麦与 SenseVoice，按需常驻）
+   - "隧道"：cloudflared（console.flitfancy.com）及隐藏的自恢复守护
 3. 启动器幂等：已运行的服务自动跳过；日志在 logs\starter.log。
+
+隧道启动入口现在调用 `scripts/start_tunnel.ps1`，由 `watch_tunnel.ps1` 持续守护。
+桌面启动器仍可沿用原入口，不依赖控制台页面、2671 或管理员登录来恢复隧道：
+
+- 每 30 秒检查一次；进程退出后在下一轮拉起。
+- 使用隧道自身的本机 `/ready` 接口检查到 Cloudflare 的连接，不把网站后端故障当作隧道故障。
+- 新进程留出 60 秒连接时间；之后连续三次检查失败才重启。反复失败的重启等待递增，最多五分钟；连续三次健康后恢复普通等待。
+- 接管已运行的同路径、同配置隧道，不主动重启；互斥锁防止重复守护，重启前核对进程路径、配置和创建时间。
+- 日志在 `logs/tunnel-watchdog.out.log`、`logs/tunnel-watchdog.err.log`，隧道日志仍为 `logs/cloudflared.*.log`。
+
+维护时如需手动停隧道，先创建 `logs/tunnel-watchdog.paused` 空文件，再停隧道进程；
+删除该文件或再次运行启动器的 `tunnel` 动作即可恢复守护。
+守护随现有启动器启用；也可通过下述开机任务启动。关机、休眠和整机断网无法靠重启隧道恢复访问。
+
+### Windows 开机启动
+
+本机任务计划程序中的 `FlitFancy Autostart` 在开机 30 秒后运行 `scripts/start_at_boot.ps1`，
+启动后端、感知监听、本机 HTTPS 入口和隧道守护，音频仍按需启动。
+任务采用现有 Windows 用户的 S4U 后台登录、普通权限，不保存 Windows 密码，也不需要桌面登录。
+失败时每隔一分钟重试，最多三次；已有服务正常运行时沿用现有实例。
+任务直接指定 Python 路径，避免开机环境依赖 WindowsApps 的命令别名。
+
+安装或更新（需管理员授权；`PythonExe` 替换为本机的实际解释器）：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install_autostart.ps1 -Account "$env:USERDOMAIN\$env:USERNAME" -PythonExe "C:\path\to\python.exe"
+```
+
+在任务计划程序中可以禁用 `FlitFancy Autostart`；或以管理员权限运行
+`scripts/install_autostart.ps1 -Remove` 解除开机启动。解除任务不会停止已经运行的服务。
+结果写入 `logs/autostart-result.json`，启动输出在 `logs/autostart.log`。
+更换用户、Python 安装路径或移动仓库后，应重新安装任务；加密的用户文件与需要 Windows 网络身份的共享路径不适用此登录模式。
+
+Windows 守护回归测试（不操作真实隧道）：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tests/tunnel-watchdog.test.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File tests/tunnel-watchdog-integration.test.ps1
+```
 
 协议名在安装时随机生成并写入注册表，本地后端经 /api/status 的
 protocol_name 字段注入控制台，按钮自动使用当前协议名（重装协议或换电脑后
@@ -29,6 +69,7 @@ protocol_name 字段注入控制台，按钮自动使用当前协议名（重装
 - scripts/start_flitfancy.bat：服务启动器（只接受白名单动作）
 - scripts/install_flitfancy_protocol.ps1：协议注册/卸载
 - scripts/watch_sensor_listener.ps1：感知板监听守护
+- scripts/start_tunnel.ps1 / watch_tunnel.ps1：隧道启动与独立自恢复守护
 - scripts/update_sensor_manifest.ps1：归档清单重建
 
 相关文件（换电脑时随仓库一起带走即可）：
@@ -51,6 +92,26 @@ python server.py
 ```
 
 然后打开 http://localhost:2671/
+
+### FIREFLY VOICE 控制台
+
+控制台“侧耳倾听”在“现实感知”下方提供双麦选择、增益、录音、本地 SenseVoice
+识别、音量、拖放播放、同名 LRC 歌词、暂停/继续和板子重启。页面只请求同源的
+`/api/audio/*`，由 `backend/flitfancy_audio.py` 转发给默认运行在
+`http://127.0.0.1:7865` 的 FFV-transfer 服务；音频文件、录音和识别结果不会发送给
+公网 Worker。
+
+代理目标只允许本机回环 HTTP 地址。需要改端口时可设置
+`FLITFANCY_AUDIO_URL`，例如 `http://127.0.0.1:7867`。音频上传按流转发，
+支持 NCM、FLAC、MP3、WAV、AAC、M4A、OGG 与 Opus，单文件上限 500 MB。
+FFV-transfer 自身也只监听回环地址，并拒绝非本机 Host 与浏览器跨站请求；
+网站后端到音频服务的调用不经过浏览器，仍可正常工作。
+
+当前原型由本机私有固件配置提供 2.4 GHz 网络参数，网页不读取或提交 Wi-Fi 密码。
+FFV-transfer 常驻持有板子会话：通过 `firefly-voice.local:7866` 完成配对认证、心跳、
+控制和扬声器下行，板子把带序号与 CRC 的双麦数据发到电脑 UDP 7867。USB 只用于烧录
+和诊断。网页的 2671 端口承担统一控制与状态，本地 AI 的连续 PCM 直接使用 7865 流式
+接口，避免在网站后端重复复制。板端端口只在受信任局域网使用，不向公网转发。
 
 ## 感知数据保存边界
 
@@ -237,6 +298,7 @@ site/
 │   ├── flitfancy_sensors.py 传感器 CSV/JSON 解析与公开序列化
 │   ├── flitfancy_storage.py SQLite 迁移、历史聚合与保留策略
 │   ├── flitfancy_sync.py Worker 请求与最新快照同步队列
+│   ├── flitfancy_audio.py FIREFLY VOICE 本机代理、控制参数与文件边界
 │   ├── flitfancy_http.py HTTP 路由、安全边界与显式领域依赖
 │   ├── module_test.py    上述拆分模块的快速单元测试
 │   ├── smoke_test.py     自包含冒烟测试（隔离临时库 + 独立端口，已接入 pnpm check）
@@ -276,16 +338,16 @@ site/
   完全一致（激活类允许页间差异）；`tests/version-consistency.test.mjs` 断言
   全库 `?v=` 与 `cloudflare/package.json` 的语义化版本一致。改导航或版本漏改
   任何一页都会在 check 里立即失败。发布版本统一使用：
-  `pnpm run version:set -- 1.2.3`（示例，在 `cloudflare` 目录执行）。
+  `pnpm version:set 1.2.3`（示例，在 `cloudflare` 目录执行）。
 - **stylelint 防线**：no-duplicate-selectors / block-no-empty /
   no-duplicate-properties 三条规则挂进 check，同名选择器提交即报错。
 - **纯函数单一出处**：传感器衍生计算在 `sensor-state.js`（带单测），
   日期格式化四件套在 `admin-core.js`（formatDateTime/formatDate/nowForInput/
   formatUnixTime），页面只做委托。
 - **控制台职责拆分**：`console.js` 只负责环境判断、刷新定时器与模块装配；
-  传感器卡片、24 小时图表、AI 对话、管理面板、服务按钮和访问统计分别集中在
+  传感器卡片、24 小时图表、AI 对话、管理面板、服务按钮、音频与访问统计分别集中在
   `console-sensors.js`、`console-overview.js`、`console-chat.js`、
-  `console-admin.js`、`console-services.js` 与 `console-visits.js`。
+  `console-admin.js`、`console-services.js`、`console-audio.js` 与 `console-visits.js`。
 - **后端职责拆分**：`server.py` 只保留运行配置、领域编排与服务启动；认证、
   传感器归一、SQLite、Worker 同步和 HTTP 边界分别集中在 `flitfancy_auth.py`、
   `flitfancy_sensors.py`、`flitfancy_storage.py`、`flitfancy_sync.py` 与
@@ -309,7 +371,8 @@ site/
   一切写入走隧道后端，由本地管理员账号把关。
 - **隧道零信任**：凡从隧道（console.flitfancy.com）进来的 API 请求一律按远程处理，
   不带有效管理员令牌就 401（唯一例外是登录接口本身）。静态页面匿名可加载，
-  但页面只是空壳，数据全靠被 401 挡住的 API。
+  但页面只是空壳，数据全靠被 401 挡住的 API。登录令牌有效期 12 小时并绑定
+  登录来源 IP，换一个来源重放会被拒绝。
 - **三把钥匙必须不同值**：任何一把泄漏不连累其余两把。尤其公网管理令牌与
   本地管理员密码不能同值——登录接口天天被人试。
 - 本机即信任源：进了本机 ≈ 拿到前两把钥匙，所以 backend 目录 ACL 只允许

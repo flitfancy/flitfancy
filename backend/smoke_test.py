@@ -192,6 +192,16 @@ def main():
             assert api_headers.get("X-Content-Type-Options") == "nosniff"
             assert api_headers.get("Referrer-Policy") == "strict-origin-when-cross-origin"
             print("STATUS:", status["msg"])
+            assert status["dialogue_enabled"] is True
+            if os.name == "nt":
+                with socket.socket() as duplicate:
+                    duplicate.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                    try:
+                        duplicate.bind(("127.0.0.1", port))
+                        raise AssertionError("第二个后端不得占用同一端口")
+                    except OSError:
+                        pass
+                print("BIND: Windows backend rejects duplicate listeners")
             ingested = request(base, "/api/ingest", "POST", {
                 "channel": "CH0", "sensor": "CH0 SHT41",
                 "ok": 1, "temp_c": 28.5, "rh_pct": 41.2,
@@ -372,6 +382,34 @@ def main():
             assert [row["uid"] for row in request(base, "/api/essays")["rows"]] == [first["uid"]]
             print("ESSAYS: draft, publish, order and archive paths ok")
 
+            # 选择为独立的公开快照：保存、排序和浏览都不会偷偷切换关于页。
+            assert request(base, "/api/essays/featured")["essay"] is None
+            request(base, "/api/essays/featured", "POST", {"uid": first["uid"]}, expected=401)
+            request(base, "/api/essays/featured", "POST", {"uid": "missing-essay-0001"},
+                    headers=admin_bearer, expected=404)
+            request(base, "/api/essays/featured", "POST", {"uid": archived["uid"]},
+                    headers=admin_bearer, expected=400)
+            selected = request(base, "/api/essays/featured", "POST", {"uid": first["uid"]},
+                               headers=admin_bearer)
+            assert selected["public_sync"] is False  # 冒烟测试没有公网凭据，必须明确报告失败。
+            assert selected["essay"]["uid"] == first["uid"]
+            request(base, "/api/essays", "POST", dict(first, content="修改留在卡牌库。"))
+            assert request(base, "/api/essays/featured")["essay"]["content"] == "顺序为十。"
+            request(base, "/api/essays", "POST", dict(first, status="archived"), expected=409)
+            request(base, "/api/essays", "POST", dict(first, status="draft"), expected=409)
+            request(base, "/api/essays/featured", "POST", {"uid": first["uid"]}, headers=admin_bearer)
+            assert request(base, "/api/essays/featured")["essay"]["content"] == "修改留在卡牌库。"
+            original = {"uid": "builtin-prologue-0001", "title": "序章测试卡", "content": "原稿测试。", "status": "public"}
+            request(base, "/api/essays", "POST", original)
+            request(base, "/api/essays", "POST", dict(original, content="原稿更新。"))
+            admin_cards = request(base, "/api/admin/essays", headers=admin_bearer)
+            assert len([r for r in admin_cards["rows"] if r["uid"] == original["uid"]]) == 1
+            assert admin_cards["featured_essay"]["uid"] == first["uid"]
+            request(base, "/api/essays/featured", "POST", {"uid": original["uid"]}, headers=admin_bearer)
+            request(base, "/api/essays", "POST", dict(first, status="archived"))
+            assert request(base, "/api/essays/featured")["essay"]["uid"] == original["uid"]
+            print("ESSAY-CARDS: explicit selection, snapshot, original card and archive guards ok")
+
             # 与 Worker 共用同一份契约：accept/reject 判定必须逐条一致。
             for index, case in enumerate(ESSAYS_CONTRACT["cases"]):
                 request(base, "/api/essays", "POST", dict(case["payload"]),
@@ -408,6 +446,18 @@ def main():
             public_observations = request(base, "/api/observations")
             assert len(public_observations["rows"]) == 2
             assert public_observations["links"][0]["uid"] == link["uid"]
+            assert public_observations["links"][0]["strength"] == "medium"
+            link_payload = {"uid": link["uid"], "source_uid": first_star["uid"],
+                            "target_uid": second_star["uid"], "relation": "类比"}
+            for strength in ("weak", "medium", "strong"):
+                saved_link = request(base, "/api/observation-links", "POST",
+                                     dict(link_payload, strength=strength), expected=200)["link"]
+                assert saved_link["strength"] == strength
+                assert request(base, "/api/observations")["links"][0]["strength"] == strength
+                assert request(base, "/api/admin/observation-links", headers=admin_bearer)["rows"][0]["strength"] == strength
+            saved_link = request(base, "/api/observation-links", "POST", link_payload, expected=200)["link"]
+            assert saved_link["strength"] == "strong", "旧客户端不传强度时保留原值"
+            request(base, "/api/observation-links", "POST", dict(link_payload, strength="bright"), expected=400)
             request(base, "/api/observations", "POST", {
                 "uid": first_star["uid"], "title": "脉冲星的钟", "category": "宇宙与自然",
                 "tags": ["时间"], "summary": "宇宙中的稳定节拍。", "content": "归档。",
@@ -502,6 +552,9 @@ def main():
 
             admin_headers = dict(tunnel_headers_a)
             admin_headers["Authorization"] = "Bearer " + relogin["token"]
+            stolen_headers = dict(tunnel_headers_b)
+            stolen_headers["Authorization"] = "Bearer " + relogin["token"]
+            request(base, "/api/status", headers=stolen_headers, expected=401)
             reflections_saved = request(base, "/api/admin/config", "POST", {
                 "reflections": REFLECTIONS_CONTRACT["input"],
             }, admin_headers)
@@ -530,6 +583,15 @@ def main():
             })
             assert local_port_host["services"]["backend"] is True
             print("GUARD: prefix-domain Host rejected; exact local Host ok")
+
+            # 私聊历史随音频状态返回，读写都必须保持远程管理员边界。
+            request(base, "/api/audio/status", headers={"Host": "console.flitfancy.com"}, expected=401)
+            request(base, "/api/dialogue/messages", "POST", {"text": "private", "request_id": "invalid"},
+                    {"Host": "console.flitfancy.com"}, expected=401)
+            request(base, "/api/dialogue/messages", "POST", {"text": "private", "request_id": "invalid"},
+                    {"Sec-Fetch-Site": "cross-site"}, expected=403)
+            request(base, "/api/dialogue/messages", "POST", {"text": "private", "request_id": "invalid"}, expected=400)
+            print("DIALOGUE: remote history/send require auth; cross-site send and invalid IDs rejected")
 
             # B2: 浏览器跨站 POST 一律 403；同源不受影响
             csrf_blocked = request(base, "/api/ingest", "POST", {
@@ -579,6 +641,9 @@ def main():
 
             with urllib.request.urlopen(base + "/console.html", timeout=10) as r:
                 html = r.read().decode("utf-8")
+                assert r.headers.get("X-Frame-Options") == "DENY"
+                assert "frame-ancestors 'none'" in (r.headers.get("Content-Security-Policy") or "")
+                assert "microphone=()" in (r.headers.get("Permissions-Policy") or "")
                 print("PAGE: HTTP %d len=%d" % (r.status, len(html)))
             with urllib.request.urlopen(base + "/robots.txt", timeout=10) as r:
                 assert r.headers.get("Content-Type") == "text/plain; charset=utf-8", (

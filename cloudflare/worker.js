@@ -7,7 +7,7 @@
  */
 
 import { handleChat } from "./worker-chat.js";
-import { handleConfig, handleToggle } from "./worker-config.js";
+import { handleConfig, handleFeaturedEssay, handleToggle } from "./worker-config.js";
 import {
   handleAnchorCreate,
   handleAnchors,
@@ -81,6 +81,9 @@ async function routeRequest(request, env, ctx, url) {
   }
   if (pathname === "/anchors" && request.method === "GET") {
     return handleAnchors(env);
+  }
+  if (pathname === "/essays/featured" && request.method === "GET") {
+    return handleFeaturedEssay(env);
   }
   if (pathname === "/essays" && request.method === "GET") {
     return handleEssays(env);
