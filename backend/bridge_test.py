@@ -94,7 +94,7 @@ def run():
                 assert wait(perf, perf.commit(tiny['id']))['state'] == 'succeeded'
             assert len(connections) == 1, ('tiny files reconnect to NAS', len(connections))
             assert not closes
-            perf.storage_used = 0
+            perf.storage_used = time.monotonic() - 61
             assert wait(perf, perf.test_connection())['state'] == 'succeeded'
             assert len(connections) == 2 and len(closes) == 1, 'idle connection must be renewed'
             perf.configure(perf_config['nas_bridge'])
