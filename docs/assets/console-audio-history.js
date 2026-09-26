@@ -143,7 +143,8 @@
       clearTimeout(timer);
       if (stopped || panel.hidden) return;
       if (!opts.isServerOnline()) {
-        note.textContent = '等待本机服务连接';
+        data = null; detail.hidden = true; message = '请登录后查看音频历史';
+        note.textContent = message; draw();
       } else {
         try {
           let url = '/api/audio/history?span=' + encodeURIComponent(range.value);
@@ -153,7 +154,7 @@
             url += '&end=' + Math.min(Date.now() / 1000, until.getTime() / 1000);
           }
           const result = await opts.request(url);
-          if (stopped || current !== revision) return;
+          if (stopped || current !== revision || !opts.isServerOnline()) return;
           if (!Array.isArray(result.rows)) throw new Error(result.error || '历史服务尚未就绪');
           data = result;
           note.textContent = result.error ? '历史写入异常：' + result.error : result.first_recorded
@@ -191,6 +192,11 @@
     function clearDetail() { detail.hidden = true; }
 
     return {
+      clearPrivate() {
+        revision++; clearTimeout(timer); data = null; detail.hidden = true;
+        message = '请登录后查看音频历史'; note.textContent = message; draw();
+        if (!stopped && !panel.hidden) timer = setTimeout(refresh, 15000);
+      },
       start() {
         front.addEventListener('click', showHistory);
         front.addEventListener('keydown', frontKey);

@@ -45,11 +45,12 @@
     let revision = null;
     let started = false;
     let sendError = "";
+    let privacyRevision = 0;
 
     function gate() {
       const history = state && state.conversation;
       const offline = !state || !state.available || !history || !history.connected || !state.dialogue || state.dialogue.protocol !== 2;
-      input.disabled = !enabled || sending || Boolean(pending) || offline;
+      input.disabled = !enabled || sending || Boolean(pending) || offline || Boolean(opts.isAdmin && !opts.isAdmin());
       sendButton.disabled = input.disabled;
     }
 
@@ -65,14 +66,17 @@
     }
 
     function updateState(value) {
+      if (opts.isAdmin && !opts.isAdmin()) value = null;
       state = value;
       const view = presentation(state);
       badge.textContent = view.label; badge.dataset.phase = view.phase;
       note.textContent = view.note;
       if (!state || !state.available) {
+        privacyRevision++; sending = false;
         if (reply) reply.textContent = "等待回复";
         log.replaceChildren(); revision = null;
-        status.textContent = "请连接本机服务；远程访问需先登录。";
+        pending = null; sendError = ''; input.value = '';
+        status.textContent = opts.isAdmin && !opts.isAdmin() ? "请先登录，再使用有求必应。" : "请连接本机服务。";
         gate(); return;
       }
       const history = state.conversation || {};
@@ -106,18 +110,21 @@
       if (!text || input.disabled || sending || pending) return;
       if (text.length > 2000) { status.textContent = "每条消息最多 2000 字"; return; }
       const key = global.crypto.randomUUID();
+      const current = privacyRevision;
       sending = true; sendError = ""; gate();
       status.textContent = "正在提交…";
       try {
         const result = await opts.sendRequest("/api/dialogue/messages", { text: text, request_id: key });
+        if (current !== privacyRevision) return;
         pending = { session: result.session, text: text, started: Date.now() };
         input.value = "";
         status.textContent = "已发送：" + text;
         badge.textContent = "正在思考";
       } catch (error) {
+        if (current !== privacyRevision) return;
         sendError = error.message || "提交失败，请检查本机服务。";
         status.textContent = sendError;
-      } finally { sending = false; gate(); }
+      } finally { if (current === privacyRevision) { sending = false; gate(); } }
     }
 
     function start() {

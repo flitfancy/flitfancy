@@ -1,4 +1,4 @@
-/* 控制台启动与刷新编排。具体 UI 职责分别位于 console-*.js 模块。 */
+/* 控制台与存在页共用启动编排；只初始化当前页面拥有的功能模块。 */
 (async function () {
   "use strict";
 
@@ -92,6 +92,7 @@
   }
 
   async function readPublicSensors() {
+    if (!sensors) return;
     try {
       const response = await fetch(PUBLIC_BASE + "/sensors/latest", { cache: "no-store" });
       if (!response.ok) throw new Error("HTTP " + response.status);
@@ -102,20 +103,27 @@
     }
   }
 
-  const services = createModule("服务状态", window.FlitFancyConsoleServices);
-  const sensors = createModule("环境数据", window.FlitFancyConsoleSensors, {
+  const services = query('[data-role="ffs-start"]') ? createModule("服务状态", window.FlitFancyConsoleServices) : null;
+  const sensors = query('[data-role="sensor-grid"]') ? createModule("环境数据", window.FlitFancyConsoleSensors, {
     query: query,
     request: request,
     publicBase: PUBLIC_BASE,
     overviewRefreshMs: CONFIG_REFRESH_MS,
-  }, [window.FlitFancySensorState, window.FlitFancyConsoleOverview]);
+  }, [window.FlitFancySensorState, window.FlitFancyConsoleOverview]) : null;
+  const authOnly = !query('[data-role="admin-panel"]');
   const admin = createModule("管理面板", window.FlitFancyConsoleAdmin, {
     query: query,
+    authOnly: authOnly,
     isServerOnline: function () { return serverOnline; },
     onAuthenticated: refresh,
-    onSignedOut: function () { call(launcher, "clearPrivate"); },
-  }, [window.FlitFancyPanelShell, window.FlitFancyVisits]);
-  const chat = createModule("对话", serverOnline ? window.FlitFancyConsoleDialogue : window.FlitFancyConsoleChat, {
+    onSignedOut: function () {
+      call(launcher, "clearPrivate");
+      call(bridge, "clearPrivate");
+      call(chat, "updateState", null);
+      call(audio, "clearPrivate");
+    },
+  }, authOnly ? [] : [window.FlitFancyPanelShell, window.FlitFancyVisits]);
+  const chat = query('[data-role="chat-log"]') ? createModule("对话", serverOnline ? window.FlitFancyConsoleDialogue : window.FlitFancyConsoleChat, {
     query: query,
     sendRequest: sendRequest,
     publicBase: PUBLIC_BASE,
@@ -124,36 +132,53 @@
     setStatus: function (text) {
       query('[data-role="chat-status"]').textContent = text || "";
     },
-  });
-  const audio = createModule("音频面板", window.FlitFancyConsoleAudio, {
+  }) : null;
+  const audio = query('[data-role="audio-panel"]') ? createModule("音频面板", window.FlitFancyConsoleAudio, {
     query: query,
     request: request,
     isServerOnline: function () { return serverOnline; },
+    isAdmin: function () { return !!call(admin, "token"); },
+    fetchRaw: function (url) { return window.FlitFancyAdmin.fetchRaw(url); },
+    onLoginRequired: function () { call(admin, "setLoginRequired", true); },
     onState: function (state) { call(chat, "updateState", state); },
-  });
+  }) : null;
 
-  const launcher = createModule("本机启动", window.FlitFancyConsoleLauncher, {
+  const launcher = query('[data-role="launcher-panel"]') ? createModule("本机启动", window.FlitFancyConsoleLauncher, {
     query: query, request: request,
     isServerOnline: function () { return serverOnline; },
     isAdmin: function () { return !!call(admin, "token"); },
-  });
+  }) : null;
+
+  const bridge = query('[data-role="bridge-panel"]') ? createModule("全界之桥", window.FlitFancyConsoleBridge, {
+    query: query, request: request,
+    isServerOnline: function () { return serverOnline; },
+    isAdmin: function () { return !!call(admin, "token"); },
+  }, [window.FlitFancyBridgeHash, window.FlitFancyBridgeFiles]) : null;
 
   async function refresh() {
+    if (!call(admin, "token")) {
+      call(chat, "updateState", null);
+      call(audio, "clearPrivate");
+    }
+    call(bridge, "refresh");
     call(launcher, "refresh");
     if (!serverOnline) {
+      setStatus(false, sensors ? "公开感知" : "公开访问");
       await readPublicSensors();
       return;
     }
     try {
       const status = await request("/api/status");
       setStatus(true);
-      call(admin, "setLoginRequired", false);
+      call(admin, "setLoginRequired", !call(admin, "token"));
       call(chat, "setEnabled", status.dialogue_enabled !== false);
       call(services, "setProtocolName", status.protocol_name);
       call(services, "update", status.services);
-      const latest = await request("/api/sensors/latest");
-      (latest.rows || []).forEach(function (row) { call(sensors, "notePressure", row); });
-      call(sensors, "render", latest.rows || []);
+      if (sensors) {
+        const latest = await request("/api/sensors/latest");
+        (latest.rows || []).forEach(function (row) { call(sensors, "notePressure", row); });
+        call(sensors, "render", latest.rows || []);
+      }
     } catch (e) {
       const needsLogin = window.FlitFancyAdmin.isUnauthorized(e);
       setStatus(false, needsLogin ? "需要登录" : "");
@@ -169,6 +194,7 @@
   call(chat, "start");
   call(audio, "start");
   call(launcher, "start");
+  call(bridge, "start");
   refresh();
   call(chat, "refreshPublicConfig");
   setInterval(refresh, SENSOR_REFRESH_MS);

@@ -18,9 +18,6 @@ const consoleServicesSource = fs.readFileSync(
 const consoleAdminSource = fs.readFileSync(
   new URL("../docs/assets/console-admin.js", import.meta.url), "utf8"
 );
-const consoleHtmlSource = fs.readFileSync(
-  new URL("../docs/console.html", import.meta.url), "utf8"
-);
 const adminCoreSource = fs.readFileSync(
   new URL("../docs/assets/admin-core.js", import.meta.url), "utf8"
 );
@@ -43,29 +40,25 @@ assert.match(consoleServicesSource, /let\s+protocolName\s*=\s*""/,
 assert.match(protocolHandlerSource,
   /\^\[A-Za-z0-9_-\]\+:\/\/start\/\(backend\|listener\|audio\|tunnel\|all\)\$/,
   "音频启动动作必须留在协议处理器的完整正则白名单内");
-assert.match(consoleHtmlSource, /data-action="audio"/,
-  "控制台必须提供经过随机协议处理器的音频服务入口");
+assert.match(fs.readFileSync(new URL("../docs/presence.html", import.meta.url), "utf8"), /data-action="audio"/,
+  "存在页必须提供经过随机协议处理器的音频服务入口");
 assert.match(consoleAdminSource, /noopener,noreferrer/,
   "外部快捷入口必须隔离 window.opener 与来源信息");
 assert.match(adminCoreSource, /response\.status\s*===\s*401\s*&&\s*token/,
   "管理请求遇到 401 必须清除会话令牌");
 
-let previousScriptIndex = -1;
-[
-  "console-visits.js",
-  "console-overview.js",
-  "console-sensors.js",
-  "console-chat.js",
-  "console-admin.js",
-  "console-services.js",
-  "console-audio.js",
-  "console.js",
-].forEach(function (name) {
-  const index = consoleHtmlSource.indexOf(name);
-  assert.ok(index > previousScriptIndex,
-    name + " 必须存在并按依赖顺序加载在 console.js 之前");
-  previousScriptIndex = index;
-});
+for (const [page, scripts] of Object.entries({
+  "console.html": ["admin-core.js", "admin-panel-shell.js", "console-visits.js", "console-admin.js", "console-services.js", "console-launcher.js", "console.js"],
+  "presence.html": ["sensor-state.js", "admin-core.js", "console-overview.js", "console-sensors.js", "console-chat.js", "console-dialogue.js", "console-admin.js", "console-services.js", "console-audio-history.js", "console-audio.js", "console.js"],
+})) {
+  const html = fs.readFileSync(new URL("../docs/" + page, import.meta.url), "utf8");
+  let previousScriptIndex = -1;
+  for (const name of scripts) {
+    const index = html.indexOf(name);
+    assert.ok(index > previousScriptIndex, page + ": " + name + " 必须按依赖顺序加载");
+    previousScriptIndex = index;
+  }
+}
 
 const adminRequests = [
   new Request("https://api.flitfancy.com/visits"),

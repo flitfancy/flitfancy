@@ -12,6 +12,9 @@ const httpSource = fs.readFileSync(
   new URL("../backend/flitfancy_http.py", import.meta.url), "utf8"
 );
 const window = {};
+const revokedUrls = [];
+let nextUrl = 0;
+window.URL = { createObjectURL: () => 'blob:fixture-' + (++nextUrl), revokeObjectURL: url => revokedUrls.push(url) };
 vm.runInNewContext(source, { window, document: { hidden: false, createElement: () => ({ style: {} }) }, performance,
   setTimeout, clearTimeout });
 
@@ -106,6 +109,7 @@ const view = audio.create({
   query: selector => node(selector.match(/data-role="([^"]+)/)[1]),
   request: async () => idle,
   isServerOnline: () => true,
+  isAdmin: () => true,
   upload: async () => { throw new Error('音频上传超时'); },
 });
 view.render(idle);
@@ -137,6 +141,7 @@ const dragView = audio.create({
   query: selector => node(selector.match(/data-role="([^"]+)/)[1]),
   request: async () => idle,
   isServerOnline: () => dragOnline,
+  isAdmin: () => true,
   upload: async file => { uploaded.push(file.name); },
 });
 dragView.start();
@@ -167,5 +172,38 @@ assert.equal(node('audio-ota-version').textContent, '当前 v0.4.1');
 assert.equal(node('audio-device-reboot').disabled, false);
 assert.equal(node('audio-ota-select').disabled, false);
 dragView.dispose();
+
+// Private recordings use the authenticated transport, never a bare API src.
+let signedIn = true, finishBlob, statusReads = 0;
+const recordingRequests = [];
+const privateView = audio.create({
+  query: selector => node(selector.match(/data-role="([^"]+)/)[1]),
+  isServerOnline: () => true, isAdmin: () => signedIn,
+  request: async () => { statusReads++; return idle; },
+  fetchRaw: async url => { recordingRequests.push(url); return { ok: true, blob: () => new Promise(resolve => { finishBlob = resolve; }) }; },
+});
+privateView.render({ ...idle, wav: 'private.wav', texts: [{text: 'private transcript'}] });
+await new Promise(resolve => setImmediate(resolve));
+assert.equal(recordingRequests[0], '/api/audio/recording?name=private.wav');
+finishBlob(new Blob(['fixture audio']));
+await new Promise(resolve => setImmediate(resolve));
+assert.match(node('audio-recording').src, /^blob:/);
+const firstUrl = node('audio-recording').src;
+signedIn = false; privateView.clearPrivate();
+assert.equal(node('audio-transcript').textContent, '');
+assert.equal(node('audio-recording').hidden, true);
+assert.ok(revokedUrls.includes(firstUrl));
+await privateView.refresh();
+assert.equal(statusReads, 0, 'anonymous page must not poll private audio');
+signedIn = true;
+privateView.render({ ...idle, wav: 'late.wav' });
+await new Promise(resolve => setImmediate(resolve));
+signedIn = false; privateView.clearPrivate();
+const urlsBefore = nextUrl;
+finishBlob(new Blob(['late response']));
+await new Promise(resolve => setImmediate(resolve));
+assert.equal(nextUrl, urlsBefore, 'logout must discard a pending recording response');
+assert.equal(node('audio-recording').hidden, true);
+privateView.dispose();
 
 console.log("console audio module and local-boundary test ok");

@@ -113,8 +113,9 @@
     const query = opts.query || function (selector) { return document.querySelector(selector); };
     const request = opts.request;
     const isServerOnline = opts.isServerOnline || function () { return false; };
+    const isAdmin = opts.isAdmin || function () { return false; };
     const history = global.FlitFancyAudioHistory ? global.FlitFancyAudioHistory.create({
-      query: query, request: request, isServerOnline: isServerOnline,
+      query: query, request: request, isServerOnline: function () { return isServerOnline() && isAdmin(); },
     }) : null;
     const elements = {
       panel: query('[data-role="audio-panel"]'),
@@ -170,6 +171,8 @@
       error: query('[data-role="audio-error"]'),
     };
     let timer = null;
+    let privacyRevision = 0, recordingRevision = 0, recordingUrl = null;
+    const mediaUrls = new Set();
     let firmwareFile = null;
     let firmwareUploading = false;
     let firmwareError = "";
@@ -268,6 +271,7 @@
     }
 
     function render(state) {
+      if (!isAdmin()) { clearPrivate(); return; }
       lastState = state;
       if (opts.onState) opts.onState(state);
       if (!state || !state.available) {
@@ -356,11 +360,10 @@
 
       if (state.wav && state.wav !== lastRecording) {
         lastRecording = state.wav;
-        elements.recording.src = "/api/audio/recording?name=" + encodeURIComponent(state.wav);
-        elements.recording.hidden = false;
+        loadRecording(state.wav);
       }
       elements.rawRecording.hidden = !state.wav_raw;
-      if (state.wav_raw) elements.rawRecording.href = "/api/audio/recording?name=" + encodeURIComponent(state.wav_raw);
+      if (state.wav_raw) elements.rawRecording.href = '#';
 
       const receiving = state.upload_active || (failed && state.play_error && !state.metadata);
       const progress = uploading ? uploadPercent : receiving
@@ -413,27 +416,32 @@
     }
 
     async function uploadFirmware() {
+      if (!isAdmin()) { clearPrivate(); return; }
       if (!firmwareFile || firmwareUploading || elements.otaStart.disabled) return;
+      const epoch = privacyRevision;
       firmwareUploading = true; firmwareError = "";
       if (lastState) renderFirmware(lastState);
       try {
         await defaultUpload(firmwareFile, function () {}, "/api/audio/firmware");
+        if (epoch !== privacyRevision) return;
         firmwareFile = null; elements.otaFile.value = "";
         elements.otaName.textContent = "固件已提交，正在等待板子验证";
-      } catch (error) { firmwareError = error.message; }
-      finally { firmwareUploading = false; await refresh(); }
+      } catch (error) { if (epoch === privacyRevision) firmwareError = error.message; }
+      finally { if (epoch === privacyRevision) { firmwareUploading = false; await refresh(); } }
     }
 
     async function control(action, value) {
+      if (!isAdmin()) { clearPrivate(); return; }
+      const epoch = privacyRevision;
       setError("");
       try {
         await request("/api/audio/control", {
           method: "POST",
           body: JSON.stringify({ action: action, value: value }),
         });
-        await refresh();
+        if (epoch === privacyRevision) await refresh();
       } catch (error) {
-        setError(error.message);
+        if (epoch === privacyRevision) setError(error.message);
       }
     }
 
@@ -466,6 +474,7 @@
     }
 
     async function playFile(file) {
+      if (!isAdmin()) { clearPrivate(); return; }
       if (!file || uploading) return;
       const extension = String(file.name || "").split(".").pop().toLowerCase();
       if (ALLOWED_EXTENSIONS.indexOf(extension) === -1) {
@@ -477,6 +486,7 @@
         return;
       }
       uploading = true;
+      const epoch = privacyRevision;
       uploadError = "";
       uploadName = file.name;
       setError("");
@@ -495,6 +505,7 @@
       try {
         const uploader = opts.upload || defaultUpload;
         await uploader(file, function (percent) {
+          if (epoch !== privacyRevision || !isAdmin()) return;
           uploadPercent = Math.max(0, Math.min(100, percent));
           elements.playPercent.textContent = uploadPercent.toFixed(1) + "%";
           elements.progress.style.width = uploadPercent + "%";
@@ -502,23 +513,85 @@
             ? "上传完成，等待本机接收" : "正在上传文件";
         });
       } catch (error) {
+        if (epoch !== privacyRevision) return;
         uploadError = error.message;
         setError(error.message);
         elements.playStatus.textContent = "播放未开始";
       } finally {
-        uploading = false;
-        elements.file.value = "";
-        await refresh();
+        if (epoch === privacyRevision) {
+          uploading = false;
+          elements.file.value = "";
+          await refresh();
+        }
       }
     }
 
     async function refresh() {
       if (stopped || !isServerOnline()) return;
+      if (!isAdmin()) { clearPrivate(); return; }
+      const current = privacyRevision;
       try {
-        render(await request("/api/audio/status"));
+        const state = await request("/api/audio/status");
+        if (current !== privacyRevision || !isAdmin()) return;
+        render(state);
       } catch (error) {
+        if (current !== privacyRevision) return;
+        if (error.status === 401) { clearPrivate(); if (opts.onLoginRequired) opts.onLoginRequired(); return; }
         renderUnavailable("本机音频服务未连接");
       }
+    }
+
+    function revokeMedia(url) {
+      if (!url || !mediaUrls.delete(url)) return;
+      global.URL.revokeObjectURL(url);
+    }
+
+    async function recordingBlob(name) {
+      const current = privacyRevision;
+      if (!isAdmin() || !opts.fetchRaw) return null;
+      const response = await opts.fetchRaw('/api/audio/recording?name=' + encodeURIComponent(name));
+      if (!response.ok) { const error = new Error('录音读取失败，请检查登录和音频服务'); error.status = response.status; throw error; }
+      const blob = await response.blob();
+      if (stopped || current !== privacyRevision || !isAdmin()) return null;
+      const url = global.URL.createObjectURL(blob);
+      mediaUrls.add(url);
+      return url;
+    }
+
+    async function loadRecording(name) {
+      const current = ++recordingRevision;
+      const epoch = privacyRevision;
+      try {
+        const url = await recordingBlob(name);
+        if (!url) return;
+        if (current !== recordingRevision || !isAdmin()) { revokeMedia(url); return; }
+        revokeMedia(recordingUrl); recordingUrl = url;
+        elements.recording.src = url;
+        elements.recording.hidden = false;
+      } catch (error) {
+        if (epoch !== privacyRevision || current !== recordingRevision) return;
+        lastRecording = '';
+        setError(error.message);
+        if (error.status === 401) { clearPrivate(); if (opts.onLoginRequired) opts.onLoginRequired(); }
+      }
+    }
+
+    function clearPrivate() {
+      privacyRevision++; recordingRevision++; lastState = null; lastRecording = '';
+      firmwareFile = null; uploadName = ''; uploadError = ''; firmwareError = '';
+      uploading = false; firmwareUploading = false;
+      clearTimeout(volumeTimer);
+      if (history && history.clearPrivate) history.clearPrivate();
+      if (elements.recording.pause) elements.recording.pause();
+      elements.recording.removeAttribute('src'); elements.recording.hidden = true;
+      if (elements.recording.load) elements.recording.load();
+      elements.rawRecording.removeAttribute('href'); elements.rawRecording.hidden = true;
+      mediaUrls.forEach(revokeMedia); recordingUrl = null;
+      for (const name of ['transcript', 'lyrics', 'playName', 'playFormat', 'playTransport', 'otaName', 'error']) elements[name].textContent = '';
+      elements.file.value = ''; elements.otaFile.value = '';
+      renderUnavailable('请先登录后使用音频和对话');
+      elements.modelStatus.textContent = '请先登录';
+      elements.wifiStatus.textContent = '登录后连接音频服务';
     }
 
     function schedule() {
@@ -538,6 +611,18 @@
     }
 
     function bind() {
+      elements.rawRecording.addEventListener('click', async function (event) {
+        event.preventDefault();
+        if (!isAdmin() || !lastState || !lastState.wav_raw) return;
+        const name = lastState.wav_raw, epoch = privacyRevision;
+        try {
+          const url = await recordingBlob(name);
+          if (!url) return;
+          if (epoch !== privacyRevision || !isAdmin()) { revokeMedia(url); return; }
+          const link = document.createElement('a'); link.href = url; link.download = name; link.click();
+          setTimeout(function () { revokeMedia(url); }, 30000);
+        } catch (error) { if (epoch === privacyRevision) setError(error.message); }
+      });
       elements.mic.addEventListener("input", updateInputLabels);
       elements.gain.addEventListener("input", updateInputLabels);
       elements.mic.addEventListener("change", function () { control("mic", MIC_STEPS[Number(elements.mic.value)]); });
@@ -638,13 +723,14 @@
 
     function dispose() {
       stopped = true;
+      clearPrivate();
       if (history) history.dispose();
       clearTimeout(timer);
       clearTimeout(volumeTimer);
       showSpectrum(null);
     }
 
-    return { start: start, refresh: refresh, render: render, playFile: playFile, dispose: dispose };
+    return { start: start, refresh: refresh, render: render, playFile: playFile, clearPrivate: clearPrivate, dispose: dispose };
   }
 
   global.FlitFancyConsoleAudio = {

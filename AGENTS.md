@@ -16,7 +16,7 @@ flitfancy.com：云萤的个人网站（GitHub Pages，发布目录为 `docs/`�
 ```text
 site/
 ├── docs/            ← 公开网站（Pages 发布根；改这里 = 改网站）
-│   ├── index/journal/console/about/resources/observations/remote.html
+│   ├── index/journal/presence/console/about/resources/observations/remote.html
 │   ├── assets/      全部 css/js（style.css 是主样式表）
 │   └── resources/   可公开下载的附件（固件/资料包，带版本号与 SHA-256）
 ├── backend/         Python 本地服务：server.py 入口 + flitfancy_*.py 领域模块
@@ -81,7 +81,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\release.ps1 `
 
 ### 新页面 / 导航调整
 
-必须同步：五页导航骨架一致（`tests/html-skeleton.test.mjs` 守卫）、
+必须同步：主页面导航骨架一致（`tests/html-skeleton.test.mjs` 守卫）、
 资源引用带当前 `?v=`、移动端断点遵循既有约定（桌面优先 + max-width）。
 
 ## 验证命令速查（在 `cloudflare/` 目录下）

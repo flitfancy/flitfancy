@@ -12,9 +12,9 @@
 
        powershell -ExecutionPolicy Bypass -File scripts\install_flitfancy_protocol.ps1
 
-2. 之后在已安装协议的电脑上打开控制台页，点状态行右侧的四个按钮（首次浏览器会弹
+2. 之后在已安装协议的电脑上打开控制台页，点状态行右侧的“后端”“隧道”按钮；“音频”“感知”按钮位于存在页（首次浏览器会弹
    确认框，选允许），分别拉起对应服务：
-   - "后端"：server.py（端口 2671）
+   - "后端"：server.py（端口 2671）。没有进程时启动；已有进程时保持运行，窗口默认 15 秒后关闭。按 ↓ 选中“重启后端”并暂停倒计时，回车执行；↑ 返回关闭，Esc 退出。选择重启后如需管理员权限，由 Windows 显示授权提示。重启前先暂停上传。
    - "感知板"：watch_sensor_listener.ps1（端口 7777）
    - "音频"：FFV-transfer（端口 7865；本机解码、双麦与 SenseVoice，按需常驻）
    - "隧道"：cloudflared（console.flitfancy.com）及隐藏的自恢复守护
@@ -84,9 +84,26 @@ protocol_name 字段注入控制台，按钮自动使用当前协议名（重装
 但不替代权限验证；浏览器也可能记住用户曾经允许打开协议的选择。
 自定义协议只操作当前浏览器所在电脑。远程恢复隧道依赖服务器电脑上的守护进程。
 
+## 后端接口权限
+
+存在页和控制台保留“再次点击当前页导航”的隐藏管理入口。公网触发时跳转到固定管理域名的同名页面并携带 `#login`；目标页消费并移除这一标记，无会话时直接弹出登录框，有会话时先验证再显示管理界面。普通页面导航不会携带此标记；取消登录后刷新也不会反复弹窗。标记只表达界面意图，不含凭证，也不改变接口权限。旅途、关于的 `#write` 与资源的 `#manage` 入口沿用各自已有流程。
+
+本机 Python 后端的 API 请求先经过 `backend/flitfancy_http.py` 中的 `_api_guard`，默认要求管理员会话。新增管理接口只需注册业务路由，无需在处理函数里重复调用鉴权；公开例外必须在 `LOCAL_ANONYMOUS_ROUTES` 中按请求方法和完整路径明确登记，不能按整个目录前缀放行。
+
+| 入口 | 匿名访问规则 |
+| --- | --- |
+| `POST /api/admin/login` | 本机和远程可提交登录 |
+| `GET /api/status`、`/api/resources`、`/api/sensors/latest`、`/api/sensors/history`、`/api/memories`、`/api/anchors`、`/api/essays`、`/api/essays/featured`、`/api/observations`、`/api/reflections` | 仅可信本机来源免登录；远程控制台仍需登录 |
+| `POST /api/ingest` | 本机设备监听器免登录上报，保留跨站请求拦截；远程需登录 |
+| 其他 API，包括笔记、音频历史/录音/对话、内容保存、桥、应用启动和配置 | 本机及远程均须登录；新路径默认属于此类 |
+
+本机同时要求 loopback 来源 IP 和精确本地 Host。页面是否显示按钮不决定接口权限；业务层仍负责参数、文件路径、同名保护等校验。`GET /api/admin/session` 用于验证现有会话，公开的 `/api/status` 成功不代表已经登录。Windows 本机服务协议入口独立运行，仍可在后端未启动时拉起服务。公网 Worker 的公开 API 与管理令牌规则不受此次调整影响。
+
+权限回归：`py -3.14 backend/auth_policy_test.py`。真实 HTTP 与数据库流程由隔离的 `backend/smoke_test.py` 验证，两者均纳入后端全量检查。
+
 ## FIREFLY VOICE 音频接入
 
-控制台“侧耳倾听”在“现实感知”下方提供双麦选择、增益、录音、本地 SenseVoice
+存在页“侧耳倾听”在“现实感知”下方提供双麦选择、增益、录音、本地 SenseVoice
 识别、音量、拖放播放、同名 LRC 歌词、暂停/继续和板子重启。页面只请求同源的
 `/api/audio/*`，由 `backend/flitfancy_audio.py` 转发给默认运行在
 `http://127.0.0.1:7865` 的 FFV-transfer 服务；音频文件、录音和识别结果不会发送给
@@ -107,7 +124,7 @@ FFV-transfer 常驻持有板子会话：通过 `firefly-voice.local:7866` 完成
 当前还提供双麦电平历史、播放进度与固件升级入口。相关硬件、FFV-transfer 与
 AstrBot 需要独立安装和配置；本仓库提供网站面板及代理，不能仅靠启动 server.py 获得完整音频能力。
 
-本机控制台的私有对话经 FFV-transfer 接入 AstrBot；公网访客对话由 Worker 单独处理。
+本机存在页的私有对话经 FFV-transfer 接入 AstrBot；公网访客对话由 Worker 单独处理。
 参见 [私有对话接入说明](PRIVATE-DIALOGUE.md)。
 
 ## 感知数据保存边界
@@ -158,7 +175,7 @@ cmd /c "pnpm run deploy"
 公开读取包括 `/memories`、`/anchors`、`/essays`、`/essays/featured`、`/observations`、`/sensors/latest` 和 `/config`。管理写入使用 `/admin/*` 接口及管理令牌。
 关于页展示快照经 `/admin/toggle` 同步；星球和弦分别经 `/admin/observations`、`/admin/observation-links` 同步。
 
-访客对话走 `/chat`，服务地址与模型可通过 `AI_BASE_URL`、`AI_MODEL`、`AI_SYSTEM` 配置。网站保留兼容接口 `/api/chat`；本机控制台实际使用的私有对话路径见 [私有对话说明](PRIVATE-DIALOGUE.md)。
+访客对话走 `/chat`，服务地址与模型可通过 `AI_BASE_URL`、`AI_MODEL`、`AI_SYSTEM` 配置。网站保留兼容接口 `/api/chat`；本机存在页实际使用的私有对话路径见 [私有对话说明](PRIVATE-DIALOGUE.md)。
 
 ## 本机与云端权限
 
@@ -176,10 +193,12 @@ cmd /c "pnpm run deploy"
 
 静态页面加载新代码，和正在运行的 Python 服务加载新代码，是两个独立步骤。更新后端文件后需要重启后端；桌面助手有改动时也需重新启动对应进程。
 
-如需仅重启网站后端，可在管理员 PowerShell 中运行：
+仅重启网站后端，优先点控制台“后端”按钮，在窗口中按 ↓、回车。窗口调用本机 `scripts/backend_window.ps1`，重启执行仍由 `scripts/reload_backend.ps1` 核验进程身份；协议 URL 不接受直接重启动作。脚本更新后按钮下次打开即生效，无需重新注册协议或先重启后端。
+
+也可在管理员 PowerShell 中运行：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/restart_backend.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/reload_backend.ps1
 ```
 
 脚本先核验端口和进程身份，再交由已有守护恢复后端。它不重启音频服务。后端重启会清除内存中的登录会话，网页需要重新登录。

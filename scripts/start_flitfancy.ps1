@@ -22,6 +22,13 @@ if (-not $match.Success) {
 }
 $action = $match.Groups[1].Value
 
+# The existing backend button opens a local keyboard menu. Merely opening the
+# window must never interrupt a running upload or request elevated privileges.
+if ($action -eq 'backend') {
+    . (Join-Path $scriptDir 'backend_window.ps1')
+    exit (Invoke-BackendWindow)
+}
+
 Push-Location $scriptDir
 try {
     & cmd.exe /c call start_flitfancy.bat $action

@@ -3,19 +3,25 @@ import fs from "node:fs";
 import vm from "node:vm";
 
 const source = fs.readFileSync(new URL("../docs/assets/console.js", import.meta.url), "utf8");
-async function run(status, fault = "") {
-  const notices = [], timers = [];
-  let audioStarts = 0, sensorRenders = 0, retries = 0;
+async function run(status, fault = "", page = "presence", publicHost = false, signedIn = true) {
+  const notices = [], timers = [], requests = [];
+  let audioStarts = 0, sensorRenders = 0, retries = 0, launcherStarts = 0, chatStarts = 0, publicReads = 0;
+  let adminOptions, audioOptions;
+  const chatStates = [];
+  const html = fs.readFileSync(new URL("../docs/" + page + ".html", import.meta.url), "utf8");
   const statusElement = { textContent: "" };
   const noop = function () {};
-  const chat = { start: noop, setEnabled: noop, refreshPublicConfig: noop };
+  const chat = { start: () => { chatStarts++; }, setEnabled: noop, refreshPublicConfig: noop,
+    updateState: value => chatStates.push(value) };
   const window = {
-    FlitFancySensorState: {}, FlitFancyConsoleOverview: {},
+    FlitFancySensorState: {}, FlitFancyConsoleOverview: {}, FlitFancyBridgeHash: {}, FlitFancyBridgeFiles: {},
+    FlitFancyConsoleBridge: { create: () => ({ start: noop, refresh: noop, clearPrivate: noop }) },
     FlitFancyPanelShell: {}, FlitFancyVisits: {},
     FlitFancyAdmin: {
-      isAdminHost: () => true, installErrorHandler: noop,
+      isAdminHost: () => !publicHost, installErrorHandler: noop,
       isUnauthorized: error => error.status === 401,
       request: async (url) => {
+        requests.push(url);
         if (url === "/api/status" && status !== 200) {
           const error = new Error("request failed"); error.status = status; throw error;
         }
@@ -24,17 +30,25 @@ async function run(status, fault = "") {
     },
     FlitFancyConsoleServices: { create: () => ({ update: noop, setProtocolName: noop }) },
     FlitFancyConsoleSensors: { create: () => ({ render: () => { sensorRenders++; }, notePressure: noop }) },
-    FlitFancyConsoleAdmin: { create: () => ({
-      start: noop, token: () => "", setLoginRequired: value => notices.push(value),
-    }) },
+    FlitFancyConsoleAdmin: { create: options => {
+      adminOptions = options;
+      return { start: noop, token: () => signedIn ? 'fixture-session' : '', setLoginRequired: value => notices.push(value) };
+    } },
     FlitFancyConsoleDialogue: { create: () => chat },
-    FlitFancyConsoleAudio: { create: () => ({ start: () => { audioStarts++; } }) },
-    FlitFancyConsoleLauncher: { create: () => ({ start: noop, refresh: noop, clearPrivate: noop }) },
+    FlitFancyConsoleChat: { create: () => chat },
+    FlitFancyConsoleAudio: { create: options => {
+      audioOptions = options;
+      return { start: () => { audioStarts++; }, render: value => options.onState(value) };
+    } },
+    FlitFancyConsoleLauncher: { create: () => ({ start: () => { launcherStarts++; }, refresh: noop, clearPrivate: noop }) },
   };
   if (fault === "missing-dialogue") delete window.FlitFancyConsoleDialogue;
   if (fault === "broken-dialogue") window.FlitFancyConsoleDialogue.create = () => { throw new Error("broken module"); };
   if (fault === "broken-services") window.FlitFancyConsoleServices.create = () => ({ update() { throw new Error("render failed"); } });
   if (fault === "missing-core") delete window.FlitFancyAdmin;
+  // Only exports actually loaded by this page are present in the browser.
+  const exports = new Set(Array.from(html.matchAll(/data-console-module="([^"]+)"/g), match => match[1]));
+  for (const name of Object.keys(window)) if (!exports.has(name)) delete window[name];
   const scripts = [];
   if (fault === "transient-script" || fault === "persistent-script") {
     delete window.FlitFancyConsoleDialogue;
@@ -57,21 +71,27 @@ async function run(status, fault = "") {
           } else script.onerror();
         });
       } },
-      querySelector: selector => selector.includes("module-error-text") ? failureElement :
-        selector.includes('"status"') ? statusElement : { classList: { toggle: noop }, addEventListener: noop },
+      querySelector: selector => {
+        const role = selector.match(/data-role="([^"]+)"/);
+        if (role && !html.includes('data-role="' + role[1] + '"')) return null;
+        return selector.includes("module-error-text") ? failureElement :
+          selector.includes('"status"') ? statusElement : { classList: { toggle: noop }, addEventListener: noop };
+      },
     },
-    fetch: async () => ({ ok: true, json: async () => ({ rows: [] }) }),
+    fetch: async () => { publicReads++; return { ok: true, json: async () => ({ rows: [] }) }; },
     setInterval: callback => timers.push(callback),
   });
   await new Promise(resolve => setImmediate(resolve));
-  return { notices, statusElement, audioStarts, sensorRenders, failureElement, retries };
+  return { notices, statusElement, audioStarts, sensorRenders, failureElement, retries,
+    launcherStarts, chatStarts, requests, publicReads, adminOptions, audioOptions, chatStates };
 }
 const unauthorized = await run(401);
 assert.deepEqual(unauthorized.notices, [true], "401 must close the management panel while preserving the hidden login entry");
 assert.match(unauthorized.statusElement.textContent, /登录/);
 assert.deepEqual((await run(200)).notices, [false], "successful refresh must clear login-required state");
+assert.deepEqual((await run(200, '', 'presence', false, false)).notices, [true], 'public status success must not imply administrator login');
 assert.deepEqual((await run(503)).notices, [], "server failure must not be misidentified as a login failure");
-for (const fault of ["missing-dialogue", "broken-dialogue", "broken-services"]) {
+for (const fault of ["missing-dialogue", "broken-dialogue"]) {
   const result = await run(200, fault);
   assert.equal(result.audioStarts, 1, fault + " must not prevent audio initialization");
   assert.ok(result.sensorRenders >= 2, fault + " must not prevent sensor refresh");
@@ -90,4 +110,37 @@ assert.equal(persistent.retries, 2, "persistent errors must have a bounded retry
 assert.equal(persistent.audioStarts, 1);
 assert.ok(persistent.sensorRenders >= 2);
 assert.match(persistent.failureElement.textContent, /对话/);
+const presence = await run(200);
+assert.equal(presence.adminOptions.authOnly, true, "presence reuses login without management dependencies");
+assert.equal(presence.launcherStarts, 0);
+assert.equal(presence.chatStarts, 1);
+const audioState = { available: true, conversation: { messages: [] } };
+presence.audioOptions.onState(audioState);
+assert.equal(presence.chatStates.at(-1), audioState, "audio must still feed dialogue on presence");
+presence.adminOptions.onSignedOut();
+assert.equal(presence.chatStates.at(-1), null, "logout clears private dialogue state");
+for (const status of [200, 401, 503]) {
+  const consolePage = await run(status, "", "console");
+  assert.equal(consolePage.audioStarts, 0);
+  assert.equal(consolePage.sensorRenders, 0);
+  assert.equal(consolePage.chatStarts, 0);
+  assert.equal(consolePage.launcherStarts, 1);
+  assert.equal(consolePage.publicReads, 0, "console must not fetch public sensor data after migration");
+  assert.deepEqual(consolePage.requests, ["/api/status"]);
+  assert.equal(consolePage.failureElement.textContent, "", "absent modules are not failures");
+  assert.equal(consolePage.adminOptions.authOnly, false);
+}
+const servicesFailure = await run(200, "broken-services", "console");
+assert.equal(servicesFailure.launcherStarts, 1, "service rendering failure must not prevent launcher startup");
+assert.deepEqual(servicesFailure.notices, [false]);
+assert.match(servicesFailure.failureElement.textContent, /服务状态/);
+const publicPresence = await run(200, "", "presence", true);
+assert.equal(publicPresence.publicReads, 1);
+assert.equal(publicPresence.chatStarts, 1);
+assert.deepEqual(publicPresence.requests, [], "public presence must not use private status APIs");
+assert.equal(publicPresence.failureElement.textContent, "");
+const publicConsole = await run(200, "", "console", true);
+assert.equal(publicConsole.publicReads, 0);
+assert.equal(publicConsole.chatStarts, 0);
+assert.deepEqual(publicConsole.requests, []);
 console.log("console session recovery tests passed");

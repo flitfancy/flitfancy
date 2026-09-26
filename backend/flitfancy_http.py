@@ -14,11 +14,25 @@ from dataclasses import dataclass
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler
 from flitfancy_launcher import LauncherError
+from flitfancy_bridge import BridgeError
+
+# Every API requires an administrator unless its exact method/path is listed
+# here. These exceptions apply only to verified loopback clients and Hosts;
+# remote console requests retain their existing administrator boundary.
+LOCAL_ANONYMOUS_ROUTES = frozenset({
+    ('GET', '/api/status'), ('GET', '/api/resources'),
+    ('GET', '/api/sensors/latest'), ('GET', '/api/sensors/history'),
+    ('GET', '/api/memories'), ('GET', '/api/anchors'),
+    ('GET', '/api/essays'), ('GET', '/api/essays/featured'),
+    ('GET', '/api/observations'), ('GET', '/api/reflections'),
+    ('POST', '/api/ingest'),
+})
 
 @dataclass(frozen=True)
 class HttpDependencies:
     audio_service: object
     launcher_service: object
+    bridge_service: object
     ai_opener: object
     cst: object
     memories_select: str
@@ -58,6 +72,7 @@ def create_handler(app):
     """创建只可访问已声明领域能力的请求处理器。"""
     audio_service = app.audio_service
     launcher_service = app.launcher_service
+    bridge_service = app.bridge_service
     AI_OPENER = app.ai_opener
     CST = app.cst
     MEMORIES_SELECT = app.memories_select
@@ -96,6 +111,9 @@ def create_handler(app):
         server_version = "flitfancy/1.0"
 
         def log_message(self, fmt, *args):
+            if urllib.parse.urlparse(self.path).path.startswith("/api/bridge/"):
+                # Private filenames and task query strings must not enter logs.
+                fmt, args = "bridge %s", (urllib.parse.urlparse(self.path).path,)
             print("[%s] %s" % (now_iso(), fmt % args))
 
         def _send(self, code, body, content_type="application/json; charset=utf-8"):
@@ -147,7 +165,7 @@ def create_handler(app):
             parsed = urllib.parse.urlparse(self.path)
             path = parsed.path
             if path.startswith("/api/"):
-                if not self._remote_guard(path):
+                if not self._api_guard('GET', path):
                     return
                 self._api_get(path, parsed.query)
                 return
@@ -180,9 +198,11 @@ def create_handler(app):
                 if origin not in allowed_origins:
                     self._send(403, {"ok": False, "error": "跨站请求被拒绝"})
                     return
-            if not self._remote_guard(parsed.path):
+            if not self._api_guard('POST', parsed.path):
                 return
-            if parsed.path.startswith("/api/launcher/"):
+            if parsed.path.startswith("/api/bridge/"):
+                self._api_bridge_post(parsed.path, parsed.query)
+            elif parsed.path.startswith("/api/launcher/"):
                 self._api_launcher_post(parsed.path)
             elif parsed.path == "/api/ingest":
                 self._api_ingest()
@@ -265,17 +285,13 @@ def create_handler(app):
                     pass
             return peer
 
-        def _remote_guard(self, path):
-            """远程访问时，除登录接口外，所有 API 都必须先带管理员令牌。"""
-            if not self._is_remote():
+        def _api_guard(self, method, path):
+            """唯一 API 鉴权入口：默认管理员；匿名例外按方法和路径精确匹配。"""
+            if (method, path) == ('POST', '/api/admin/login'):
                 return True
-            if path == "/api/admin/login":
+            if (method, path) in LOCAL_ANONYMOUS_ROUTES and not self._is_remote():
                 return True
-            if admin_token_valid(
-                    self._admin_token_from_request(), self._login_client_ip()):
-                return True
-            self._send(401, {"ok": False, "error": "远程访问需要先登录"})
-            return False
+            return self._require_admin() is not None
 
         def _serve_static(self, path):
             if path in ("", "/"):
@@ -314,12 +330,15 @@ def create_handler(app):
             self._send(200, body, MIME.get(ext, "application/octet-stream"))
 
         def _api_get(self, path, query=""):
-            if path == "/api/launcher":
-                if self._require_admin():
-                    try:
-                        self._send(200, launcher_service.catalog())
-                    except (OSError, RuntimeError, sqlite3.Error, subprocess.SubprocessError):
-                        self._send(503, {"ok": False, "error": "本机启动区暂时不可用"})
+            if path == '/api/admin/session':
+                self._send(200, {"ok": True})
+            elif path.startswith("/api/bridge/"):
+                self._api_bridge_get(path, query)
+            elif path == "/api/launcher":
+                try:
+                    self._send(200, launcher_service.catalog())
+                except (OSError, RuntimeError, sqlite3.Error, subprocess.SubprocessError):
+                    self._send(503, {"ok": False, "error": "本机启动区暂时不可用"})
             elif path == "/api/status":
                 n_sensors, n_notes = _status_counts()
                 heartbeat = service_status()
@@ -425,8 +444,6 @@ def create_handler(app):
                 con.close()
                 self._send(200, {"ok": True, "rows": [dict(r) for r in rows]})
             elif path == "/api/admin/essays":
-                if self._require_admin() is None:
-                    return
                 con = db()
                 rows = con.execute(
                     """SELECT uid, created_at, updated_at, title, content,
@@ -443,12 +460,8 @@ def create_handler(app):
             elif path == "/api/observations":
                 self._send(200, observation_service.public_catalog())
             elif path == "/api/admin/observations":
-                if self._require_admin() is None:
-                    return
                 self._send(200, observation_service.admin_observations())
             elif path == "/api/admin/observation-links":
-                if self._require_admin() is None:
-                    return
                 self._send(200, observation_service.admin_links())
             elif path == "/api/reflections":
                 self._send(200, {
@@ -791,8 +804,6 @@ def create_handler(app):
             })
 
         def _api_essay_feature(self):
-            if self._require_admin() is None:
-                return
             data = self._json_body()
             if data is None:
                 return
@@ -902,9 +913,64 @@ def create_handler(app):
                 "public_sync_note": sync_note,
             })
 
+        def _api_bridge_get(self, path, query):
+            try:
+                params = urllib.parse.parse_qs(query)
+                if path == "/api/bridge/status":
+                    result = bridge_service.status()
+                elif path == "/api/bridge/config":
+                    result = bridge_service.config()
+                elif path == "/api/bridge/transfers":
+                    try:
+                        wait_ms = int(params.get("wait_ms", ["0"])[0])
+                    except ValueError:
+                        raise BridgeError("等待时间无效") from None
+                    result = bridge_service.status(params.get("id", [""])[0], wait_ms=wait_ms)
+                else:
+                    raise BridgeError("接口不存在", 404)
+                self._send(200, result)
+            except BridgeError as error:
+                self._send(error.status, {"ok": False, "error": str(error)})
+            except OSError:
+                self._send(503, {"ok": False, "error": "桥接状态暂时不可用"})
+
+        def _api_bridge_post(self, path, query):
+            try:
+                if path == "/api/bridge/transfers/chunk":
+                    if self.headers.get("Transfer-Encoding") or len(self.headers.get_all("Content-Length", [])) != 1:
+                        raise BridgeError("分块请求必须提供唯一的 Content-Length")
+                    params = urllib.parse.parse_qs(query)
+                    try:
+                        length = int(self.headers.get("Content-Length", ""))
+                        offset = int(params.get("offset", [""])[0])
+                    except ValueError:
+                        raise BridgeError("分块长度或偏移无效") from None
+                    result = bridge_service.chunk(params.get("id", [""])[0], offset, length, self.rfile)
+                else:
+                    data = self._json_body()
+                    if data is None:
+                        return
+                    if path == "/api/bridge/config":
+                        result = bridge_service.configure(data)
+                    elif path == "/api/bridge/test":
+                        result = bridge_service.test_connection()
+                    elif path == "/api/bridge/directories":
+                        result = bridge_service.directories(data)
+                    elif path == "/api/bridge/transfers":
+                        result = bridge_service.begin(data)
+                    elif path == "/api/bridge/transfers/commit":
+                        result = bridge_service.commit(data.get("id", ""))
+                    elif path == "/api/bridge/transfers/cancel":
+                        result = bridge_service.cancel(data.get("id", ""))
+                    else:
+                        raise BridgeError("接口不存在", 404)
+                self._send(202 if path.endswith(("/test", "/commit", "/directories")) else 200, result)
+            except BridgeError as error:
+                self._send(error.status, {"ok": False, "error": str(error)})
+            except OSError:
+                self._send(503, {"ok": False, "error": "桥接设置或暂存文件无法保存"})
+
         def _api_launcher_post(self, path):
-            if not self._require_admin():
-                return
             data = self._json_body()
             if data is None:
                 return
@@ -1074,8 +1140,6 @@ def create_handler(app):
             self._send(200, {"ok": True})
 
         def _api_admin_config_get(self):
-            if self._require_admin() is None:
-                return
             cfg = _read_local_cfg()
             self._send(200, {
                 "ok": True,
@@ -1097,8 +1161,6 @@ def create_handler(app):
             return data
 
         def _api_resource_prepare(self):
-            if self._require_admin() is None:
-                return
             data = self._json_body()
             if data is None:
                 return
@@ -1110,8 +1172,6 @@ def create_handler(app):
             self._send(200, {"ok": True, **result})
 
         def _api_resource_upload(self):
-            if self._require_admin() is None:
-                return
             query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
             token = (query.get("token") or [""])[0].strip()
             try:
@@ -1162,8 +1222,6 @@ def create_handler(app):
             self._send(200, {"ok": True, "entry": entry})
 
         def _api_resource_delete(self):
-            if self._require_admin() is None:
-                return
             data = self._json_body()
             if data is None:
                 return
@@ -1176,8 +1234,6 @@ def create_handler(app):
             self._send(200, {"ok": True, "removed_files": removed})
 
         def _api_resource_publish(self):
-            if self._require_admin() is None:
-                return
             ok, note = resource_service.publish()
             self._send(200 if ok else 502, {"ok": ok, "note": note})
 
@@ -1231,8 +1287,6 @@ def create_handler(app):
             self._send(200, {"ok": True, **result})
 
         def _api_audio_firmware(self):
-            if self._require_admin() is None:
-                return
             try:
                 length = int(self.headers.get("Content-Length") or 0)
                 self.connection.settimeout(30)
@@ -1278,15 +1332,11 @@ def create_handler(app):
                     connection.close()
 
         def _api_visits(self):
-            if self._require_admin() is None:
-                return
             data = self._fetch_worker_json("/visits")
             if data is not None:
                 self._send(200, data)
 
         def _api_admin_config_set(self):
-            if self._require_admin() is None:
-                return
             data = self._json_body()
             if data is None:
                 return

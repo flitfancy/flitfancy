@@ -15,12 +15,16 @@
     const query = opts.query || function (selector) { return document.querySelector(selector); };
     const isServerOnline = opts.isServerOnline || function () { return false; };
     const onAuthenticated = opts.onAuthenticated || function () {};
+    const authOnly = opts.authOnly === true;
+    const pageName = authOnly ? "presence.html" : "console.html";
     const adminCore = global.FlitFancyAdmin;
     let panelShell = null;
     let visitsPanel = null;
     let quickLinks = [];
     let quickLinkEditing = -1;
     let started = false;
+    let entering = null;
+    let entryRevision = 0;
 
     function token() {
       return adminCore.token(ADMIN_KEY);
@@ -44,9 +48,9 @@
     }
 
     function showPanel(show) {
-      if (show) {
+      if (panelShell && show) {
         panelShell.show();
-      } else {
+      } else if (panelShell) {
         panelShell.hide();
         panelShell.clearCollapsed();
       }
@@ -72,6 +76,7 @@
     }
 
     function closeLogin() {
+      entryRevision++; entering = null;
       query('[data-role="admin-overlay"]').hidden = true;
     }
 
@@ -137,17 +142,30 @@
       });
     }
 
-    async function loadConfig() {
+    async function loadConfig(options) {
+      const entry = options && options.entry;
+      const currentEntry = function () { return !entry || options.revision === entryRevision; };
+      const expectedToken = token();
       try {
+        if (authOnly) {
+          await adminCore.request("/api/admin/session");
+          if (!currentEntry() || token() !== expectedToken) return;
+          showPanel(true);
+          return true;
+        }
         const response = await adminFetch("/api/admin/config", { method: "GET" });
         const data = await response.json();
+        if (!currentEntry()) return;
         if (!response.ok) {
           if (response.status === 401) {
+            if (token() && token() !== expectedToken) return;
             clearToken();
             showPanel(false);
+            return false;
           }
-          return;
+          throw Object.assign(new Error(data.error || '暂时无法读取管理配置'), { status: response.status });
         }
+        if (token() !== expectedToken) return;
         setModelSelect(data.model || "");
         query('[data-role="cfg-chat-toggle"]').checked = !!data.chat_enabled;
         quickLinks = Array.isArray(data.quick_links) ? data.quick_links : [];
@@ -156,16 +174,43 @@
         renderQuickLinks();
         showPanel(true);
         visitsPanel.load();
+        return true;
       } catch (e) {
+        if (!currentEntry() || (token() && token() !== expectedToken)) return;
         if (adminCore.isUnauthorized(e)) {
           clearToken();
           showPanel(false);
-          return;
+          return false;
         }
-        showPanel(true);
+        showPanel(!entry);
         setStatus(query('[data-role="cfg-model-status"]'),
           (e && e.status === 0) ? "管理配置加载超时，登录状态已保留" : ((e && e.message) || "管理配置加载失败"));
+        return null;
       }
+    }
+
+    function enterManagement() {
+      if (!isServerOnline()) {
+        // A fragment carries only UI intent, never credentials or a return URL.
+        global.location.href = 'https://console.flitfancy.com/' + pageName + '#login';
+        return Promise.resolve();
+      }
+      if (entering) return entering;
+      if (!token()) { openLogin(); return Promise.resolve(); }
+      const revision = ++entryRevision;
+      entering = loadConfig({ entry: true, revision: revision }).then(function (ready) {
+        if (revision !== entryRevision || ready === undefined) return;
+        if (ready === true) {
+          closeLogin();
+          if (!authOnly) query('[data-role="admin-panel"]').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } else {
+          openLogin();
+          setStatus(query('[data-role="admin-login-status"]'), ready === false
+            ? '登录已过期，请重新登录'
+            : '暂时无法确认登录状态，原会话已保留，请稍后重试。');
+        }
+      }).finally(function () { if (revision === entryRevision) entering = null; });
+      return entering;
     }
 
     async function login() {
@@ -327,6 +372,7 @@
     }
 
     async function logout() {
+      entryRevision++; entering = null;
       try {
         await adminFetch("/api/admin/logout", { method: "POST" });
       } catch (e) { /* ignore */ }
@@ -336,26 +382,14 @@
     }
 
     function bindEvents() {
-      query('[data-role="admin-mode"]').addEventListener("click", function () {
+      if (!authOnly) query('[data-role="admin-mode"]').addEventListener("click", function () {
         const bottom = document.body.classList.toggle("admin-mode-bottom");
         this.textContent = bottom ? "侧边模式" : "底部模式";
       });
 
-      query('.nav nav a[href="console.html"]').addEventListener("click", function (event) {
+      query('.nav nav a[href="' + pageName + '"]').addEventListener("click", function (event) {
         event.preventDefault();
-        if (token()) {
-          showPanel(true);
-          visitsPanel.load();
-          query('[data-role="admin-panel"]').scrollIntoView({
-            behavior: "smooth", block: "start",
-          });
-          return;
-        }
-        if (isServerOnline()) {
-          openLogin();
-        } else {
-          global.location.href = "https://console.flitfancy.com/console.html";
-        }
+        return enterManagement();
       });
 
       query('[data-role="admin-login"]').addEventListener("click", login);
@@ -366,6 +400,8 @@
           login();
         }
       });
+      query('[data-role="admin-logout"]').addEventListener("click", logout);
+      if (authOnly) return;
       query('[data-role="cfg-save"]').addEventListener("click", saveModelConfig);
       query('[data-role="cfg-model"]').addEventListener("change", function () {
         const select = query('[data-role="cfg-model"]');
@@ -375,7 +411,6 @@
       });
       query('[data-role="cfg-chat-toggle"]').addEventListener("change", saveChatToggle);
       query('[data-role="ql-add"]').addEventListener("click", saveQuickLink);
-      query('[data-role="admin-logout"]').addEventListener("click", logout);
       query('[data-role="visits-refresh"]').addEventListener("click", visitsPanel.load);
       query('[data-role="visits-group-toggle"]').addEventListener("click", function () {
         visitsPanel.toggleGrouping(this);
@@ -385,25 +420,30 @@
     function start() {
       if (started) return;
       started = true;
-      panelShell = global.FlitFancyPanelShell.init({
-        panel: query('[data-role="admin-panel"]'),
-        grab: query('[data-role="admin-grab"]'),
-        collapseBtn: query('[data-role="admin-collapse"]'),
-        expandTab: query('[data-role="admin-expand-tab"]'),
-        storageKey: "flitfancy.console.panelW",
-        openClass: "admin-open",
-        min: 280,
-        max: 900,
-      });
-      visitsPanel = global.FlitFancyVisits.create({
-        query: query,
-        request: adminFetch,
-        authFailed: authFailed,
-        setStatus: setStatus,
-        formatTime: adminCore.formatUnixTime,
-      });
+      if (!authOnly) {
+        panelShell = global.FlitFancyPanelShell.init({
+          panel: query('[data-role="admin-panel"]'),
+          grab: query('[data-role="admin-grab"]'),
+          collapseBtn: query('[data-role="admin-collapse"]'),
+          expandTab: query('[data-role="admin-expand-tab"]'),
+          storageKey: "flitfancy.console.panelW",
+          openClass: "admin-open",
+          min: 280,
+          max: 900,
+        });
+        visitsPanel = global.FlitFancyVisits.create({
+          query: query,
+          request: adminFetch,
+          authFailed: authFailed,
+          setStatus: setStatus,
+          formatTime: adminCore.formatUnixTime,
+        });
+      }
       bindEvents();
-      if (token()) loadConfig();
+      if (isServerOnline() && global.location.hash === '#login') {
+        global.history.replaceState(global.history.state, '', global.location.pathname + global.location.search);
+        enterManagement();
+      } else if (isServerOnline() && token()) loadConfig();
     }
 
     return {

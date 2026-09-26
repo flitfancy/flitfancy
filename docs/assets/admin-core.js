@@ -62,7 +62,7 @@
     const authMode = opts.authMode || "relative";
     const token = authMode === "none" ? "" : readToken(opts.tokenKey);
     applyAuth(headers, url, token, authMode);
-    if (opts.body) headers["Content-Type"] = "application/json";
+    if (opts.body && !Object.keys(headers).some(key => key.toLowerCase() === "content-type")) headers["Content-Type"] = "application/json";
     const response = await fetchWithTimeout(url, opts, headers);
     if (response.status === 401 && token) writeToken(opts.tokenKey, "");
     let data = null;
@@ -83,7 +83,7 @@
     const authMode = opts.authMode || "always";
     const token = authMode === "none" ? "" : readToken(opts.tokenKey);
     applyAuth(headers, url, token, authMode);
-    if (opts.body) headers["Content-Type"] = "application/json";
+    if (opts.body && !Object.keys(headers).some(key => key.toLowerCase() === "content-type")) headers["Content-Type"] = "application/json";
     const response = await fetchWithTimeout(url, opts, headers);
     if (response.status === 401 && token) writeToken(opts.tokenKey, "");
     return response;

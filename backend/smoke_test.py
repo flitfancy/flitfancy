@@ -280,14 +280,33 @@ def main():
                 base, "/api/ingest", "POST", legacy_line,
                 {"X-Firefly-Board": "firefly-r1-1-legacy"}, raw=True,
             )["ingested"] == 1
-            request(base, "/api/notes", "POST", {"author": "test", "content": "冒烟测试"})
-            notes = request(base, "/api/notes")
+            # 所有管理操作统一鉴权，本机也不能绕过登录。
+            for path in ('/api/notes', '/api/memories', '/api/anchors', '/api/essays',
+                         '/api/observations', '/api/observation-links', '/api/reflections',
+                         '/api/command', '/api/audio/control', '/api/dialogue/messages'):
+                request(base, path, 'POST', {}, expected=401)
+            for path in ('/api/notes', '/api/audio/status', '/api/audio/history', '/api/audio/recording'):
+                request(base, path, expected=401)
+            print('AUTH: local management writes and private reads require login')
+
+            # 本地管理员登录：后续管理读写接口都需要令牌（与会话
+            # IP 绑定，隧道段另有独立登录，互不影响）。
+            admin_login_local = request(base, "/api/admin/login", "POST", {
+                "username": "smoke-admin", "password": password,
+            })
+            assert admin_login_local.get("token"), admin_login_local
+            admin_bearer = {"Authorization": "Bearer " + admin_login_local["token"]}
+            request(base, '/api/admin/session', expected=401)
+            assert request(base, '/api/admin/session', headers=admin_bearer)['ok'] is True
+
+            request(base, "/api/notes", "POST", {"author": "test", "content": "冒烟测试"}, headers=admin_bearer)
+            notes = request(base, "/api/notes", headers=admin_bearer)
             print("NOTES:", notes["rows"][0]["content"])
             created = request(base, "/api/memories", "POST", {
                 "time": "2026-08-12T21:35:07",
                 "perspective": "me",
                 "content": "只写进隔离的临时数据库。",
-            }, expected=201)
+            }, expected=201, headers=admin_bearer)
             assert created["memory"]["time"] == "2026-08-12T21:35:07+08:00"
             assert created["memory"]["precision"] == "second"
             assert created["public_sync"] is False
@@ -299,7 +318,7 @@ def main():
                 "source": "firefly",
                 "title": "旧插件标题",
                 "content": "旧插件正文",
-            }, expected=400)
+            }, expected=400, headers=admin_bearer)
             assert "停止支持" in legacy_rejected["error"]
             print("MEMORY: local save ok; offline public sync remains pending")
 
@@ -307,7 +326,7 @@ def main():
                 "title": "测试锚点", "content": "冒烟测试里的一个锚点。",
                 "time": "2026-08-10",
                 "horizon": "now", "project": "flitfancy",
-            }, expected=201)
+            }, expected=201, headers=admin_bearer)
             assert anchor_created["anchor"]["title"] == "测试锚点"
             assert anchor_created["anchor"]["precision"] == "date"
             assert anchor_created["anchor"]["horizon"] == "now"
@@ -323,7 +342,7 @@ def main():
                 "time": "2026-08-12T22:00:00",
                 "perspective": "me",
                 "content": "编辑后的日记内容。",
-            }, expected=200)
+            }, expected=200, headers=admin_bearer)
             assert updated_memory["updated"] is True
             assert updated_memory["memory"]["content"] == "编辑后的日记内容。"
             assert len(request(base, "/api/memories")["rows"]) == memories_before
@@ -334,7 +353,7 @@ def main():
                 "time": "2026-08-10",
                 "horizon": "future",
                 "project": "firefly",
-            }, expected=200)
+            }, expected=200, headers=admin_bearer)
             assert updated_anchor["updated"] is True
             assert updated_anchor["anchor"]["title"] == "编辑后的锚点"
             assert updated_anchor["anchor"]["horizon"] == "future"
@@ -345,39 +364,31 @@ def main():
 
             invalid_anchor = request(base, "/api/anchors", "POST", {
                 "title": "缺少分类", "content": "不能保存", "time": "2026-08-10",
-            }, expected=400)
+            }, expected=400, headers=admin_bearer)
             assert "时间视角" in invalid_anchor["error"]
-
-            # 本地管理员登录：后续 /api/admin/* 读接口都需要令牌（与会话
-            # IP 绑定，隧道段另有独立登录，互不影响）。
-            admin_login_local = request(base, "/api/admin/login", "POST", {
-                "username": "smoke-admin", "password": password,
-            })
-            assert admin_login_local.get("token"), admin_login_local
-            admin_bearer = {"Authorization": "Bearer " + admin_login_local["token"]}
 
             draft = request(base, "/api/essays", "POST", {
                 "title": "草稿短文", "content": "尚未公开。",
                 "status": "draft", "display_order": 20,
-            }, expected=201)["essay"]
+            }, expected=201, headers=admin_bearer)["essay"]
             assert request(base, "/api/essays")["rows"] == []
             assert request(base, "/api/admin/essays",
                            headers=admin_bearer)["rows"][0]["status"] == "draft"
             published = request(base, "/api/essays", "POST", {
                 "uid": draft["uid"], "title": "公开短文", "content": "已经公开。",
                 "status": "public", "display_order": 20,
-            }, expected=200)["essay"]
+            }, expected=200, headers=admin_bearer)["essay"]
             assert published["status"] == "public"
             first = request(base, "/api/essays", "POST", {
                 "title": "排在前面", "content": "顺序为十。",
                 "status": "public", "display_order": 10,
-            }, expected=201)["essay"]
+            }, expected=201, headers=admin_bearer)["essay"]
             public_essays = request(base, "/api/essays")["rows"]
             assert [row["uid"] for row in public_essays] == [first["uid"], draft["uid"]]
             archived = request(base, "/api/essays", "POST", {
                 "uid": draft["uid"], "title": "公开短文", "content": "已经归档。",
                 "status": "archived", "display_order": 20,
-            }, expected=200)["essay"]
+            }, expected=200, headers=admin_bearer)["essay"]
             assert archived["status"] == "archived"
             assert [row["uid"] for row in request(base, "/api/essays")["rows"]] == [first["uid"]]
             print("ESSAYS: draft, publish, order and archive paths ok")
@@ -393,27 +404,27 @@ def main():
                                headers=admin_bearer)
             assert selected["public_sync"] is False  # 冒烟测试没有公网凭据，必须明确报告失败。
             assert selected["essay"]["uid"] == first["uid"]
-            request(base, "/api/essays", "POST", dict(first, content="修改留在卡牌库。"))
+            request(base, "/api/essays", "POST", dict(first, content="修改留在卡牌库。"), headers=admin_bearer)
             assert request(base, "/api/essays/featured")["essay"]["content"] == "顺序为十。"
-            request(base, "/api/essays", "POST", dict(first, status="archived"), expected=409)
-            request(base, "/api/essays", "POST", dict(first, status="draft"), expected=409)
+            request(base, "/api/essays", "POST", dict(first, status="archived"), expected=409, headers=admin_bearer)
+            request(base, "/api/essays", "POST", dict(first, status="draft"), expected=409, headers=admin_bearer)
             request(base, "/api/essays/featured", "POST", {"uid": first["uid"]}, headers=admin_bearer)
             assert request(base, "/api/essays/featured")["essay"]["content"] == "修改留在卡牌库。"
             original = {"uid": "builtin-prologue-0001", "title": "序章测试卡", "content": "原稿测试。", "status": "public"}
-            request(base, "/api/essays", "POST", original)
-            request(base, "/api/essays", "POST", dict(original, content="原稿更新。"))
+            request(base, "/api/essays", "POST", original, headers=admin_bearer)
+            request(base, "/api/essays", "POST", dict(original, content="原稿更新。"), headers=admin_bearer)
             admin_cards = request(base, "/api/admin/essays", headers=admin_bearer)
             assert len([r for r in admin_cards["rows"] if r["uid"] == original["uid"]]) == 1
             assert admin_cards["featured_essay"]["uid"] == first["uid"]
             request(base, "/api/essays/featured", "POST", {"uid": original["uid"]}, headers=admin_bearer)
-            request(base, "/api/essays", "POST", dict(first, status="archived"))
+            request(base, "/api/essays", "POST", dict(first, status="archived"), headers=admin_bearer)
             assert request(base, "/api/essays/featured")["essay"]["uid"] == original["uid"]
             print("ESSAY-CARDS: explicit selection, snapshot, original card and archive guards ok")
 
             # 与 Worker 共用同一份契约：accept/reject 判定必须逐条一致。
             for index, case in enumerate(ESSAYS_CONTRACT["cases"]):
                 request(base, "/api/essays", "POST", dict(case["payload"]),
-                        expected=201 if case["valid"] else 400)
+                        expected=201 if case["valid"] else 400, headers=admin_bearer)
             print("ESSAYS-CONTRACT: parity with worker fixtures ok")
 
             draft_star = request(base, "/api/observations", "POST", {
@@ -422,7 +433,7 @@ def main():
                 "content": "一些脉冲星拥有极其稳定的周期。",
                 "discovered_at": "2026-08-22", "source_name": "示例来源",
                 "source_url": "https://example.com/pulsar", "status": "draft",
-            }, expected=201)["observation"]
+            }, expected=201, headers=admin_bearer)["observation"]
             assert request(base, "/api/observations")["rows"] == []
             assert request(base, "/api/admin/observations", headers=admin_bearer)["rows"][0]["tags"] == ["时间", "宇宙"]
             first_star = request(base, "/api/observations", "POST", {
@@ -431,18 +442,18 @@ def main():
                 "content": "一些脉冲星拥有极其稳定的周期。",
                 "discovered_at": "2026-08-22", "source_name": "示例来源",
                 "source_url": "https://example.com/pulsar", "status": "public",
-            }, expected=200)["observation"]
+            }, expected=200, headers=admin_bearer)["observation"]
             second_star = request(base, "/api/observations", "POST", {
                 "title": "两千年前的齿轮", "category": "历史与文明",
                 "tags": ["机械", "计时"], "summary": "古代机械与天体运行。",
                 "content": "安提基特拉机械展现了古代精密造物。",
                 "discovered_at": "2026-08-21", "source_name": "示例来源",
                 "source_url": "https://example.com/gears", "status": "public",
-            }, expected=201)["observation"]
+            }, expected=201, headers=admin_bearer)["observation"]
             link = request(base, "/api/observation-links", "POST", {
                 "source_uid": first_star["uid"], "target_uid": second_star["uid"],
                 "relation": "类比",
-            }, expected=201)["link"]
+            }, expected=201, headers=admin_bearer)["link"]
             public_observations = request(base, "/api/observations")
             assert len(public_observations["rows"]) == 2
             assert public_observations["links"][0]["uid"] == link["uid"]
@@ -451,31 +462,31 @@ def main():
                             "target_uid": second_star["uid"], "relation": "类比"}
             for strength in ("weak", "medium", "strong"):
                 saved_link = request(base, "/api/observation-links", "POST",
-                                     dict(link_payload, strength=strength), expected=200)["link"]
+                                     dict(link_payload, strength=strength), expected=200, headers=admin_bearer)["link"]
                 assert saved_link["strength"] == strength
                 assert request(base, "/api/observations")["links"][0]["strength"] == strength
                 assert request(base, "/api/admin/observation-links", headers=admin_bearer)["rows"][0]["strength"] == strength
-            saved_link = request(base, "/api/observation-links", "POST", link_payload, expected=200)["link"]
+            saved_link = request(base, "/api/observation-links", "POST", link_payload, expected=200, headers=admin_bearer)["link"]
             assert saved_link["strength"] == "strong", "旧客户端不传强度时保留原值"
-            request(base, "/api/observation-links", "POST", dict(link_payload, strength="bright"), expected=400)
+            request(base, "/api/observation-links", "POST", dict(link_payload, strength="bright"), expected=400, headers=admin_bearer)
             request(base, "/api/observations", "POST", {
                 "uid": first_star["uid"], "title": "脉冲星的钟", "category": "宇宙与自然",
                 "tags": ["时间"], "summary": "宇宙中的稳定节拍。", "content": "归档。",
                 "discovered_at": "2026-08-22", "source_name": "", "source_url": "",
                 "status": "archived",
-            }, expected=200)
+            }, expected=200, headers=admin_bearer)
             assert request(base, "/api/observations")["links"] == []
             request(base, "/api/observations", "POST", {
                 "title": "危险来源", "category": "技术与造物", "tags": [],
                 "summary": "来源协议不合法。", "content": "测试。",
                 "discovered_at": "2026-08-22", "source_name": "错误",
                 "source_url": "javascript:alert(1)", "status": "draft",
-            }, expected=400)
+            }, expected=400, headers=admin_bearer)
 
             # 与 Worker 共用同一份契约：accept/reject 判定必须逐条一致。
             for index, case in enumerate(OBSERVATIONS_CONTRACT["cases"]):
                 request(base, "/api/observations", "POST", dict(case["payload"]),
-                        expected=201 if case["valid"] else 400)
+                        expected=201 if case["valid"] else 400, headers=admin_bearer)
             print("OBSERVATIONS-CONTRACT: parity with worker fixtures ok")
             print("OBSERVATIONS: draft, publish, archive, links and URL validation ok")
 
@@ -485,11 +496,11 @@ def main():
                     {"date": "2026-02-03", "content": "导入一"},
                     {"date": "2026-02-04", "content": "导入二"},
                 ],
-            }, expected=200)
+            }, expected=200, headers=admin_bearer)
             assert imp1["imported"] == 2
             imp2 = request(base, "/api/memories/import-static", "POST", {
                 "entries": [{"date": "2026-02-03", "content": "导入一"}],
-            }, expected=200)
+            }, expected=200, headers=admin_bearer)
             assert imp2["imported"] == 0
             print("IMPORT: static diary import idempotent")
 
@@ -498,20 +509,20 @@ def main():
                 "time": "2026-08-15",
                 "perspective": "me",
                 "content": "仅日期的日记。",
-            }, expected=201)
+            }, expected=201, headers=admin_bearer)
             assert date_only["memory"]["time"] == "2026-08-15T00:00:00+08:00"
             assert date_only["memory"]["precision"] == "date"
             minute_only = request(base, "/api/memories", "POST", {
                 "time": "2026-08-16T09:30",
                 "perspective": "me",
                 "content": "到分钟的日记。",
-            }, expected=201)
+            }, expected=201, headers=admin_bearer)
             assert minute_only["memory"]["time"] == "2026-08-16T09:30:00+08:00"
             print("TIME: date-only and minute-only normalized")
 
             refl = request(base, "/api/reflections", "POST", {
                 "content": "冒烟随笔一句。",
-            }, expected=201)
+            }, expected=201, headers=admin_bearer)
             assert "冒烟随笔一句。" in refl["reflections"]
             reflections_now = request(base, "/api/reflections")
             assert "冒烟随笔一句。" in reflections_now["reflections"]
@@ -520,7 +531,7 @@ def main():
             # C6: 整表替换负载（编辑器列表保存）：去空去重 + 覆盖旧值。
             replaced = request(base, "/api/reflections", "POST", {
                 "reflections": ["替换一", "替换二", "替换一", ""],
-            }, expected=201)
+            }, expected=201, headers=admin_bearer)
             assert replaced["reflections"] == ["替换一", "替换二"]
             assert "冒烟随笔一句。" not in replaced["reflections"]
             print("REFLECTION: full-replace edit path ok")
@@ -589,8 +600,8 @@ def main():
             request(base, "/api/dialogue/messages", "POST", {"text": "private", "request_id": "invalid"},
                     {"Host": "console.flitfancy.com"}, expected=401)
             request(base, "/api/dialogue/messages", "POST", {"text": "private", "request_id": "invalid"},
-                    {"Sec-Fetch-Site": "cross-site"}, expected=403)
-            request(base, "/api/dialogue/messages", "POST", {"text": "private", "request_id": "invalid"}, expected=400)
+                    {**admin_bearer, **{"Sec-Fetch-Site": "cross-site"}}, expected=403)
+            request(base, "/api/dialogue/messages", "POST", {"text": "private", "request_id": "invalid"}, expected=400, headers=admin_bearer)
             print("DIALOGUE: remote history/send require auth; cross-site send and invalid IDs rejected")
 
             # B2: 浏览器跨站 POST 一律 403；同源不受影响
@@ -600,15 +611,15 @@ def main():
             assert csrf_blocked["ok"] is False
             request(base, "/api/notes", "POST", {
                 "author": "test", "content": "same-origin ok",
-            }, {"Sec-Fetch-Site": "same-origin"})
+            }, {**admin_bearer, **{"Sec-Fetch-Site": "same-origin"}})
             print("CSRF: cross-site POST rejected, same-origin allowed")
 
             # C1: 命令限长——超过 200 字符直接 400，合法命令入队。
             overlong = request(base, "/api/command", "POST", {
                 "command": "x" * 201,
-            }, expected=400)
+            }, expected=400, headers=admin_bearer)
             assert "200" in overlong["error"]
-            queued = request(base, "/api/command", "POST", {"command": "hello"})
+            queued = request(base, "/api/command", "POST", {"command": "hello"}, headers=admin_bearer)
             assert queued["ok"] is True and queued["command"] == "hello"
             print("COMMAND: length cap enforced; valid command queued")
 

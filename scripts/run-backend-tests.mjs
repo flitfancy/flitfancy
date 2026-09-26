@@ -33,7 +33,13 @@ if (!python) {
 }
 
 console.log(`backend tests: ${python.command} ${python.args.join(" ")}`.trim());
-for (const relativePath of ["backend/connection_test.py", "backend/module_test.py", "backend/launcher_test.py", "backend/smoke_test.py"]) {
+if (process.platform === "win32") {
+  const result = spawnSync("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
+    path.join(root, "tests/backend-window.test.ps1")], { cwd: root, stdio: "inherit" });
+  if (result.error) throw result.error;
+  if (result.status !== 0) process.exit(result.status ?? 1);
+}
+for (const relativePath of ["backend/auth_policy_test.py", "backend/connection_test.py", "backend/module_test.py", "backend/launcher_test.py", "backend/bridge_test.py", "backend/smoke_test.py"]) {
   const result = spawnSync(
     python.command,
     [...python.args, path.join(root, relativePath)],

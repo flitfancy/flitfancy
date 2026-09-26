@@ -1,4 +1,4 @@
-"""flitfancy 控制台服务（仅用 Python 标准库）。
+"""flitfancy 控制台服务（基础功能使用 Python 标准库，NAS 桥按需加载 SMB 依赖）。
 
 运行（在 backend 目录下）：
     python server.py
@@ -26,6 +26,7 @@ from http.server import ThreadingHTTPServer
 from flitfancy_auth import AdminAuth, MIN_NEW_PASSWORD_LENGTH
 from flitfancy_launcher import LauncherService
 from flitfancy_audio import AudioService
+from flitfancy_bridge import BridgeService
 from flitfancy_core import (
     CST,
     base_url_for_model,
@@ -528,6 +529,8 @@ _audio_service = AudioService()
 Handler = create_handler(HttpDependencies(
     audio_service=_audio_service,
     launcher_service=LauncherService(os.path.join(os.path.dirname(DB_PATH), "launcher")),
+    bridge_service=BridgeService(_read_local_cfg, ai_config_save,
+                                 os.path.join(os.path.dirname(DB_PATH), "bridge")),
     ai_opener=AI_OPENER,
     cst=CST,
     memories_select=MEMORIES_SELECT,

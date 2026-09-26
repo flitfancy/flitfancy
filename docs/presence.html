@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <link rel="canonical" href="https://flitfancy.com/presence.html">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='24' fill='%23f5b84b' opacity='0.22'/%3E%3Ccircle cx='32' cy='32' r='12' fill='%23f5b84b'/%3E%3Ccircle cx='32' cy='32' r='5' fill='%23ffe9c4'/%3E%3C/svg%3E">
+  <title>存在 — 云萤 · FlitFancy</title>
+  <meta name="description" content="小流萤的存在：感知周围，侧耳倾听，与你对话。">
+  <link rel="stylesheet" href="assets/style.css?v=1.20.4">
+  <script src="assets/track.js?v=1.20.4" defer></script>
+</head>
+<body class="console-page presence-page">
+  <canvas id="sky" aria-hidden="true"></canvas>
+
+  <header class="nav">
+    <a class="brand grad-clip grad-flame" href="index.html">云萤 · FlitFancy</a>
+    <nav>
+      <a href="index.html" class="grad-clip grad-cool">首页</a>
+      <a href="journal.html" class="grad-clip grad-cool">旅途</a>
+      <a href="presence.html" class="active grad-clip grad-cool">存在</a>
+      <a href="console.html" class="grad-clip grad-cool">控制台</a>
+      <a href="about.html" class="grad-clip grad-cool">关于</a>
+      <a href="resources.html" class="grad-clip grad-cool">资源</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="section">
+      <div class="console-title">
+        <h1 class="grad-title grad-clip grad-flame">存在<span class="title-en">PRESENCE</span></h1>
+      </div>
+      <div class="console-status">
+        <span class="dot" data-role="dot"></span>
+        <span data-role="status">正在连接服务…</span>
+        <span class="ffs-actions" hidden>
+          <button class="btn" data-role="ffs-start" data-action="audio" title="启动本机音频服务；已经运行时不会重复启动"><span class="grad-clip grad-cool">音频</span></button>
+          <button class="btn" data-role="ffs-start" data-action="listener" title="启动感知板监听器（端口 7777）。首次使用需运行 scripts/install_flitfancy_protocol.ps1"><span class="grad-clip grad-cool">感知</span></button>
+          <button class="btn" data-role="admin-logout" hidden><span class="grad-clip grad-cool">退出管理</span></button>
+        </span>
+      </div>
+
+      <p class="hint" data-role="module-error" role="status" hidden>
+        <span data-role="module-error-text"></span>
+        <button class="btn btn-ghost" data-role="module-reload">刷新页面</button>
+      </p>
+
+      <div class="sensor-board">
+        <div class="sensor-board-head">
+          <span>现实感知</span>
+          <span class="sensor-updated" data-role="sensor-updated">等待第一组数据</span>
+        </div>
+        <div class="sensor-grid" data-role="sensor-grid"></div>
+      </div>
+
+      <div class="console-panel audio-console" data-role="audio-panel">
+        <div class="audio-head">
+          <div>
+            <h2>侧耳倾听</h2>
+          </div>
+          <div class="audio-connection">
+            <span class="audio-model-state" data-role="audio-model-status" role="status">SenseVoice 未连接</span>
+            <span class="audio-link-state" data-role="audio-wifi-status">WiFi未连接</span>
+            <button class="btn btn-ghost" data-role="audio-device-reboot" title="让 FIREFLY VOICE 板子重新启动并自动接入 Wi-Fi">重启板子</button>
+            <button class="btn btn-ghost" data-role="audio-ota-toggle" aria-expanded="false">固件升级</button>
+          </div>
+        </div>
+
+        <div class="audio-ota" data-role="audio-ota-panel" hidden>
+          <div class="audio-ota-head">
+            <span class="audio-ota-title">FIREFLY VOICE</span>
+            <span class="audio-ota-version" data-role="audio-ota-version">等待版本信息</span>
+          </div>
+          <div class="audio-ota-file-row">
+            <input type="file" accept=".bin" data-role="audio-ota-file" hidden>
+            <span class="audio-ota-format" aria-hidden="true">.bin</span>
+            <span class="audio-ota-name" data-role="audio-ota-name">选择 FIREFLY VOICE 应用固件</span>
+            <button class="btn btn-ghost" data-role="audio-ota-select">选择固件</button>
+          </div>
+          <div class="audio-ota-footer">
+            <div class="audio-ota-notes">
+              <p class="audio-ota-status" data-role="audio-ota-status" role="status">等待固件信息</p>
+              <p class="audio-ota-hint">升级期间请保持供电</p>
+            </div>
+            <button class="btn" data-role="audio-ota-start" disabled>开始升级</button>
+          </div>
+        </div>
+        <div class="audio-layout">
+          <section class="audio-block" aria-labelledby="audio-mic-title">
+            <div class="audio-block-head">
+              <h3 id="audio-mic-title">拾音</h3>
+            </div>
+            <div class="audio-main">
+              <div class="audio-actions">
+              <button class="btn" data-role="audio-recognition-toggle" aria-pressed="false">开始语音识别</button>
+              <button class="btn btn-ghost" data-role="audio-wake-toggle" aria-pressed="true">语音唤醒：开</button>
+              <button class="btn btn-ghost" data-role="audio-aec-toggle" aria-pressed="true">回声消除：开</button>
+            </div>
+            <audio class="audio-recording" data-role="audio-recording" controls hidden></audio>
+            <div class="audio-settings">
+              <div class="audio-settings-head">
+                <h4>收音设置与状态</h4>
+                <div class="audio-recording-foot">
+                  <span class="audio-live-state" data-role="audio-vad-state" role="status">语音检测正在准备…</span>
+                  <a class="hint" data-role="audio-raw-recording" hidden>对比原始录音</a>
+                </div>
+              </div>
+              <div class="audio-history-flip" data-role="audio-history-flip">
+              <div class="audio-meters audio-history-front" data-role="audio-history-front" role="button" tabindex="0" aria-label="实时双麦电平，点击查看历史" aria-controls="audio-history-back" aria-expanded="false">
+                <div class="audio-meter">
+                  <span>左麦 U6</span>
+                  <div class="audio-meter-track" role="meter" aria-label="左麦电平" aria-valuemin="-100" aria-valuemax="0" aria-valuenow="-100">
+                    <span data-role="audio-level-left"></span>
+                  </div>
+                  <strong data-role="audio-db-left">−100 dBFS</strong>
+                  <span class="audio-probability-value" data-role="audio-probability-value-left" aria-label="左麦语音概率">—</span>
+                  <div class="audio-probability-track" role="meter" aria-label="左麦语音概率" aria-valuemin="0" aria-valuemax="100" aria-valuetext="等待检测">
+                    <span data-role="audio-probability-left"></span>
+                  </div>
+                </div>
+                <div class="audio-meter">
+                  <span>右麦 U7</span>
+                  <div class="audio-meter-track" role="meter" aria-label="右麦电平" aria-valuemin="-100" aria-valuemax="0" aria-valuenow="-100">
+                    <span data-role="audio-level-right"></span>
+                  </div>
+                  <strong data-role="audio-db-right">−100 dBFS</strong>
+                  <span class="audio-probability-value" data-role="audio-probability-value-right" aria-label="右麦语音概率">—</span>
+                  <div class="audio-probability-track" role="meter" aria-label="右麦语音概率" aria-valuemin="0" aria-valuemax="100" aria-valuetext="等待检测">
+                    <span data-role="audio-probability-right"></span>
+                  </div>
+                </div>
+              </div>
+            <div class="audio-history" data-role="audio-history" id="audio-history-back" hidden>
+              <div class="audio-history-tools">
+                <button class="btn btn-ghost" type="button" data-role="audio-history-back">返回</button>
+                <button class="btn btn-ghost" type="button" data-role="audio-history-mode" aria-label="切换历史曲线通道">双麦</button>
+                <select aria-label="麦克风历史时间范围">
+                  <option value="5m" selected>5 分钟</option>
+                  <option value="1h">1 小时</option>
+                  <option value="24h">24 小时</option>
+                  <option value="7d">7 天</option>
+                  <option value="30d">30 天</option>
+                  <option value="all">全部</option>
+                </select>
+                <input type="date" aria-label="查看截至此日的麦克风历史">
+              </div>
+              <canvas role="img" aria-label="双麦历史电平，单位 dBFS"></canvas>
+              <p class="audio-history-detail" data-role="audio-history-detail" hidden></p>
+              <p class="sr-only" data-role="audio-history-note" role="status">正在读取历史…</p>
+            </div>
+            </div>
+            </div>
+            </div>
+            <label class="audio-volume audio-mode-control">
+              <span>采集模式</span>
+              <input data-role="audio-mic" type="range" min="0" max="2" step="1" value="1" aria-valuetext="双麦" title="从左到右：左麦、双麦、右麦">
+              <strong data-role="audio-mic-text">双麦</strong>
+            </label>
+            <label class="audio-volume audio-gain-control">
+              <span>麦克风增益</span>
+              <input data-role="audio-gain" type="range" min="0" max="3" step="1" value="2" aria-valuetext="4倍" title="从左到右：1×、2×、4×、8×">
+              <strong data-role="audio-gain-text">4×</strong>
+            </label>
+            <div class="audio-detail-row">
+              <div class="audio-lyrics" data-role="audio-vad-metrics">等待语音检测</div>
+              <p class="hint audio-stats" data-role="audio-stats" hidden></p>
+            </div>
+            <div class="audio-text-footer">
+              <div class="audio-transcript" data-role="audio-transcript" aria-label="语音识别结果">等待语音</div>
+            </div>
+          </section>
+
+          <section class="audio-block audio-play-block" aria-labelledby="audio-play-title">
+            <div class="audio-block-head">
+              <h3 id="audio-play-title">有言</h3>
+            </div>
+            <div class="audio-main">
+              <input data-role="audio-file" type="file" accept="audio/*,.ncm,.flac,.mp3,.wav,.aac,.m4a,.ogg,.opus" hidden>
+            <div class="audio-source" data-role="audio-source">
+              <div class="audio-drop" data-role="audio-drop" tabindex="0" role="button" aria-label="选择要播放的音频文件">
+                <span class="audio-drop-title">拖入音频，或点此选择</span>
+                <small class="audio-format-list"><span>NCM · FLAC · MP3 · WAV</span> <span>AAC · M4A · OGG · Opus</span></small>
+                <small class="audio-decode-note">本机解码 · 48 kHz / 16-bit / 单声道</small>
+              </div>
+              <div class="audio-play-foot" data-role="audio-play-panel" hidden>
+                <p class="audio-track-title" data-role="audio-play-name"></p>
+                <div class="audio-track-summary">
+                  <span data-role="audio-play-status">等待拖入音频</span>
+                  <span data-role="audio-play-percent"></span>
+                </div>
+                <p class="hint" data-role="audio-play-format" hidden></p>
+                <p class="audio-transport-note" data-role="audio-play-transport" hidden></p>
+                <div class="audio-play-actions">
+                  <button class="btn btn-ghost" data-role="audio-play-pause">暂停播放</button>
+                  <button class="btn btn-ghost" data-role="audio-play-stop">停止播放</button>
+                  <button class="btn btn-ghost" data-role="audio-play-retry" hidden>重新选择文件</button>
+                </div>
+              </div>
+            </div>
+            <div class="audio-spectrum" data-role="audio-spectrum" aria-hidden="true"></div>
+            </div>
+            <div class="audio-progress-row">
+              <div class="audio-progress" aria-hidden="true"><span data-role="audio-progress"></span></div>
+            </div>
+            <label class="audio-volume audio-output-control">
+              <span>音量</span>
+              <input data-role="audio-volume" type="range" min="0" max="100" value="100">
+              <strong data-role="audio-volume-text">100%</strong>
+            </label>
+            <div class="audio-detail-row">
+              <div class="audio-lyrics" data-role="audio-lyrics">歌词会在播放时逐行显示</div>
+            </div>
+            <div class="audio-text-footer">
+              <div class="audio-transcript" data-role="audio-reply" aria-label="最近一次回复">等待回复</div>
+            </div>
+          </section>
+        </div>
+        <p class="audio-error" data-role="audio-error" hidden></p>
+      </div>
+
+      <div class="console-panel dialogue-console">
+        <div class="dialogue-title-row">
+          <h2 data-role="chat-title">有求必应</h2>
+          <span class="console-eyebrow">CONVERSATION</span>
+        </div>
+        <div class="dialogue-header" data-role="dialogue-header" hidden>
+          <span class="dialogue-state" data-role="dialogue-state" role="status">正在连接…</span>
+          <span class="hint" data-role="dialogue-note">共享本机对话</span>
+        </div>
+        <div class="chat-log" data-role="chat-log">
+          <p class="chat-empty" data-role="chat-empty">有求必应</p>
+        </div>
+        <div class="chat-form">
+          <div class="chat-field">
+            <textarea rows="2" aria-label="聊天消息" placeholder="你会如何问出你的问题" data-role="chat-input"></textarea>
+            <button class="btn chat-send" data-role="chat-send" title="发送">发送</button>
+          </div>
+        </div>
+        <p class="hint status-gap" data-role="chat-status"></p>
+      </div>
+
+    </section>
+  </main>
+
+  <footer>
+    <p class="grad-clip grad-flame"><span>云萤 · FlitFancy</span><span class="sep"> · </span><span>献给我们所热爱的一切</span></p>
+  </footer>
+
+  <div class="admin-overlay" data-role="admin-overlay" hidden>
+    <div class="admin-card">
+      <h2>管理员登录</h2>
+      <p class="hint">Who are you</p>
+      <input type="text" data-role="admin-username" placeholder="用户名" autocomplete="username">
+      <input type="password" data-role="admin-password" placeholder="管理密码" autocomplete="current-password">
+      <div class="admin-actions">
+        <button class="btn" data-role="admin-login">登录</button>
+        <button class="btn btn-ghost" data-role="admin-cancel">取消</button>
+      </div>
+      <p class="hint status-gap" data-role="admin-login-status"></p>
+    </div>
+  </div>
+
+  <div class="js-error" data-role="js-error" hidden></div>
+
+  <script src="assets/firefly.js?v=1.20.4"></script>
+  <script src="assets/sitefx.js?v=1.20.4"></script>
+  <script src="assets/sensor-state.js?v=1.20.4" data-console-module="FlitFancySensorState"></script>
+  <script src="assets/admin-core.js?v=1.20.4" data-console-module="FlitFancyAdmin"></script>
+  <script src="assets/console-overview.js?v=1.20.4" data-console-module="FlitFancyConsoleOverview"></script>
+  <script src="assets/console-sensors.js?v=1.20.4" data-console-module="FlitFancyConsoleSensors"></script>
+  <script src="assets/console-chat.js?v=1.20.4" data-console-module="FlitFancyConsoleChat"></script>
+  <script src="assets/console-dialogue.js?v=1.20.4" data-console-module="FlitFancyConsoleDialogue"></script>
+  <script src="assets/console-admin.js?v=1.20.4" data-console-module="FlitFancyConsoleAdmin"></script>
+  <script src="assets/console-services.js?v=1.20.4" data-console-module="FlitFancyConsoleServices"></script>
+  <script src="assets/console-audio-history.js?v=1.20.4" data-console-module="FlitFancyAudioHistory"></script>
+  <script src="assets/console-audio.js?v=1.20.4" data-console-module="FlitFancyConsoleAudio"></script>
+  <script src="assets/console.js?v=1.20.4"></script>
+</body>
+</html>

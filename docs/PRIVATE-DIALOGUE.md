@@ -1,6 +1,6 @@
 # 私有对话接入说明
 
-版本 1.14.0。本机控制台及经管理员登录的控制台使用 `console-dialogue.js`；公开站点仍使用
+对话能力始于版本 1.14.0，版本 1.18.0 起位于“存在”页。本机及经管理员登录的存在页使用 `console-dialogue.js`；公开站点仍使用
 原 `console-chat.js`。私聊数据不保存到 sessionStorage/localStorage，不发往公开 AI 接口。
 
 文字请求路径：页面 → 2671 `/api/dialogue/messages` → 固定回环 7865 → AstrBot 正常事件队列。

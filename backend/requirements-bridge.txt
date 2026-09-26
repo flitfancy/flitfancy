@@ -1,0 +1,2 @@
+# Optional: only required for the private NAS bridge.
+smbprotocol==1.17.0
