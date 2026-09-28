@@ -64,7 +64,7 @@
     applyAuth(headers, url, token, authMode);
     if (opts.body && !Object.keys(headers).some(key => key.toLowerCase() === "content-type")) headers["Content-Type"] = "application/json";
     const response = await fetchWithTimeout(url, opts, headers);
-    if (response.status === 401 && token) writeToken(opts.tokenKey, "");
+    if (response.status === 401 && token && readToken(opts.tokenKey) === token) writeToken(opts.tokenKey, "");
     let data = null;
     try { data = await response.json(); } catch (e) { data = {}; }
     if (!response.ok) {
@@ -85,7 +85,7 @@
     applyAuth(headers, url, token, authMode);
     if (opts.body && !Object.keys(headers).some(key => key.toLowerCase() === "content-type")) headers["Content-Type"] = "application/json";
     const response = await fetchWithTimeout(url, opts, headers);
-    if (response.status === 401 && token) writeToken(opts.tokenKey, "");
+    if (response.status === 401 && token && readToken(opts.tokenKey) === token) writeToken(opts.tokenKey, "");
     return response;
   }
 

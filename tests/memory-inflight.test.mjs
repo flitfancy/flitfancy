@@ -12,65 +12,59 @@ const source = fs.readFileSync(
 assert.doesNotMatch(source, /memory\.(?:date|title)/,
   "公开日记渲染不得重新引入旧 date/title 字段兜底");
 
-let fetchCalls = 0;
-const pending = [];
-const handlers = {};
-
-const streamEl = {
-  children: [],
+let fetchCalls = 0, nextTimer = 0;
+const pending = [], handlers = {}, lifecycle = {}, timers = new Map();
+const streamEl = { children: [], querySelectorAll() { return []; }, appendChild() {} };
+const document = {
+  hidden: false,
+  querySelector(selector) {
+    if (selector === '[data-role="memory-sync"]') return {textContent:""};
+    if (selector === '[data-role="memory-stream"]') return streamEl;
+    return null;
+  },
   querySelectorAll() { return []; },
-  appendChild() {},
+  addEventListener(name, fn) { handlers[name] = fn; },
 };
-
-vm.runInNewContext(source, {
-  document: {
-    hidden: false,
-    querySelector(selector) {
-      if (selector === '[data-role="memory-sync"]') return { textContent: "" };
-      if (selector === '[data-role="memory-stream"]') return streamEl;
-      return null;
+const window = {
+  setTimeout(fn, ms) { const id=++nextTimer; timers.set(id,{fn,ms}); return id; },
+  clearTimeout(id) { timers.delete(id); },
+  addEventListener(name, fn) { lifecycle[name] = fn; },
+  FlitFancyAdmin: {
+    token: () => '', isAdminHost: () => false,
+    fetchRaw(url, options) {
+      assert.equal(url, 'https://api.flitfancy.com/memories');
+      assert.equal(options.authMode, 'none', 'public diary must not receive administrator credentials');
+      fetchCalls++;
+      return new Promise(resolve => pending.push(resolve));
     },
-    querySelectorAll() { return []; },
-    addEventListener(name, fn) { handlers[name] = fn; },
+    formatDateTime: (value, precision) => precision === 'date'
+      ? String(value || '').slice(0,10) : String(value || '').slice(0,19).replace('T',' '),
   },
-  fetch: () => {
-    fetchCalls += 1;
-    return new Promise((resolve) => pending.push(resolve));
-  },
-  window: {
-    setInterval: () => 0,
-    FlitFancyAdmin: {
-      TIMEOUT_MS: 8000,
-      formatDateTime: (value, precision) => precision === "date"
-        ? String(value || "").slice(0, 10)
-        : String(value || "").slice(0, 19).replace("T", " "),
-    },
-  },
-  setInterval: () => 0,
-  setTimeout: () => 0,
-  clearTimeout: () => {},
-  AbortController: AbortController,
-});
-
-const settle = () => new Promise((resolve) => setImmediate(resolve));
-
-// 脚本加载即触发首次 refresh（fetch 在途，挂起不返回）
+};
+vm.runInNewContext(fs.readFileSync(new URL('../docs/assets/refresh-scheduler.js',import.meta.url),'utf8'),{window});
+vm.runInNewContext(source,{window,document});
+const settle = () => new Promise(resolve => setImmediate(resolve));
+const complete = () => pending.shift()({ok:true,json:async()=>({ok:true,rows:[]})});
 await settle();
-assert.equal(fetchCalls, 1, "加载时应发起第一次同步请求");
-
-// 请求挂起期间，连续三路触发：只允许一个在途请求，其余全部被守卫拦下
-handlers["visibilitychange"]();
-handlers["visibilitychange"]();
-handlers["flitfancy:memory-saved"]();
+assert.equal(fetchCalls,1,'initial load fetches once');
+handlers.visibilitychange(); handlers.visibilitychange();
+handlers['flitfancy:memory-saved'](); handlers['flitfancy:memory-saved']();
 await settle();
-assert.equal(fetchCalls, 1, "在途请求未完成时，并发触发必须被防重入守卫拦截");
-
-// 完成第一次请求后再触发，应允许发起新请求
-pending.shift()({ ok: true, json: async () => ({ ok: true, rows: [] }) });
-await settle();
-assert.equal(fetchCalls, 1);
-handlers["visibilitychange"]();
-await settle();
-assert.equal(fetchCalls, 2, "在途请求完成后，新触发应正常发起请求");
-
-console.log("memory inFlight guard test ok");
+assert.equal(fetchCalls,1,'one in-flight request despite multiple triggers');
+complete(); await settle();
+assert.equal(fetchCalls,2,'saved events coalesce into one fresh read after the old request');
+complete(); await settle();
+assert.equal(fetchCalls,2);
+document.hidden=true; handlers.visibilitychange(); await settle();
+assert.equal(timers.size,0,'hidden diary suspends its data timer');
+document.hidden=false; handlers.visibilitychange(); await settle();
+assert.equal(fetchCalls,3,'visible again refreshes immediately');
+complete(); await settle();
+lifecycle.pagehide({persisted:true});
+assert.equal(timers.size,0,'back-forward cached page pauses polling');
+lifecycle.pageshow({persisted:true}); await settle();
+assert.equal(fetchCalls,4,'restored cached page resumes polling');
+complete(); await settle();
+lifecycle.pagehide({persisted:false});
+assert.equal(timers.size,0,'leaving diary disposes scheduler');
+console.log('memory shared refresh: overlap, coalesced writes, visibility and back-forward restore passed');

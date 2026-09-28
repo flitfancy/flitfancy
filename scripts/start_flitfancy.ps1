@@ -22,11 +22,11 @@ if (-not $match.Success) {
 }
 $action = $match.Groups[1].Value
 
-# The existing backend button opens a local keyboard menu. Merely opening the
-# window must never interrupt a running upload or request elevated privileges.
-if ($action -eq 'backend') {
-    . (Join-Path $scriptDir 'backend_window.ps1')
-    exit (Invoke-BackendWindow)
+# Local service buttons share the backend's keyboard menu. A URL can open it,
+# but only a local arrow + Enter action may request a restart or elevation.
+if ($action -in @('backend', 'listener', 'audio', 'tunnel')) {
+    . (Join-Path $scriptDir 'service_window.ps1')
+    exit (Invoke-ServiceWindow $action)
 }
 
 Push-Location $scriptDir

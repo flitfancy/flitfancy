@@ -1,5 +1,6 @@
 ﻿# Interactive backend entry for the existing browser protocol. Dot-source for tests.
 $backendScripts = $PSScriptRoot
+. (Join-Path $PSScriptRoot 'process_wait.ps1')
 
 function Get-BackendWindowState {
     $site = Split-Path -Parent $backendScripts
@@ -94,12 +95,18 @@ function Restart-BackendFromWindow {
         FilePath = (Join-Path $PSHOME 'powershell.exe')
         ArgumentList = ('-NoProfile -ExecutionPolicy Bypass -File "' + (Join-Path $backendScripts 'reload_backend.ps1') + '"')
         WindowStyle = 'Hidden'
-        Wait = $true
         PassThru = $true
     }
     if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { $launch.Verb = 'RunAs' }
     $result = Start-Process @launch
-    if ($result.ExitCode -ne 0) { throw 'Restart failed: process identity, permissions or startup checks did not pass. Run scripts/reload_backend.ps1 in an Administrator terminal for details.' }
+    try {
+        $exitCode = Wait-LocalHelperProcess -Process $result -OnWaiting {
+            param($Seconds)
+            Write-Host ("`r正在等待后端重启完成… 已等待 $Seconds 秒   ") -NoNewline
+        }
+        Write-Host ''
+        if ($exitCode -ne 0) { throw 'Restart failed: process identity, permissions or startup checks did not pass. Run scripts/reload_backend.ps1 in an Administrator terminal for details.' }
+    } finally { $result.Dispose() }
 }
 
 function Invoke-BackendWindow {

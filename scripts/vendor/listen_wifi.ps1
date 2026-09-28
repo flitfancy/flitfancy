@@ -251,6 +251,12 @@ function Handle-Connection($Client) {
                         continue
                     }
 
+                    # CH5 恢复事件即使在 Quiet 模式也要保留，供实板故障诊断。
+                    if ($line.StartsWith('[recovery] CH5 ')) {
+                        Write-Host ('[' + (Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + '] board: ' + $line)
+                        continue
+                    }
+
                     # 其他行：当作板端调试输出，仅打印。
                     Log-Info ('board: ' + $line)
                 } else {

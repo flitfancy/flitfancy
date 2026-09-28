@@ -27,6 +27,7 @@ from flitfancy_auth import AdminAuth, MIN_NEW_PASSWORD_LENGTH
 from flitfancy_launcher import LauncherService
 from flitfancy_audio import AudioService
 from flitfancy_bridge import BridgeService
+from flitfancy_activity import ActivityService
 from flitfancy_core import (
     CST,
     base_url_for_model,
@@ -525,9 +526,15 @@ _observation_service = ObservationService(
 
 _resource_service = ResourceService(SITE_ROOT, now_iso)
 _audio_service = AudioService()
+_activity_service = ActivityService(
+    DB_PATH,
+    source_url=os.environ.get('FLITFANCY_ACTIVITYWATCH_URL', 'http://127.0.0.1:5600'),
+    enabled=os.environ.get('FLITFANCY_ACTIVITYWATCH_ENABLED', '1').lower() not in ('0', 'false', 'no'),
+)
 
 Handler = create_handler(HttpDependencies(
     audio_service=_audio_service,
+    activity_service=_activity_service,
     launcher_service=LauncherService(os.path.join(os.path.dirname(DB_PATH), "launcher")),
     bridge_service=BridgeService(_read_local_cfg, ai_config_save,
                                  os.path.join(os.path.dirname(DB_PATH), "bridge")),
@@ -632,6 +639,7 @@ def main():
         target=_history_sync_loop, name="history-public-sync", daemon=True
     ).start()
     server = FlitFancyServer((HOST, PORT), Handler)
+    _activity_service.start()
     print("flitfancy 控制台服务已启动: http://localhost:%d/" % PORT)
     print("前端目录: %s" % SITE_ROOT)
     print("数据文件: %s" % DB_PATH)
@@ -642,6 +650,7 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
+        _activity_service.close()
         server.server_close()
 
 

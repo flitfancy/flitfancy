@@ -7,8 +7,9 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='24' fill='%23f5b84b' opacity='0.22'/%3E%3Ccircle cx='32' cy='32' r='12' fill='%23f5b84b'/%3E%3Ccircle cx='32' cy='32' r='5' fill='%23ffe9c4'/%3E%3C/svg%3E">
   <title>存在 — 云萤 · FlitFancy</title>
   <meta name="description" content="小流萤的存在：感知周围，侧耳倾听，与你对话。">
-  <link rel="stylesheet" href="assets/style.css?v=1.20.4">
-  <script src="assets/track.js?v=1.20.4" defer></script>
+  <link rel="stylesheet" href="assets/style.css?v=1.24.1">
+  <link rel="stylesheet" href="assets/console-activity.css?v=1.24.1">
+  <script src="assets/track.js?v=1.24.1" defer></script>
 </head>
 <body class="console-page presence-page">
   <canvas id="sky" aria-hidden="true"></canvas>
@@ -218,6 +219,31 @@
         <p class="audio-error" data-role="audio-error" hidden></p>
       </div>
 
+      <section class="console-panel activity-console" data-role="activity-panel" aria-labelledby="activity-title" hidden>
+        <div class="activity-head">
+          <h2 id="activity-title">电脑使用</h2>
+          <span class="activity-status" data-activity="source" role="status"></span>
+        </div>
+        <p class="activity-collected" data-activity="collected"></p>
+        <div class="activity-summary">
+          <div><span class="activity-summary-label">今天 · 活跃前台</span><strong data-activity="today">—</strong><p data-activity="today-detail"></p></div>
+          <div><span class="activity-summary-label">所选范围 · 累计活跃</span><strong data-activity="range-total">—</strong><p data-activity="range-detail"></p></div>
+        </div>
+        <div class="activity-tools">
+          <label>范围 <select data-activity="days"><option value="7">7 天</option><option value="30">30 天</option><option value="90">90 天</option></select></label>
+          <label>截至 <input type="date" data-activity="end"></label>
+          <button type="button" class="btn btn-ghost" data-activity="export" disabled>导出统计</button>
+        </div>
+        <div class="activity-trend" data-activity="trend" role="group" aria-label="每日活跃时长，点选日期查看应用分布"></div>
+        <details class="activity-details" data-activity="details">
+          <summary>明细<span class="activity-apps-date" data-activity="apps-date"></span></summary>
+          <button type="button" class="btn btn-ghost" data-activity="all-days" hidden>查看整个范围</button>
+          <ol class="activity-apps" data-activity="apps" aria-label="活跃前台应用时长"></ol>
+          <p class="activity-apps-note" data-activity="apps-note"></p>
+        </details>
+        <p class="activity-message" data-activity="message" role="status"></p>
+      </section>
+
       <div class="console-panel dialogue-console">
         <div class="dialogue-title-row">
           <h2 data-role="chat-title">有求必应</h2>
@@ -262,18 +288,20 @@
 
   <div class="js-error" data-role="js-error" hidden></div>
 
-  <script src="assets/firefly.js?v=1.20.4"></script>
-  <script src="assets/sitefx.js?v=1.20.4"></script>
-  <script src="assets/sensor-state.js?v=1.20.4" data-console-module="FlitFancySensorState"></script>
-  <script src="assets/admin-core.js?v=1.20.4" data-console-module="FlitFancyAdmin"></script>
-  <script src="assets/console-overview.js?v=1.20.4" data-console-module="FlitFancyConsoleOverview"></script>
-  <script src="assets/console-sensors.js?v=1.20.4" data-console-module="FlitFancyConsoleSensors"></script>
-  <script src="assets/console-chat.js?v=1.20.4" data-console-module="FlitFancyConsoleChat"></script>
-  <script src="assets/console-dialogue.js?v=1.20.4" data-console-module="FlitFancyConsoleDialogue"></script>
-  <script src="assets/console-admin.js?v=1.20.4" data-console-module="FlitFancyConsoleAdmin"></script>
-  <script src="assets/console-services.js?v=1.20.4" data-console-module="FlitFancyConsoleServices"></script>
-  <script src="assets/console-audio-history.js?v=1.20.4" data-console-module="FlitFancyAudioHistory"></script>
-  <script src="assets/console-audio.js?v=1.20.4" data-console-module="FlitFancyConsoleAudio"></script>
-  <script src="assets/console.js?v=1.20.4"></script>
+  <script src="assets/firefly.js?v=1.24.1"></script>
+  <script src="assets/sitefx.js?v=1.24.1"></script>
+  <script src="assets/sensor-state.js?v=1.24.1" data-console-module="FlitFancySensorState"></script>
+  <script src="assets/admin-core.js?v=1.24.1" data-console-module="FlitFancyAdmin"></script>
+  <script src="assets/refresh-scheduler.js?v=1.24.1" data-console-module="FlitFancyRefresh"></script>
+  <script src="assets/console-overview.js?v=1.24.1" data-console-module="FlitFancyConsoleOverview"></script>
+  <script src="assets/console-sensors.js?v=1.24.1" data-console-module="FlitFancyConsoleSensors"></script>
+  <script src="assets/console-chat.js?v=1.24.1" data-console-module="FlitFancyConsoleChat"></script>
+  <script src="assets/console-dialogue.js?v=1.24.1" data-console-module="FlitFancyConsoleDialogue"></script>
+  <script src="assets/console-admin.js?v=1.24.1" data-console-module="FlitFancyConsoleAdmin"></script>
+  <script src="assets/console-services.js?v=1.24.1" data-console-module="FlitFancyConsoleServices"></script>
+  <script src="assets/console-activity.js?v=1.24.1" data-console-module="FlitFancyConsoleActivity"></script>
+  <script src="assets/console-audio-history.js?v=1.24.1" data-console-module="FlitFancyAudioHistory"></script>
+  <script src="assets/console-audio.js?v=1.24.1" data-console-module="FlitFancyConsoleAudio"></script>
+  <script src="assets/console.js?v=1.24.1"></script>
 </body>
 </html>

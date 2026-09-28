@@ -147,37 +147,51 @@
 
   let inFlight = false;
   async function refresh() {
-    if (inFlight) return;   // interval/visibilitychange/写入事件 三路并发防重入
+    if (inFlight) return {skipped:true};
     inFlight = true;
     try {
-      const ctrl = new AbortController();
-      const timer = setTimeout(function () {
-        ctrl.abort();
-      }, window.FlitFancyAdmin.TIMEOUT_MS);
-      const response = await fetch(API, { cache: "no-store", signal: ctrl.signal });
-      clearTimeout(timer);
+      const response = await window.FlitFancyAdmin.fetchRaw(API, {authMode:'none',cache:'no-store'});
       const data = await response.json();
-      if (!response.ok || !data.ok) throw new Error(data.error || "HTTP " + response.status);
+      if (!response.ok || !data.ok) throw Object.assign(new Error('日记读取失败'), {status:response.status});
       render(Array.isArray(data.rows) ? data.rows : []);
       if (status) {
         status.hidden = liveEntries.size > 0;
         status.textContent = liveEntries.size ? "" : "还没有留下日记";
       }
+      return {ok:true};
     } catch (error) {
       if (status) {
         status.hidden = false;
         status.textContent = liveEntries.size ? "暂时听不到云端，旧日记仍在这里" : "日记暂时未能加载，稍后会自动重试";
       }
+      return {ok:false,status:error.status};
     } finally {
       inFlight = false;
     }
   }
 
   if (stream) sortStream(stream);   // 静态条目立即倒叙，不等网络
-  refresh();
-  window.setInterval(refresh, POLL_MS);
-  document.addEventListener("visibilitychange", function () {
-    if (!document.hidden) refresh();
+  if (!window.FlitFancyRefresh) {
+    void refresh();
+    document.addEventListener('flitfancy:memory-saved',refresh);
+    return;
+  }
+  const scheduler = window.FlitFancyRefresh.create({concurrency:2});
+  const job = scheduler.register({id:'memories',label:'日记更新',page:'journal',interval:POLL_MS,hidden:'pause',run:refresh});
+  function syncContext(runNow) {
+    scheduler.reconcile({authenticated:!!window.FlitFancyAdmin.token(),hidden:!!document.hidden,
+      online:!window.navigator || window.navigator.onLine !== false,runNow:runNow===true});
+  }
+  syncContext();
+  scheduler.start();
+  document.addEventListener('visibilitychange',()=>syncContext());
+  document.addEventListener('flitfancy:memory-saved',()=>job.refresh({rerun:true}));
+  window.addEventListener('online',()=>syncContext(true));
+  window.addEventListener('offline',()=>syncContext());
+  window.addEventListener('pagehide',event=>{
+    if (event.persisted) {
+      scheduler.reconcile({hidden:true,online:false});
+    } else { scheduler.dispose(); }
   });
-  document.addEventListener("flitfancy:memory-saved", refresh);
+  window.addEventListener('pageshow',event=>{if(event.persisted) syncContext(true);});
 })();

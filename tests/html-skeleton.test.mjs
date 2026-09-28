@@ -62,7 +62,7 @@ console.log("html skeleton ok: nav across " + NAV_PAGES.length +
 // 页面职责与依赖随迁移一起受保护，避免误把大面板或脚本留在控制台。
 const presence = read("presence.html");
 const consolePage = read("console.html");
-for (const role of ["sensor-grid", "audio-panel", "chat-log"]) {
+for (const role of ["sensor-grid", "audio-panel", "chat-log", "activity-panel"]) {
   assert.ok(presence.includes('data-role="' + role + '"'), role + " belongs on presence");
   assert.ok(!consolePage.includes('data-role="' + role + '"'), role + " must leave console");
 }
@@ -70,7 +70,7 @@ for (const role of ["launcher-panel", "admin-panel"]) {
   assert.ok(consolePage.includes('data-role="' + role + '"'), role + " stays on console");
   assert.ok(!presence.includes('data-role="' + role + '"'), role + " must not be duplicated");
 }
-for (const name of ["sensor-state", "console-overview", "console-sensors", "console-audio-history", "console-audio", "console-chat", "console-dialogue"]) {
+for (const name of ["sensor-state", "console-overview", "console-sensors", "console-audio-history", "console-audio", "console-chat", "console-dialogue", "console-activity"]) {
   assert.ok(presence.includes('assets/' + name + '.js?'), name + " loads on presence");
   assert.ok(!consolePage.includes('assets/' + name + '.js?'), name + " must not load on console");
 }

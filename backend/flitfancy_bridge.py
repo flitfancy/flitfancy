@@ -7,6 +7,7 @@ import re
 import stat
 from contextlib import contextmanager
 import copy
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
 import os
@@ -172,6 +173,10 @@ class SMBStorage:
 
 
 CHUNK_BYTES = 4 * 1024 * 1024
+BATCH_MAX_FILES = 32
+BATCH_MAX_BYTES = CHUNK_BYTES
+BATCH_MAX_FILE_BYTES = 256 * 1024
+BATCH_WORKERS = 4
 MAX_FILE_BYTES = 20 * 1024 * 1024 * 1024
 TASK_TTL = 3600
 ACTIVE = {"receiving", "queued", "sending", "verifying", "testing"}
@@ -198,13 +203,19 @@ class BridgeService:
         self.lease = None
         self.thread = None
         self.storage = None
+        self.batch_storages = []
         self.storage_key = None
         self.storage_used = 0
 
     def _close_storage(self):
-        storage, self.storage = self.storage, None
+        storages = [self.storage, *self.batch_storages]
+        self.storage, self.batch_storages = None, []
         self.storage_key = None
-        if storage is not None:
+        closed = set()
+        for storage in storages:
+            if storage is None or id(storage) in closed:
+                continue
+            closed.add(id(storage))
             try:
                 storage.close()
             except Exception:
@@ -286,13 +297,15 @@ class BridgeService:
         return checked_settings(settings)
 
     def config(self):
+        capabilities = {'batch_upload': True, 'batch_max_files': BATCH_MAX_FILES,
+                        'batch_max_bytes': BATCH_MAX_BYTES, 'batch_max_file_bytes': BATCH_MAX_FILE_BYTES}
         try:
             settings = self._settings()
         except BridgeError:
-            return {"configured": False, "chunk_bytes": CHUNK_BYTES, "max_file_bytes": MAX_FILE_BYTES, "folder_upload": True, "task_wait": True}
+            return {**capabilities, "configured": False, "chunk_bytes": CHUNK_BYTES, "max_file_bytes": MAX_FILE_BYTES, "folder_upload": True, "task_wait": True}
         return {**{key: value for key, value in settings.items() if key != "password"},
                 "configured": True, "password_saved": True,
-                "chunk_bytes": CHUNK_BYTES, "max_file_bytes": MAX_FILE_BYTES, "folder_upload": True, "task_wait": True}
+                "chunk_bytes": CHUNK_BYTES, "max_file_bytes": MAX_FILE_BYTES, "folder_upload": True, "task_wait": True, **capabilities}
 
     def _reap(self):
         for task in self.tasks.values():
@@ -412,6 +425,51 @@ class BridgeService:
             self._save()
             return copy.deepcopy(task)
 
+    def begin_batch(self, data):
+        with self.lock:
+            self._idle()
+            self._settings()
+            folder_root = relative_path(data.get('folder_root'), empty=False)
+            values = data.get('files')
+            if not isinstance(values, list) or not 1 <= len(values) <= BATCH_MAX_FILES:
+                raise BridgeError('小文件批次须包含 1 到 32 个文件')
+            files, names, size = [], set(), 0
+            for value in values:
+                if not isinstance(value, dict):
+                    raise BridgeError('文件清单无效')
+                path = relative_path(value.get('path'), empty=False)
+                length, digest = value.get('size'), value.get('sha256')
+                if not path.startswith(folder_root + '/'):
+                    raise BridgeError('文件路径不在指定文件夹内')
+                if type(length) is not int or not 0 <= length <= BATCH_MAX_FILE_BYTES:
+                    raise BridgeError('批次内单个文件不能超过 256 KiB')
+                if not isinstance(digest, str) or not re.fullmatch(r'[a-fA-F0-9]{64}', digest):
+                    raise BridgeError('请提供文件的 SHA-256')
+                name = path.casefold()
+                if name in names:
+                    raise BridgeError('批次内存在同名文件')
+                names.add(name)
+                files.append({'path': path, 'size': length, 'sha256': digest.lower(), 'offset': size,
+                              'state': 'pending', 'sent_bytes': 0, 'error': None})
+                size += length
+            if size > BATCH_MAX_BYTES:
+                raise BridgeError('小文件批次总大小不能超过 4 MiB')
+            for name in names:
+                parts = name.split('/')
+                if any('/'.join(parts[:i]) in names for i in range(1, len(parts))):
+                    raise BridgeError('批次内文件和目录名称冲突')
+            if shutil.disk_usage(self.root).free < size + 64 * 1024 * 1024:
+                raise BridgeError('电脑暂存空间不足', 507)
+            task = self._new('batch', state='receiving', folder_root=folder_root, path=folder_root,
+                             size=size, files=files, file_count=len(files), completed_files=0)
+            try:
+                self._part(task['id']).touch(exist_ok=False)
+            except OSError:
+                task.update(state='failed', error='无法创建暂存文件')
+                self._save()
+                raise BridgeError('无法创建暂存文件', 503) from None
+            return copy.deepcopy(task)
+
     def cancel(self, task_id):
         with self.lock:
             task = self._task(task_id)
@@ -426,7 +484,7 @@ class BridgeService:
     def commit(self, task_id):
         with self.lock:
             task = self._task(task_id)
-            if task["kind"] != "transfer":
+            if task["kind"] not in {"transfer", "batch"}:
                 raise BridgeError("这不是文件传输任务", 409)
             if task["state"] in {"queued", "sending", "verifying", "succeeded"}:
                 return copy.deepcopy(task)
@@ -434,6 +492,11 @@ class BridgeService:
                 raise BridgeError("文件尚未接收完整或任务不可重试", 409)
             settings = self._settings()
             task.update(state="queued", error=None, retryable=False, sent_bytes=0, updated_at=self.clock())
+            if task['kind'] == 'batch':
+                for item in task['files']:
+                    if item['state'] != 'succeeded':
+                        item.update(state='pending', error=None, sent_bytes=0)
+                task['sent_bytes'] = sum(item['sent_bytes'] for item in task['files'])
             task['attempts'] = task.get('attempts', 0) + 1
             self._launch(task, settings)
             return copy.deepcopy(task)
@@ -467,7 +530,7 @@ class BridgeService:
         try:
             self.thread.start()
         except Exception:
-            task.update(state="failed", retryable=task["kind"] == "transfer", error="无法启动传输任务")
+            task.update(state="failed", retryable=task["kind"] in {"transfer", "batch"}, error="无法启动传输任务")
             self._save()
             raise BridgeError("无法启动传输任务", 503) from None
 
@@ -479,6 +542,20 @@ class BridgeService:
 
     @staticmethod
     def _make_directories(storage, path, known):
+        if not path or path in known:
+            return
+        try:
+            # SMBStorage.stat validates every parent and rejects reparse points.
+            # Querying all prefixes separately only repeats those same checks.
+            info = storage.stat(path)
+        except OSError as error:
+            if error.errno != errno.ENOENT:
+                raise
+        else:
+            if is_link(info) or not stat.S_ISDIR(info.st_mode):
+                raise BridgeError("目标位置有同名文件，无法创建文件夹，请修改保存名称", 409)
+            known.add(path)
+            return
         current = ""
         for part in filter(None, path.split("/")):
             current = current + "/" + part if current else part
@@ -501,6 +578,8 @@ class BridgeService:
 
     def _worker(self, task_id, settings):
         task = self.tasks[task_id]
+        if task['kind'] == 'batch':
+            return self._batch_worker(task_id, settings)
         storage = None
         temporary = TEMP_PREFIX + task_id
         temporary_exists = False
@@ -595,4 +674,132 @@ class BridgeService:
                 # Preserve in-memory failure and let restart recovery reject incomplete persisted work.
                 with self.lock:
                     task.update(state="failed", error="任务结果无法保存，请检查电脑磁盘空间", retryable=False)
+                    self.changed.notify_all()
+
+    def _batch_item_result(self, task_id, index, **values):
+        with self.lock:
+            task = self.tasks[task_id]
+            task['files'][index].update(**values)
+            task['completed_files'] = sum(item['state'] == 'succeeded' for item in task['files'])
+            self._update(task_id, sent_bytes=sum(item['sent_bytes'] for item in task['files']))
+
+    def _batch_worker(self, task_id, settings):
+        task = self.tasks[task_id]
+        failure = None
+        storage = None
+        try:
+            # The whole batch is bounded at 4 MiB. Validate every slice before
+            # publishing any file; source bytes are immutable for all workers.
+            body = self._part(task_id).read_bytes()
+            if len(body) != task['size']:
+                raise BridgeError('接收文件的大小校验失败，请取消后重新上传', 422)
+            for item in task['files']:
+                data = body[item['offset']:item['offset'] + item['size']]
+                if hashlib.sha256(data).hexdigest() != item['sha256']:
+                    raise BridgeError('接收文件的 SHA-256 校验失败，请取消后重新上传', 422)
+            with storage_errors():
+                storage = self._storage(settings)
+                # Prepare directories before handing each worker its own session.
+                # Every operation still validates the complete path.
+                storage.ensure_root()
+                self._update(task_id, state='sending')
+                known = set()
+                for parent in sorted({item['path'].rpartition('/')[0] for item in task['files'] if item['state'] != 'succeeded'}):
+                    self._make_directories(storage, parent, known)
+
+                def transfer(index, storage):
+                    item = task['files'][index]
+                    if item['state'] == 'succeeded':
+                        return
+                    temporary = TEMP_PREFIX + task_id + '-' + str(index)
+                    temporary_exists, error, reused = False, None, False
+                    try:
+                        with storage_errors():
+                            if task['attempts'] > 1:
+                                try:
+                                    storage.remove(temporary)
+                                except OSError as exc:
+                                    if exc.errno != errno.ENOENT:
+                                        raise
+                            try:
+                                existing = storage.stat(item['path'])
+                            except OSError as exc:
+                                if exc.errno != errno.ENOENT:
+                                    raise
+                            else:
+                                if stat.S_ISREG(existing.st_mode) and existing.st_size == item['size']:
+                                    with storage.open(item['path'], 'rb') as handle:
+                                        reused = file_digest(handle) == (item['sha256'], item['size'])
+                                if not reused:
+                                    raise BridgeError('目标文件已存在且内容不同，请更换保存名称；桥不会覆盖原文件', 409)
+                            if not reused:
+                                temporary_exists = True
+                                with storage.open(temporary, 'xb') as handle:
+                                    handle.write(body[item['offset']:item['offset'] + item['size']])
+                                with storage.open(temporary, 'rb') as handle:
+                                    if file_digest(handle) != (item['sha256'], item['size']):
+                                        raise BridgeError('NAS 写入后的 SHA-256 校验失败', 503)
+                                storage.rename(temporary, item['path'])
+                                temporary_exists = False
+                    except Exception as exc:
+                        error = exc if isinstance(exc, BridgeError) else BridgeError('文件传输失败，请检查 NAS 连接', 503)
+                    finally:
+                        if temporary_exists:
+                            try:
+                                storage.remove(temporary)
+                            except OSError as exc:
+                                if exc.errno != errno.ENOENT and error is None:
+                                    error = BridgeError('NAS 临时文件清理失败', 503)
+                            except Exception:
+                                if error is None:
+                                    error = BridgeError('NAS 临时文件清理失败', 503)
+                    self._batch_item_result(task_id, index, state='failed' if error else 'succeeded',
+                                            error=str(error) if error else None, reused=reused,
+                                            sent_bytes=0 if error else item['size'])
+
+                pending = [index for index, item in enumerate(task['files']) if item['state'] != 'succeeded']
+                workers = min(BATCH_WORKERS, len(pending))
+                while len(self.batch_storages) < workers - 1:
+                    self.batch_storages.append(self.storage_factory(settings))
+                storages = [storage, *self.batch_storages]
+
+                def run_slot(slot):
+                    owned = storages[slot]
+                    indices = pending[slot::workers]
+                    try:
+                        with storage_errors():
+                            if slot:
+                                owned.ensure_root()
+                    except Exception as exc:
+                        message = str(exc) if isinstance(exc, BridgeError) else 'NAS 连接失败，请重试'
+                        for index in indices:
+                            self._batch_item_result(task_id, index, state='failed', error=message, sent_bytes=0)
+                        return
+                    for index in indices:
+                        transfer(index, owned)
+
+                if workers:
+                    # smbclient's connection cache reconnect path is not atomic.
+                    # A session is used by only one worker at a time, so a NAS
+                    # disconnect cannot race creation of untracked connections.
+                    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix='nas-small-file') as pool:
+                        list(pool.map(run_slot, range(workers)))
+                failed = [item for item in task['files'] if item['state'] != 'succeeded']
+                if failed:
+                    raise BridgeError('有 %d 个文件未完成：%s' % (len(failed), failed[0]['error']), 503)
+                self._part(task_id).unlink(missing_ok=True)
+        except Exception as exc:
+            failure = exc if isinstance(exc, BridgeError) else BridgeError('批量传输失败，请检查本地磁盘及 NAS 连接', 503)
+        finally:
+            # All pool workers have finished before closing a failed session.
+            if failure:
+                self._close_storage()
+            elif storage is not None:
+                self.storage_used = time.monotonic()
+            try:
+                self._update(task_id, state='failed' if failure else 'succeeded', error=str(failure) if failure else None,
+                             retryable=bool(failure and self._part(task_id).exists()))
+            except OSError:
+                with self.lock:
+                    task.update(state='failed', error='任务结果无法保存，请检查电脑磁盘空间', retryable=False)
                     self.changed.notify_all()

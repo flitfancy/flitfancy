@@ -16,6 +16,13 @@
     const canUse = () => opts.isServerOnline() && opts.isAdmin();
     const note = message => { field("status").textContent = message || ""; };
     const post = (action, body) => opts.request("/api/launcher/" + action, { method: "POST", body: JSON.stringify(body || {}) });
+    let forceNext = false;
+    const refreshJob = opts.scheduler ? opts.scheduler.register({
+      id:'launcher-status', label:'本机启动', page:'console', requiresAuth:true,
+      interval:()=>pickId || jobs.some(job=>['pending','dispatched'].includes(job.state)) ? 2000 : 5000,
+      enabled:canUse, hidden:'pause', disabledReason:()=> '等待登录',
+      run:()=>{const force=forceNext;forceNext=false;return poll(force);},
+    }) : null;
     function clearPrivate() {
       generation++;
       root.hidden = true; cards = []; jobs = []; rendered = ""; pickId = "";
@@ -91,14 +98,18 @@
         item.append(launch, controls); field("cards").appendChild(item);
       });
     }
-    async function refresh(force) {
-      if (!canUse()) { clearPrivate(); return; }
-      if (loading || (busy && !force)) return;
+    function refresh(force) {
+      if (force) forceNext=true;
+      return refreshJob ? refreshJob.refresh({rerun:!!force}) : poll(force);
+    }
+    async function poll(force) {
+      if (!canUse()) { clearPrivate(); return {skipped:true,reason:'auth'}; }
+      if (loading || (busy && !force)) return {skipped:true,reason:'busy'};
       loading = true;
       const epoch = generation;
       try {
         const data = await opts.request("/api/launcher");
-        if (!canUse() || epoch !== generation) return;
+        if (!canUse() || epoch !== generation) return {skipped:true};
         root.hidden = false; cards = data.cards || []; jobs = data.jobs || []; online = data.agent_online;
         if (pickId) {
           const job = jobs.find(j => j.id === pickId);
@@ -107,10 +118,12 @@
           }
         }
         render();
+        return {ok:true};
       } catch (error) {
-        if (!canUse() || epoch !== generation) return;
+        if (!canUse() || epoch !== generation) return {skipped:true};
         if (global.FlitFancyAdmin.isUnauthorized(error)) clearPrivate();
         else { root.hidden = false; online = false; note(error.message || "启动区加载失败"); render(); }
+        return {ok:false,status:error.status};
       } finally { loading = false; }
     }
     async function drop(event) {
@@ -145,9 +158,9 @@
       root.addEventListener("dragleave", event => { if (!root.contains(event.relatedTarget)) root.classList.remove("is-dragging"); });
       root.addEventListener("drop", drop);
       refresh();
-      setInterval(() => { if (!document.hidden) refresh(); }, 2000);
     }
-    return { start, refresh, clearPrivate };
+    function dispose() { if (refreshJob) refreshJob.unregister(); clearPrivate(); }
+    return { start, refresh, clearPrivate, dispose };
   }
   global.FlitFancyConsoleLauncher = { create };
 })(window);

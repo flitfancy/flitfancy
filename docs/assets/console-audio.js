@@ -116,6 +116,7 @@
     const isAdmin = opts.isAdmin || function () { return false; };
     const history = global.FlitFancyAudioHistory ? global.FlitFancyAudioHistory.create({
       query: query, request: request, isServerOnline: function () { return isServerOnline() && isAdmin(); },
+      scheduler: opts.scheduler,
     }) : null;
     const elements = {
       panel: query('[data-role="audio-panel"]'),
@@ -170,7 +171,7 @@
       otaVersion: query('[data-role="audio-ota-version"]'),
       error: query('[data-role="audio-error"]'),
     };
-    let timer = null;
+    let refreshJob = null, pendingRefresh = null, started = false;
     let privacyRevision = 0, recordingRevision = 0, recordingUrl = null;
     const mediaUrls = new Set();
     let firmwareFile = null;
@@ -526,19 +527,27 @@
       }
     }
 
-    async function refresh() {
-      if (stopped || !isServerOnline()) return;
-      if (!isAdmin()) { clearPrivate(); return; }
+    async function poll() {
+      if (stopped || !isServerOnline()) return { skipped: true, reason: "unavailable" };
+      if (!isAdmin()) { clearPrivate(); return { skipped: true, reason: "signed-out" }; }
       const current = privacyRevision;
       try {
         const state = await request("/api/audio/status");
-        if (current !== privacyRevision || !isAdmin()) return;
+        if (stopped || current !== privacyRevision || !isAdmin()) return { skipped: true, reason: "changed" };
         render(state);
+        return { ok: state.available !== false, status: state.available === false ? 503 : 200 };
       } catch (error) {
-        if (current !== privacyRevision) return;
-        if (error.status === 401) { clearPrivate(); if (opts.onLoginRequired) opts.onLoginRequired(); return; }
-        renderUnavailable("本机音频服务未连接");
+        if (stopped || current !== privacyRevision) return { skipped: true, reason: "changed" };
+        if (error.status === 401) { clearPrivate(); if (opts.onLoginRequired) opts.onLoginRequired(); }
+        else renderUnavailable("本机音频服务未连接");
+        return { ok: false, status: error.status || 0 };
       }
+    }
+
+    function refresh() {
+      if (refreshJob) return refreshJob.refresh({ rerun: true });
+      if (!pendingRefresh) pendingRefresh = poll().finally(function () { pendingRefresh = null; });
+      return pendingRefresh;
     }
 
     function revokeMedia(url) {
@@ -592,13 +601,6 @@
       renderUnavailable('请先登录后使用音频和对话');
       elements.modelStatus.textContent = '请先登录';
       elements.wifiStatus.textContent = '登录后连接音频服务';
-    }
-
-    function schedule() {
-      if (stopped || !isServerOnline()) return;
-      refresh().finally(function () {
-        timer = setTimeout(schedule, nextPollMs);
-      });
     }
 
     function updateInputLabels() {
@@ -707,6 +709,8 @@
     }
 
     function start() {
+      if (started || stopped) return;
+      started = true;
       if (history) history.start();
       for (let index = 0; index < 16; index += 1) {
         const bar = document.createElement('span');
@@ -714,18 +718,25 @@
         spectrumBars.push(bar);
       }
       bind();
+      if (opts.scheduler) refreshJob = opts.scheduler.register({
+        id: "audio-state", label: "音频状态", page: "presence", interval: function () { return nextPollMs; },
+        requiresAuth: true, enabled: function () { return !stopped && isServerOnline() && isAdmin(); },
+        disabledReason: function () { return isAdmin() ? "管理服务未连接" : "登录后刷新"; },
+        hidden: "slow", hiddenInterval: 15000, run: poll,
+      });
       if (!isServerOnline()) {
         renderUnavailable("请从本机控制台或登录后的控制台使用音频功能");
         return;
       }
-      schedule();
+      if (!isAdmin()) clearPrivate();
+      if (!refreshJob) void refresh();
     }
 
     function dispose() {
       stopped = true;
       clearPrivate();
       if (history) history.dispose();
-      clearTimeout(timer);
+      if (refreshJob) { refreshJob.unregister(); refreshJob = null; }
       clearTimeout(volumeTimer);
       showSpectrum(null);
     }

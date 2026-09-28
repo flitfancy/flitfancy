@@ -34,7 +34,7 @@
     const date = panel.querySelector('input');
     const note = panel.querySelector('[data-role="audio-history-note"]');
     const detail = panel.querySelector('[data-role="audio-history-detail"]');
-    let mode = 0, data = null, stopped = false, timer = null, revision = 0;
+    let mode = 0, data = null, stopped = false, started = false, refreshJob = null, pending = null, revision = 0;
     let message = '正在读取历史…';
     const modes = [['left', 'right'], ['left'], ['right']];
     const labels = ['双麦', '左麦', '右麦'];
@@ -120,7 +120,7 @@
       front.removeAttribute('aria-hidden');
       front.setAttribute('aria-expanded', 'false');
       revision += 1;
-      clearTimeout(timer);
+      if (opts.scheduler) opts.scheduler.reconcile();
       front.focus();
     }
 
@@ -138,13 +138,13 @@
       if (event.key === 'Escape') { event.preventDefault(); showLevels(); }
     }
 
-    async function refresh() {
-      const current = ++revision;
-      clearTimeout(timer);
-      if (stopped || panel.hidden) return;
+    async function poll() {
+      const current = revision;
+      if (stopped || panel.hidden) return { skipped: true, reason: "closed" };
       if (!opts.isServerOnline()) {
         data = null; detail.hidden = true; message = '请登录后查看音频历史';
         note.textContent = message; draw();
+        return { skipped: true, reason: "signed-out" };
       } else {
         try {
           let url = '/api/audio/history?span=' + encodeURIComponent(range.value);
@@ -154,7 +154,7 @@
             url += '&end=' + Math.min(Date.now() / 1000, until.getTime() / 1000);
           }
           const result = await opts.request(url);
-          if (stopped || current !== revision || !opts.isServerOnline()) return;
+          if (stopped || current !== revision || panel.hidden || !opts.isServerOnline()) return { skipped: true, reason: "changed" };
           if (!Array.isArray(result.rows)) throw new Error(result.error || '历史服务尚未就绪');
           data = result;
           note.textContent = result.error ? '历史写入异常：' + result.error : result.first_recorded
@@ -163,7 +163,9 @@
           detail.hidden = true;
           message = result.error ? '历史写入异常，请检查音频服务' : '这个时段暂无记录';
           draw();
+          return { ok: !result.error, status: result.error ? 503 : 200 };
         } catch (error) {
+          if (stopped || current !== revision || panel.hidden || !opts.isServerOnline()) return { skipped: true, reason: "changed" };
           if (current === revision) {
             message = /unknown api/i.test(error.message)
               ? '网站后台需要重启以加载历史' : '暂时无法读取历史';
@@ -171,9 +173,17 @@
             data = null;
             draw();
           }
+          return { ok: false, status: error.status || 0 };
         }
       }
-      if (!stopped && current === revision) timer = setTimeout(refresh, 15000);
+    }
+
+    function refresh() {
+      revision++;
+      if (refreshJob) return refreshJob.refresh({ rerun: true });
+      if (pending) return pending.then(function () { return refresh(); });
+      pending = poll().finally(function () { pending = null; });
+      return pending;
     }
 
     function inspect(event) {
@@ -193,11 +203,12 @@
 
     return {
       clearPrivate() {
-        revision++; clearTimeout(timer); data = null; detail.hidden = true;
+        revision++; data = null; detail.hidden = true;
         message = '请登录后查看音频历史'; note.textContent = message; draw();
-        if (!stopped && !panel.hidden) timer = setTimeout(refresh, 15000);
       },
       start() {
+        if (started || stopped) return;
+        started = true;
         front.addEventListener('click', showHistory);
         front.addEventListener('keydown', frontKey);
         backButton.addEventListener('click', showLevels);
@@ -209,10 +220,16 @@
         range.addEventListener('change', refresh);
         date.addEventListener('change', refresh);
         if (observer) observer.observe(canvas);
-        draw(); refresh();
+        if (opts.scheduler) refreshJob = opts.scheduler.register({
+          id: "audio-history", label: "音频历史", page: "presence", interval: 15000,
+          requiresAuth: true, enabled: function () { return !stopped && !panel.hidden && opts.isServerOnline(); },
+          disabledReason: function () { return panel.hidden ? "展开历史后刷新" : "登录后刷新"; }, hidden: "pause", run: poll,
+        });
+        draw(); if (!refreshJob) void refresh();
       },
       dispose() {
-        stopped = true; revision += 1; clearTimeout(timer);
+        stopped = true; revision += 1;
+        if (refreshJob) { refreshJob.unregister(); refreshJob = null; }
         if (observer) observer.disconnect();
         front.removeEventListener('click', showHistory);
         front.removeEventListener('keydown', frontKey);

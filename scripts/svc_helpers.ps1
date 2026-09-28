@@ -89,7 +89,8 @@ switch ($Action) {
     }
     'start-audio' {
         if (-not $Exe -or -not $WorkDir) { exit 1 }
-        $proc = Start-Process -FilePath $Exe -ArgumentList '-u', '-X', 'utf8', 'app.py' -WorkingDirectory $WorkDir -WindowStyle Hidden -RedirectStandardOutput $OutLog -RedirectStandardError $ErrLog -PassThru
+        $appPath = Join-Path $WorkDir 'app.py'
+        $proc = Start-Process -FilePath $Exe -ArgumentList ('-u -X utf8 "' + $appPath + '"') -WorkingDirectory $WorkDir -WindowStyle Hidden -RedirectStandardOutput $OutLog -RedirectStandardError $ErrLog -PassThru
         if ($PidFile) { Set-Content -Path $PidFile -Value $proc.Id }
         exit 0
     }

@@ -75,6 +75,18 @@ def run():
     adapter.client = FakeSMB()
     rejected(lambda: adapter._path('jump/file'), 403)
 
+    # Existing deep directories need one fully validated lookup, not every
+    # prefix queried again (which makes per-file metadata checks quadratic).
+    class ExistingDirectories:
+        def __init__(self):
+            self.reads = []
+        def stat(self, path):
+            self.reads.append(path)
+            return type('Info', (), {'st_mode': stat.S_IFDIR})()
+    existing = ExistingDirectories()
+    BridgeService._make_directories(existing, 'one/two/three/four/five', set())
+    assert existing.reads == ['one/two/three/four/five'], existing.reads
+
     with tempfile.TemporaryDirectory(prefix='flitfancy-bridge-test-') as temp:
         root = Path(temp)
         # A folder of tiny files must share one healthy NAS connection.

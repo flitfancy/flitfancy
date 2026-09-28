@@ -15,6 +15,8 @@ from datetime import datetime
 from http.server import BaseHTTPRequestHandler
 from flitfancy_launcher import LauncherError
 from flitfancy_bridge import BridgeError
+from flitfancy_activity import ActivityError
+from flitfancy_refresh import RefreshRegistry
 
 # Every API requires an administrator unless its exact method/path is listed
 # here. These exceptions apply only to verified loopback clients and Hosts;
@@ -31,6 +33,7 @@ LOCAL_ANONYMOUS_ROUTES = frozenset({
 @dataclass(frozen=True)
 class HttpDependencies:
     audio_service: object
+    activity_service: object
     launcher_service: object
     bridge_service: object
     ai_opener: object
@@ -71,6 +74,7 @@ class HttpDependencies:
 def create_handler(app):
     """创建只可访问已声明领域能力的请求处理器。"""
     audio_service = app.audio_service
+    activity_service = app.activity_service
     launcher_service = app.launcher_service
     bridge_service = app.bridge_service
     AI_OPENER = app.ai_opener
@@ -106,9 +110,15 @@ def create_handler(app):
     sync_pending_essays = app.sync_pending_essays
     sync_pending_memories = app.sync_pending_memories
     sync_public_config = app.sync_public_config
+    refresh_registry = RefreshRegistry()
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "flitfancy/1.0"
+
+        def send_response(self, code, message=None):
+            if getattr(self, '_refresh_ticket', None) is not None:
+                self._refresh_status = code
+            super().send_response(code, message)
 
         def log_message(self, fmt, *args):
             if urllib.parse.urlparse(self.path).path.startswith("/api/bridge/"):
@@ -167,7 +177,22 @@ def create_handler(app):
             if path.startswith("/api/"):
                 if not self._api_guard('GET', path):
                     return
-                self._api_get(path, parsed.query)
+                # Observe existing reads after authorization, not their bodies
+                # or query strings. Uploads, exports and this ledger are absent
+                # from the fixed catalog and retain their direct dispatch.
+                ticket = refresh_registry.begin(path)
+                if ticket is None:
+                    self._api_get(path, parsed.query)
+                    return
+                self._refresh_ticket = ticket
+                self._refresh_status = None
+                completed = False
+                try:
+                    self._api_get(path, parsed.query)
+                    completed = True
+                finally:
+                    refresh_registry.finish(ticket, self._refresh_status, failed=not completed)
+                    self._refresh_ticket = None
                 return
             self._serve_static(path)
 
@@ -332,6 +357,10 @@ def create_handler(app):
         def _api_get(self, path, query=""):
             if path == '/api/admin/session':
                 self._send(200, {"ok": True})
+            elif path == '/api/refresh/status':
+                self._send(200, refresh_registry.snapshot())
+            elif path.startswith('/api/activity/'):
+                self._api_activity_get(path, query)
             elif path.startswith("/api/bridge/"):
                 self._api_bridge_get(path, query)
             elif path == "/api/launcher":
@@ -345,6 +374,7 @@ def create_handler(app):
                 self._send(200, {
                     "name": "flitfancy",
                     "time": now_iso(),
+                    "capabilities": {"refresh_ledger": 1},
                     "services": {
                         "backend": True,
                         "listener": heartbeat["listener"],
@@ -913,6 +943,25 @@ def create_handler(app):
                 "public_sync_note": sync_note,
             })
 
+        def _api_activity_get(self, path, query):
+            try:
+                if path not in ('/api/activity/summary', '/api/activity/export'):
+                    self._send(404, {'ok': False, 'error': '接口不存在'})
+                    return
+                params = urllib.parse.parse_qs(query)
+                try:
+                    days = int(params.get('days', ['30' if path.endswith('/export') else '7'])[0])
+                except ValueError:
+                    self._send(400, {'ok': False, 'error': '请选择有效的统计天数'})
+                    return
+                end = params.get('end', [None])[0]
+                result = activity_service.export(days=days, end=end) if path.endswith('/export') else activity_service.summary(days=days, end=end)
+                self._send(200, result)
+            except ActivityError as error:
+                self._send(error.status, {'ok': False, 'error': str(error)})
+            except (OSError, sqlite3.Error):
+                self._send(503, {'ok': False, 'error': '电脑使用归档暂时不可用'})
+
         def _api_bridge_get(self, path, query):
             try:
                 params = urllib.parse.parse_qs(query)
@@ -958,6 +1007,8 @@ def create_handler(app):
                         result = bridge_service.directories(data)
                     elif path == "/api/bridge/transfers":
                         result = bridge_service.begin(data)
+                    elif path == "/api/bridge/batches":
+                        result = bridge_service.begin_batch(data)
                     elif path == "/api/bridge/transfers/commit":
                         result = bridge_service.commit(data.get("id", ""))
                     elif path == "/api/bridge/transfers/cancel":

@@ -216,6 +216,7 @@
       request: request,
       publicBase: publicBase,
       refreshMs: refreshMs,
+      scheduler: opts.scheduler,
       sensorMeta: SENSOR_META,
       format: formatValue,
       math: {
@@ -237,6 +238,8 @@
       render: render,
       notePressure: notePressure,
       overview: overview,
+      clearPrivate: function () { overview.clearPrivate(); },
+      dispose: function () { overview.dispose(); },
     };
   }
 

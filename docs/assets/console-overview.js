@@ -52,7 +52,7 @@
     const getRows = opts.getRows || function () { return []; };
     const renderRows = opts.renderRows || function () {};
     let channelOpen = null;
-    let refreshTimer = null;
+    let refreshJob = null, pending = null, revision = 0, disposed = false;
     let spectralMode = false;
     const bandsOn = {};
     const seriesOn = {};
@@ -124,7 +124,7 @@
           seriesOn[channel] = seriesOn[channel] || {};
           seriesOn[channel][item.key] = seriesOn[channel][item.key] === false;
           button.classList.toggle("off", seriesOn[channel][item.key] === false);
-          load(channel);
+          refresh();
         });
         row.appendChild(button);
       });
@@ -159,7 +159,7 @@
         button.addEventListener("click", function () {
           spectralMode = mode === "spectral";
           syncModes();
-          load(channel);
+          refresh();
         });
         return button;
       };
@@ -176,7 +176,7 @@
           seriesOn.CH2 = seriesOn.CH2 || {};
           seriesOn.CH2[item.key] = seriesOn.CH2[item.key] === false;
           button.classList.toggle("off", seriesOn.CH2[item.key] === false);
-          load(channel);
+          refresh();
         });
         modes.appendChild(button);
       });
@@ -192,7 +192,7 @@
         button.addEventListener("click", function () {
           bandsOn[band.key] = bandsOn[band.key] === false;
           button.classList.toggle("off", bandsOn[band.key] === false);
-          load(channel);
+          refresh();
         });
         modes.appendChild(button);
       });
@@ -201,6 +201,7 @@
     }
 
     function open(channel) {
+      if (disposed) return;
       channelOpen = channel;
       const grid = query('[data-role="sensor-grid"]');
       const meta = sensorMeta[channel];
@@ -249,30 +250,33 @@
       wrapper.appendChild(canvas);
       wrapper.appendChild(status);
       grid.appendChild(wrapper);
-      load(channel);
-      global.clearInterval(refreshTimer);
-      refreshTimer = global.setInterval(function () { load(channelOpen); }, refreshMs);
+      refresh();
     }
 
     function close() {
       channelOpen = null;
-      global.clearInterval(refreshTimer);
+      revision++;
       const grid = query('[data-role="sensor-grid"]');
       grid.textContent = "";
       renderRows(getRows());
+      if (opts.scheduler) opts.scheduler.reconcile();
     }
 
     async function load(channel) {
-      if (!channel) return;
+      if (!channel || disposed) return { skipped: true, reason: "closed" };
+      const current = revision;
+      const valid = function () { return !disposed && current === revision && channelOpen === channel; };
       const status = query('[data-role="overview-status"]');
       const params = "channel=" + encodeURIComponent(channel) + "&hours=24";
       const urls = ["/api/sensors/history?" + params,
         publicBase + "/sensors/history?" + params];
+      let failureStatus = 0;
       for (const url of urls) {
         try {
+          if (!valid()) return { skipped: true, reason: "changed" };
           const data = await request(url);
-          if (!data.ok) throw new Error(data.error || "HTTP");
-          if (channelOpen !== channel) return;
+          if (!valid()) return { skipped: true, reason: "changed" };
+          if (!data.ok) { failureStatus = 503; continue; }
           const currentSeries = channel === "CH2" && spectralMode
             ? buildSpectralSeries(data.buckets || [])
             : buildSeriesList(channel, data.buckets || []);
@@ -283,10 +287,20 @@
             : "";
           status.textContent = "24 小时总览 · " + (data.buckets || []).length +
             " 个采样点（10 分钟聚合）" + trend;
-          return;
-        } catch (e) { /* 尝试下一个数据源 */ }
+          return { ok: true };
+        } catch (e) { failureStatus = e.status || 0; }
       }
+      if (!valid()) return { skipped: true, reason: "changed" };
       status.textContent = "暂时拿不到 24 小时数据（需要本地服务或登录后的云端历史）";
+      return { ok: false, status: failureStatus };
+    }
+
+    function refresh() {
+      revision++;
+      if (refreshJob) return refreshJob.refresh({ rerun: true });
+      if (pending) return pending.then(function () { return refresh(); });
+      pending = load(channelOpen).finally(function () { pending = null; });
+      return pending;
     }
 
     function buildSeriesList(channel, buckets) {
@@ -489,12 +503,23 @@
       chartState.draw = function () { drawSeriesChart(canvas, buckets, seriesList); };
     }
 
+    if (opts.scheduler) refreshJob = opts.scheduler.register({
+      id: "sensor-history", label: "感知历史", page: "presence", interval: refreshMs,
+      enabled: function () { return !disposed && isOpen(); }, disabledReason: function () { return "展开历史后刷新"; },
+      hidden: "pause", run: function () { return load(channelOpen); },
+    });
+
     return {
       isOpen: isOpen,
       toggle: toggle,
       open: open,
       close: close,
-      refresh: load,
+      refresh: refresh,
+      clearPrivate: function () { if (isOpen()) close(); else revision++; },
+      dispose: function () {
+        disposed = true; revision++;
+        if (refreshJob) { refreshJob.unregister(); refreshJob = null; }
+      },
     };
   }
 

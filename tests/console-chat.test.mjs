@@ -81,4 +81,15 @@ assert.equal(elements['[data-role="chat-input"]'].disabled, true);
 assert.equal(elements['[data-role="chat-send"]'].disabled, true);
 assert.match(elements['[data-role="chat-status"]'].textContent, /暂未对游客开放/);
 
+// Public configuration failures remain visible to the shared refresh heartbeat.
+local = false;
+const failedConfig = window.FlitFancyConsoleChat.create({
+  query: selector => elements[selector], storage, isServerOnline: () => local,
+  fetchPublic: async () => ({ok: false, status: 503}),
+});
+const failure = await failedConfig.refreshPublicConfig();
+assert.equal(failure.ok, false); assert.equal(failure.status, 503);
+local = true;
+assert.equal((await failedConfig.refreshPublicConfig()).skipped, true);
+
 console.log("console chat module test ok");

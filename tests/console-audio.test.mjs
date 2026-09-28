@@ -206,4 +206,34 @@ assert.equal(nextUrl, urlsBefore, 'logout must discard a pending recording respo
 assert.equal(node('audio-recording').hidden, true);
 privateView.dispose();
 
+// Shared scheduling coalesces refreshes, keeps dynamic cadence, and discards private late replies.
+const schedulerWindow = {setTimeout: () => 1, clearTimeout() {}};
+vm.runInNewContext(fs.readFileSync(new URL('../docs/assets/refresh-scheduler.js', import.meta.url), 'utf8'), {window: schedulerWindow});
+const scheduler = schedulerWindow.FlitFancyRefresh.create({now: () => 1000});
+let scheduledAdmin = true, reads = 0, finishStatus;
+const scheduledView = audio.create({
+  query: selector => node(selector.match(/data-role="([^"]+)/)[1]), scheduler,
+  isServerOnline: () => true, isAdmin: () => scheduledAdmin,
+  request: () => { reads++; return new Promise(resolve => { finishStatus = resolve; }); },
+});
+scheduler.reconcile({authenticated: true}); scheduledView.start(); scheduler.start();
+await new Promise(resolve => setImmediate(resolve));
+assert.equal(reads, 1);
+const manualRefresh = scheduledView.refresh(), anotherRefresh = scheduledView.refresh();
+assert.equal(reads, 1, 'manual refreshes must queue behind the current audio status request');
+finishStatus(idle); await new Promise(resolve => setImmediate(resolve));
+assert.equal(reads, 2, 'several manual refreshes coalesce into one followup');
+finishStatus({...idle, playing: true}); await Promise.all([manualRefresh, anotherRefresh]);
+assert.equal(scheduler.snapshot()[0].intervalMs, 600);
+scheduler.reconcile({hidden: true}); assert.equal(scheduler.snapshot()[0].intervalMs, 15000);
+scheduler.reconcile({hidden: false}); await new Promise(resolve => setImmediate(resolve));
+const lateStatus = scheduledView.refresh();
+scheduledAdmin = false; scheduledView.clearPrivate(); scheduler.reconcile({authenticated: false});
+finishStatus({...idle, texts: [{text: 'late private transcript'}]}); await lateStatus;
+assert.equal(node('audio-transcript').textContent, '');
+assert.equal(scheduler.snapshot()[0].state, 'disabled');
+scheduledView.dispose(); scheduler.dispose();
+assert.equal(scheduler.snapshot().length, 0);
+assert.doesNotMatch(source, /setTimeout\(schedule|setInterval\(/, 'audio polling must use the shared scheduler');
+
 console.log("console audio module and local-boundary test ok");

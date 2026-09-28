@@ -7,10 +7,11 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='24' fill='%23f5b84b' opacity='0.22'/%3E%3Ccircle cx='32' cy='32' r='12' fill='%23f5b84b'/%3E%3Ccircle cx='32' cy='32' r='5' fill='%23ffe9c4'/%3E%3C/svg%3E">
   <title>控制台 — 云萤 · FlitFancy</title>
   <meta name="description" content="小流萤的控制台：服务管理与本机启动。">
-  <link rel="stylesheet" href="assets/style.css?v=1.20.4">
-  <link rel="stylesheet" href="assets/console-launcher.css?v=1.20.4">
-  <link rel="stylesheet" href="assets/console-bridge.css?v=1.20.4">
-  <script src="assets/track.js?v=1.20.4" defer></script>
+  <link rel="stylesheet" href="assets/style.css?v=1.24.1">
+  <link rel="stylesheet" href="assets/console-launcher.css?v=1.24.1">
+  <link rel="stylesheet" href="assets/console-bridge.css?v=1.24.1">
+  <link rel="stylesheet" href="assets/console-heartbeat.css?v=1.24.1">
+  <script src="assets/track.js?v=1.24.1" defer></script>
 </head>
 <body class="console-page">
   <canvas id="sky" aria-hidden="true"></canvas>
@@ -46,6 +47,30 @@
         <span data-role="module-error-text"></span>
         <button class="btn btn-ghost" data-role="module-reload">刷新页面</button>
       </p>
+
+      <section class="console-panel heartbeat-console" data-role="heartbeat-panel" hidden aria-label="后端读取心跳">
+        <div class="heartbeat-head">
+          <h2>心跳</h2>
+          <span class="sr-only" data-heartbeat="summary"></span>
+          <button type="button" class="btn btn-ghost" data-heartbeat="refresh" aria-label="更新心跳记录"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M6.1 6.1A8 8 0 0 1 19.6 10M4.4 14a8 8 0 0 0 13.5 3.9"/></svg></button>
+        </div>
+        <span class="sr-only" data-heartbeat="scope"></span>
+        <p class="heartbeat-read-state" data-heartbeat="state" role="status" hidden></p>
+        <div class="heartbeat-rows" data-heartbeat="rows"></div>
+        <div id="heartbeat-detail" class="heartbeat-detail" data-heartbeat="detail" hidden>
+          <div class="overview-head heartbeat-detail-head"><strong data-heartbeat="detail-name"></strong><button type="button" class="btn btn-ghost" data-heartbeat="back">返回</button></div>
+          <p class="heartbeat-detail-status" data-heartbeat="detail-status"></p>
+          <dl class="heartbeat-metrics">
+            <div><dt>最近完成</dt><dd data-heartbeat="detail-finished"></dd></div>
+            <div><dt>最近成功</dt><dd data-heartbeat="detail-success"></dd></div>
+            <div><dt>处理耗时</dt><dd data-heartbeat="detail-duration"></dd></div>
+            <div><dt>已完成</dt><dd data-heartbeat="detail-runs"></dd></div>
+            <div><dt>进行中</dt><dd data-heartbeat="detail-active"></dd></div>
+            <div><dt>连续失败</dt><dd data-heartbeat="detail-failures"></dd></div>
+          </dl>
+          <p class="heartbeat-detail-note" data-heartbeat="detail-note"></p>
+        </div>
+      </section>
 
       <section class="console-panel bridge-console" data-role="bridge-panel" aria-label="全界之桥">
         <div class="bridge-head"><h2>全界之桥</h2><span class="bridge-caption">把文件带回家</span></div>
@@ -209,17 +234,19 @@
 
   <div class="js-error" data-role="js-error" hidden></div>
 
-  <script src="assets/firefly.js?v=1.20.4"></script>
-  <script src="assets/sitefx.js?v=1.20.4"></script>
-  <script src="assets/admin-core.js?v=1.20.4" data-console-module="FlitFancyAdmin"></script>
-  <script src="assets/admin-panel-shell.js?v=1.20.4" data-console-module="FlitFancyPanelShell"></script>
-  <script src="assets/console-visits.js?v=1.20.4" data-console-module="FlitFancyVisits"></script>
-  <script src="assets/console-admin.js?v=1.20.4" data-console-module="FlitFancyConsoleAdmin"></script>
-  <script src="assets/console-services.js?v=1.20.4" data-console-module="FlitFancyConsoleServices"></script>
-  <script src="assets/console-launcher.js?v=1.20.4" data-console-module="FlitFancyConsoleLauncher"></script>
-  <script src="assets/bridge-files.js?v=1.20.4" data-console-module="FlitFancyBridgeFiles"></script>
-  <script src="assets/bridge-hash.js?v=1.20.4" data-console-module="FlitFancyBridgeHash"></script>
-  <script src="assets/console-bridge.js?v=1.20.4" data-console-module="FlitFancyConsoleBridge"></script>
-  <script src="assets/console.js?v=1.20.4"></script>
+  <script src="assets/firefly.js?v=1.24.1"></script>
+  <script src="assets/sitefx.js?v=1.24.1"></script>
+  <script src="assets/admin-core.js?v=1.24.1" data-console-module="FlitFancyAdmin"></script>
+  <script src="assets/refresh-scheduler.js?v=1.24.1" data-console-module="FlitFancyRefresh"></script>
+  <script src="assets/admin-panel-shell.js?v=1.24.1" data-console-module="FlitFancyPanelShell"></script>
+  <script src="assets/console-visits.js?v=1.24.1" data-console-module="FlitFancyVisits"></script>
+  <script src="assets/console-admin.js?v=1.24.1" data-console-module="FlitFancyConsoleAdmin"></script>
+  <script src="assets/console-services.js?v=1.24.1" data-console-module="FlitFancyConsoleServices"></script>
+  <script src="assets/console-launcher.js?v=1.24.1" data-console-module="FlitFancyConsoleLauncher"></script>
+  <script src="assets/bridge-files.js?v=1.24.1" data-console-module="FlitFancyBridgeFiles"></script>
+  <script src="assets/bridge-hash.js?v=1.24.1" data-console-module="FlitFancyBridgeHash"></script>
+  <script src="assets/console-bridge.js?v=1.24.1" data-console-module="FlitFancyConsoleBridge"></script>
+  <script src="assets/console-heartbeat.js?v=1.24.1" data-console-module="FlitFancyHeartbeats"></script>
+  <script src="assets/console.js?v=1.24.1"></script>
 </body>
 </html>

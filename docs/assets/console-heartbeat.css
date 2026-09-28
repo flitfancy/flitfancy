@@ -1,0 +1,54 @@
+.heartbeat-console.console-panel { padding: 14px 18px; border-color: rgba(161, 194, 188, 0.18); }
+.heartbeat-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.heartbeat-head h2 { margin: 0; color: var(--muted); font-size: var(--fs-meta); font-weight: 500; }
+.heartbeat-head .btn { display: grid; place-items: center; width: 28px; min-height: 28px; padding: 0; color: var(--muted); }
+.heartbeat-head .btn[aria-disabled="true"] { opacity: 0.4; cursor: default; }
+.heartbeat-read-state { margin: 6px 0 0; color: var(--muted); font-size: var(--fs-fine); }
+.heartbeat-read-state[data-stale="true"] { color: #ff7c7c; }
+.heartbeat-rows { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 6px; margin-top: 8px; }
+.heartbeat-row { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 11px; min-width: 0; padding: 12px 3px 8px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font: inherit; cursor: pointer; }
+.heartbeat-row:hover { background: rgba(161, 194, 188, 0.05); }
+.heartbeat-row:focus-visible { outline: 1px solid var(--cyan); outline-offset: 2px; }
+.heartbeat-signal { flex: none; width: 8px; height: 8px; border-radius: 50%; background: rgba(168, 184, 182, 0.35); }
+.heartbeat-name { font-size: var(--fs-fine); line-height: 1.5; text-align: center; white-space: nowrap; }
+.heartbeat-row[data-state="success"] .heartbeat-signal { background: #85c3ac; }
+.heartbeat-row[data-state="running"] .heartbeat-signal { background: #93bbd6; }
+.heartbeat-row[data-state="idle"] { opacity: 0.6; }
+.heartbeat-row[data-problem="true"] { color: #ff7c7c; background: rgba(255, 92, 92, 0.06); }
+.heartbeat-row[data-problem="true"] .heartbeat-signal { background: #ff5f68; box-shadow: 0 0 0 3px rgba(255, 95, 104, 0.12), 0 0 12px rgba(255, 95, 104, 0.5); }
+.heartbeat-console[data-stale="true"] .heartbeat-rows,
+.heartbeat-console[data-stale="true"] .heartbeat-detail { opacity: 0.55; }
+.heartbeat-detail { margin-top: 12px; }
+.heartbeat-detail-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: var(--fs-meta); }
+.heartbeat-detail-head strong { font-weight: 500; }
+.heartbeat-detail-head .btn { min-height: 30px; padding: 4px 10px; font-size: var(--fs-fine); }
+.heartbeat-detail-status { margin: 8px 0 14px; color: var(--muted); font-size: var(--fs-meta); }
+.heartbeat-detail[data-problem="true"] .heartbeat-detail-status { color: #ff7c7c; }
+.heartbeat-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 24px; margin: 0; }
+.heartbeat-metrics dt { color: var(--muted); font-size: var(--fs-fine); }
+.heartbeat-metrics dd { margin: 4px 0 0; font-size: var(--fs-meta); }
+.heartbeat-detail-note { margin: 14px 0 0; color: var(--muted); font-size: var(--fs-fine); line-height: 1.6; }
+.heartbeat-completed:not([data-problem="true"]) .heartbeat-signal { animation: heartbeat-confirmed 650ms ease-out 1; }
+.heartbeat-completed-again:not([data-problem="true"]) .heartbeat-signal { animation: heartbeat-confirmed-again 650ms ease-out 1; }
+@keyframes heartbeat-confirmed {
+  from { background: var(--amber); box-shadow: 0 0 0 0 var(--amber); }
+  50% { background: var(--amber); }
+  to { box-shadow: 0 0 0 9px transparent; }
+}
+@keyframes heartbeat-confirmed-again {
+  from { background: var(--amber); box-shadow: 0 0 0 0 var(--amber); }
+  50% { background: var(--amber); }
+  to { box-shadow: 0 0 0 9px transparent; }
+}
+@media (max-width: 900px) {
+  .heartbeat-rows { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+@media (max-width: 540px) {
+  .heartbeat-console.console-panel { padding: 12px; }
+  .heartbeat-rows { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+  .heartbeat-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .heartbeat-completed:not([data-problem="true"]) .heartbeat-signal,
+  .heartbeat-completed-again:not([data-problem="true"]) .heartbeat-signal { animation: none; }
+}

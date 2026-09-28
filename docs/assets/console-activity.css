@@ -1,0 +1,46 @@
+.activity-console[hidden] { display: none; }
+.activity-head, .activity-tools { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.activity-head h2 { margin: 0; }
+.activity-status { color: var(--muted); font-size: var(--fs-meta); }
+.activity-status[data-state="online"] { color: var(--amber-soft); }
+.activity-collected, .activity-message, .activity-apps-note { color: var(--muted); font-size: var(--fs-fine); line-height: 1.7; }
+.activity-collected { margin: 8px 0 20px; }
+.activity-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px; }
+.activity-summary-label { display: block; color: var(--muted); font-size: var(--fs-meta); }
+.activity-summary strong { display: block; margin: 8px 0; font-size: var(--fs-head-2); font-weight: 500; }
+.activity-summary p { margin: 0; color: var(--muted); font-size: var(--fs-fine); line-height: 1.7; }
+.activity-tools { justify-content: flex-start; padding-top: 18px; border-top: 1px solid var(--border); }
+.activity-tools label { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: var(--fs-meta); }
+.activity-tools select, .activity-tools input { min-width: 0; padding: 7px 9px; border: 1px solid var(--border); border-radius: 8px; background: rgba(0, 0, 0, 0.16); color: var(--text); font: inherit; color-scheme: dark; }
+.activity-tools .btn { margin-left: auto; }
+.activity-console button:disabled { opacity: 0.45; cursor: default; }
+.activity-trend { display: flex; align-items: stretch; gap: 7px; overflow-x: auto; padding: 12px 1px 7px; }
+.activity-day { flex: 1 0 38px; display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 0; padding: 6px 3px; background: transparent; border: 1px solid transparent; border-radius: 7px; color: var(--muted); cursor: pointer; }
+.activity-day:hover, .activity-day[aria-pressed="true"] { border-color: var(--border); background: rgba(255, 255, 255, 0.035); }
+.activity-day:focus-visible { outline: 2px solid var(--amber-soft); outline-offset: -1px; }
+.activity-day-plot { display: flex; align-items: flex-end; justify-content: center; width: 100%; height: 94px; border-bottom: 1px solid var(--border); }
+.activity-day-bar { display: block; width: min(70%, 32px); max-height: 88px; border-radius: 3px 3px 0 0; background: var(--amber-soft); opacity: 0.7; }
+.activity-day[data-status="partial"] .activity-day-bar { border: 1px dashed var(--amber-soft); background: rgba(245, 184, 75, 0.18); box-sizing: border-box; }
+.activity-day[data-status="no_data"] .activity-day-bar, .activity-day[data-status="not_archived"] .activity-day-bar { background: transparent; }
+.activity-day-date { font-size: var(--fs-caption); white-space: nowrap; }
+.activity-details { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
+.activity-details > summary { display: flex; align-items: center; gap: 8px; cursor: pointer; list-style: none; color: var(--amber-soft); font-size: var(--fs-ui); }
+.activity-details > summary::before { content: "▸"; }
+.activity-details[open] > summary::before { content: "▾"; }
+.activity-details > summary::-webkit-details-marker { display: none; }
+.activity-details > summary:focus-visible { outline: 1px solid var(--amber-soft); outline-offset: 4px; border-radius: 3px; }
+.activity-details > .btn { margin-top: 12px; }
+.activity-apps-date { margin-left: auto; color: var(--muted); font-size: var(--fs-fine); }
+.activity-apps { display: grid; gap: 13px; padding: 0 5px 0 0; margin: 14px 0; list-style: none; max-height: 300px; overflow-y: auto; }
+.activity-app-label { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: var(--fs-meta); }
+.activity-app-name { min-width: 0; overflow-wrap: anywhere; }
+.activity-app-value { flex-shrink: 0; color: var(--muted); font-size: var(--fs-fine); }
+.activity-app-track { height: 3px; background: rgba(255, 255, 255, 0.04); margin-top: 6px; border-radius: 3px; overflow: hidden; }
+.activity-app-track span { display: block; height: 100%; background: var(--amber-soft); opacity: 0.45; }
+.activity-message:empty { display: none; }
+@media (max-width: 560px) {
+  .activity-summary { grid-template-columns: 1fr; gap: 20px; }
+  .activity-tools { gap: 10px; }
+  .activity-tools .btn { margin-left: 0; }
+  .activity-app-value { max-width: 55%; text-align: right; }
+}

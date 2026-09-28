@@ -180,6 +180,7 @@ def main():
             "FLITFANCY_AI_CONFIG_PATH": config_path,
             "FLITFANCY_SENSOR_RETENTION_DAYS": "14",
             "FLITFANCY_SENSOR_PRUNE_INTERVAL_SECONDS": "0",
+            "FLITFANCY_ACTIVITYWATCH_ENABLED": "0",
         })
         proc = subprocess.Popen(
             [sys.executable, "server.py"], cwd=ROOT, env=env,
@@ -298,6 +299,14 @@ def main():
             admin_bearer = {"Authorization": "Bearer " + admin_login_local["token"]}
             request(base, '/api/admin/session', expected=401)
             assert request(base, '/api/admin/session', headers=admin_bearer)['ok'] is True
+            for path in ('/api/activity/summary', '/api/activity/export'):
+                request(base, path, expected=401)
+            activity = request(base, '/api/activity/summary?days=7', headers=admin_bearer)
+            assert activity['source']['status'] == 'disabled'
+            assert len(activity['daily']) == 7 and activity['archive']['recorded_days'] == 0
+            assert all(row['active_seconds'] is None for row in activity['daily'])
+            assert request(base, '/api/activity/export', headers=admin_bearer)['format'] == 'flitfancy-activity-summary-v1'
+            print('ACTIVITY: private archive endpoints; real AW collection disabled in smoke test')
 
             request(base, "/api/notes", "POST", {"author": "test", "content": "冒烟测试"}, headers=admin_bearer)
             notes = request(base, "/api/notes", headers=admin_bearer)

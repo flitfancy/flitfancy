@@ -94,15 +94,17 @@
     }
 
     async function refreshPublicConfig() {
-      if (isServerOnline()) return;
+      if (isServerOnline()) return { skipped: true, reason: "local-config" };
       try {
         const response = await fetchPublic(publicBase + "/config");
-        if (!response.ok) throw new Error("HTTP " + response.status);
+        if (!response.ok) return { ok: false, status: response.status };
         const data = await response.json();
+        if (isServerOnline()) return { skipped: true, reason: "local-config" };
         if (data && typeof data.chat_enabled === "boolean") {
           setEnabled(data.chat_enabled);
         }
-      } catch (e) { /* 公网配置不可达则保留最近一次状态 */ }
+        return { ok: true };
+      } catch (e) { return { ok: false, status: e.status || 0 }; }
     }
 
     async function send() {
