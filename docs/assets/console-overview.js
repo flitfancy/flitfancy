@@ -99,6 +99,9 @@
         { key: "co2_ppm", label: "CO₂", unit: "ppm", digits: 0, color: "#f5b84b" },
         { key: "temp_c", label: "温度", unit: "°C", digits: 1, color: "#38bdf8" },
       ],
+      CH6: [
+        { key: "heart_rate_bpm", label: "心率", unit: "bpm", digits: 0, color: "#fb7185" },
+      ],
     };
 
     function isOpen() {
@@ -268,8 +271,8 @@
       const valid = function () { return !disposed && current === revision && channelOpen === channel; };
       const status = query('[data-role="overview-status"]');
       const params = "channel=" + encodeURIComponent(channel) + "&hours=24";
-      const urls = ["/api/sensors/history?" + params,
-        publicBase + "/sensors/history?" + params];
+      const urls = channel === "CH6" ? ["/api/sensors/heart-rate/history?hours=24"] :
+        ["/api/sensors/history?" + params, publicBase + "/sensors/history?" + params];
       let failureStatus = 0;
       for (const url of urls) {
         try {
@@ -291,7 +294,8 @@
         } catch (e) { failureStatus = e.status || 0; }
       }
       if (!valid()) return { skipped: true, reason: "changed" };
-      status.textContent = "暂时拿不到 24 小时数据（需要本地服务或登录后的云端历史）";
+      status.textContent = channel === "CH6" ? "暂时拿不到心率历史（需要登录后的本机服务）" :
+        "暂时拿不到 24 小时数据（需要本地服务或登录后的云端历史）";
       return { ok: false, status: failureStatus };
     }
 
@@ -308,7 +312,8 @@
       return (series[channel] || []).filter(function (item) {
         return active[item.key] !== false;
       }).map(function (item) {
-        const values = buckets.map(function (bucket) {
+          const values = buckets.map(function (bucket) {
+            if (channel === "CH6" && bucket[item.key] == null) return null;
           const value = item.get ? item.get(bucket) : Number(bucket[item.key]);
           return isFinite(value) ? value * (item.scale || 1) : null;
         });
@@ -316,8 +321,9 @@
           label: item.label,
           unit: item.unit,
           digits: item.digits,
-          color: item.color,
-          values: values,
+            color: item.color,
+            values: values,
+            points: channel === "CH6",
         };
       });
     }
@@ -427,6 +433,15 @@
         context.strokeStyle = item.color;
         context.lineWidth = 1.6;
         context.stroke();
+        if (item.points) {
+          context.fillStyle = item.color;
+          item.values.forEach(function (value, index) {
+            if (value == null) return;
+            context.beginPath();
+            context.arc(x(index), y(value), 2.5, 0, Math.PI * 2);
+            context.fill();
+          });
+        }
       });
 
       context.font = "11px Consolas, monospace";

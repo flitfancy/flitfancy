@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { DatabaseSync } from "node:sqlite";
 
 const worker = (await import(new URL("../cloudflare/worker.js", import.meta.url))).default;
 const ESSAYS_CONTRACT = JSON.parse(
@@ -23,10 +24,14 @@ class FakeStatement {
     const sql = this.sql;
     if (sql.includes("ADD COLUMN horizon")) this.db.anchorColumns.push("horizon");
     if (sql.includes("ADD COLUMN project")) this.db.anchorColumns.push("project");
+    for (const column of ["badge", "badge_kind"]) {
+      if (sql.includes("ADD COLUMN " + column + " ")) this.db.anchorColumns.push(column);
+    }
     if (sql.includes("INSERT INTO anchors")) {
-      const [uid, createdTs, time, precision, horizon, project, title, content] = this.values;
+      const [uid, createdTs, time, precision, horizon, project, title, content, badge, badgeKind] = this.values;
       this.db.anchors.set(uid, {
         uid, created_ts: createdTs, time, precision, horizon, project, title, content,
+        badge, badge_kind: badgeKind,
       });
     }
     if (sql.includes("INSERT INTO essays")) {
@@ -44,7 +49,7 @@ class FakeStatement {
     if (this.sql.includes("PRAGMA table_info(anchors)")) {
       return { results: this.db.anchorColumns.map((name) => ({ name })) };
     }
-    if (this.sql.includes("FROM anchors ORDER BY")) {
+    if (this.sql.includes("FROM anchors")) {
       return { results: [...this.db.anchors.values()] };
     }
     if (this.sql.includes("FROM essays ORDER BY")) {
@@ -107,6 +112,69 @@ const anchors = await (await worker.fetch(
 )).json();
 assert.equal(anchors.rows[0].horizon, "future");
 assert.equal(anchors.rows[0].project, "skywork");
+
+const cardBody = {uid:"legacy-anchor-firefly-brain", title:"原卡片", content:"原格式正文", horizon:"now",
+  project:"firefly", time:"", badge:"已跑通", badge_kind:"done"};
+async function saveCard(body) {
+  return worker.fetch(new Request("https://api.flitfancy.com/admin/anchors", {
+    method:"POST", headers:adminHeaders, body:JSON.stringify(body),
+  }), env);
+}
+assert.equal((await saveCard(cardBody)).status, 200);
+const changedCardResponse = await saveCard({...cardBody, title:"修改后的卡片", badge:"进行中", badge_kind:"doing"});
+assert.equal(changedCardResponse.status, 200);
+const cardConfirmation = await changedCardResponse.json();
+assert.equal(cardConfirmation.precision, "none");
+assert.equal(cardConfirmation.badge, "进行中");
+assert.equal(cardConfirmation.badge_kind, "doing");
+const savedCard = db.anchors.get(cardBody.uid);
+assert.equal(savedCard.time, "");
+assert.equal(savedCard.precision, "none");
+assert.equal(savedCard.title, "修改后的卡片");
+assert.equal(savedCard.badge, "进行中");
+assert.equal(savedCard.badge_kind, "doing");
+assert.equal([...db.anchors.values()].filter(row => row.uid === cardBody.uid).length, 1);
+assert.ok(db.anchorColumns.includes("badge") && db.anchorColumns.includes("badge_kind"));
+assert.equal((await saveCard({...cardBody, badge_kind:"unsafe"})).status, 400);
+
+// 真实 SQLite 执行公开查询：九张原卡片独立保留，普通时间线仍只取最新 200 条。
+const sqlite = new DatabaseSync(":memory:");
+try {
+  const sqlEnv = { ...env, DB: { prepare(sql) {
+    const statement = sqlite.prepare(sql);
+    let params = [];
+    return { bind(...values) { params = values; return this; },
+      async run() { statement.run(...params); return { success: true }; },
+      async all() { return { results: statement.all(...params) }; } };
+  } } };
+  const { ensureAnchorsTable } = await import("../cloudflare/worker-storage.js?anchor-pagination-test");
+  await ensureAnchorsTable(sqlEnv);
+  const originalUids = [...fs.readFileSync(new URL("../docs/journal.html", import.meta.url), "utf8")
+    .matchAll(/data-anchor-uid="([^"]+)"/g)].map(match => match[1]);
+  assert.equal(originalUids.length, 9);
+  for (const uid of originalUids) {
+    const response = await worker.fetch(new Request("https://api.flitfancy.com/admin/anchors", {
+      method: "POST", headers: adminHeaders,
+      body: JSON.stringify({ ...cardBody, uid, title: "保留的修改", badge: "进行中", badge_kind: "doing" }),
+    }), sqlEnv);
+    assert.equal(response.status, 200);
+  }
+  const insert = sqlite.prepare(`INSERT INTO anchors
+    (uid,created_ts,anchor_time,horizon,project,title,content) VALUES(?,1,?,'now','firefly','分页测试','正文')`);
+  const dated = Array.from({ length: 205 }, (_, index) => ({
+    uid: "pagination-anchor-" + String(index).padStart(4, "0"), index,
+    time: index % 2 ? "2026-10-02T12:00:00+08:00" : "2026-09-01T12:00:00+08:00",
+  }));
+  for (const row of dated) insert.run(row.uid, row.time);
+  const listed = await (await worker.fetch(new Request("https://api.flitfancy.com/anchors"), sqlEnv)).json();
+  const expected = dated.sort((a, b) => b.time.localeCompare(a.time) || b.index - a.index).slice(0, 200);
+  assert.deepEqual(listed.rows.filter(row => !originalUids.includes(row.uid)).map(row => row.uid), expected.map(row => row.uid));
+  const originalRows = listed.rows.filter(row => originalUids.includes(row.uid));
+  assert.equal(listed.rows.length, 209);
+  assert.deepEqual(new Set(originalRows.map(row => row.uid)), new Set(originalUids));
+  assert.ok(originalRows.every(row => row.title === "保留的修改" && row.time === "" &&
+    row.precision === "none" && row.badge === "进行中" && row.badge_kind === "doing"));
+} finally { sqlite.close(); }
 
 const essayBody = {
   uid: "taxonomy-essay-0001",

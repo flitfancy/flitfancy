@@ -69,11 +69,13 @@ class HttpDependencies:
     sync_pending_essays: object
     sync_pending_memories: object
     sync_public_config: object
+    sensor_device_service: object = None
 
 
 def create_handler(app):
     """创建只可访问已声明领域能力的请求处理器。"""
     audio_service = app.audio_service
+    sensor_device_service = app.sensor_device_service
     activity_service = app.activity_service
     launcher_service = app.launcher_service
     bridge_service = app.bridge_service
@@ -261,6 +263,8 @@ def create_handler(app):
                 self._api_admin_config_set()
             elif parsed.path == "/api/resources/prepare":
                 self._api_resource_prepare()
+            elif parsed.path == "/api/resources/update":
+                self._api_resource_update()
             elif parsed.path == "/api/resources/upload":
                 self._api_resource_upload()
             elif parsed.path == "/api/resources/delete":
@@ -275,6 +279,8 @@ def create_handler(app):
                 self._api_audio_play_file(parsed.query)
             elif parsed.path == "/api/audio/firmware":
                 self._api_audio_firmware()
+            elif parsed.path == "/api/sensors/firmware":
+                self._api_sensor_firmware()
             else:
                 self._send(404, {"error": "not found"})
 
@@ -374,7 +380,7 @@ def create_handler(app):
                 self._send(200, {
                     "name": "flitfancy",
                     "time": now_iso(),
-                    "capabilities": {"refresh_ledger": 1},
+                    "capabilities": {"refresh_ledger": 1, "resource_edit": 1, "heart_rate": 1},
                     "services": {
                         "backend": True,
                         "listener": heartbeat["listener"],
@@ -404,12 +410,30 @@ def create_handler(app):
                 self._api_audio_recording((params.get("name") or [""])[0])
             elif path == "/api/resources":
                 self._send(200, {"resources": resource_service.list_resources()})
+            elif path == "/api/sensors/device":
+                self._send(200, sensor_device_service.status())
+            elif path == "/api/sensors/heart-rate":
+                con = db()
+                rows = con.execute(
+                    """SELECT s.* FROM sensors s
+                       JOIN (SELECT board, MAX(id) AS mid FROM sensors
+                             WHERE channel = 'CH6' GROUP BY board) m ON s.id = m.mid
+                       ORDER BY s.board"""
+                ).fetchall()
+                con.close()
+                self._send(200, {"rows": [sensor_row_public(dict(r)) for r in rows]})
+            elif path == "/api/sensors/heart-rate/history":
+                params = urllib.parse.parse_qs(query)
+                hours_text = (params.get("hours") or ["24"])[0]
+                hours = int(hours_text) if hours_text.isdigit() else 24
+                self._send(200, {"ok": True, "channel": "CH6", "hours": min(72, max(1, hours)),
+                                 "buckets": compute_history_buckets(min(72, max(1, hours)), "CH6")})
             elif path == "/api/sensors/latest":
                 con = db()
                 rows = con.execute(
                     """SELECT s.* FROM sensors s
                        JOIN (SELECT board, channel, MAX(id) AS mid FROM sensors
-                             WHERE channel IS NOT NULL GROUP BY board, channel) m
+                             WHERE channel IS NOT NULL AND channel != 'CH6' GROUP BY board, channel) m
                          ON s.id = m.mid
                        ORDER BY s.board, s.channel"""
                 ).fetchall()
@@ -420,6 +444,9 @@ def create_handler(app):
                 channel = (params.get("channel") or [""])[0].strip().upper()
                 hours_text = (params.get("hours") or [""])[0]
                 hours = int(hours_text) if hours_text.isdigit() else 0
+                if channel == "CH6":
+                    self._send(403, {"error": "心率历史请使用登录后的私人接口"})
+                    return
                 if channel and 1 <= hours <= 72:
                     # 24 小时总览：按 10 分钟桶聚合该通道的均值/最小/最大。
                     self._send(200, {
@@ -431,7 +458,7 @@ def create_handler(app):
                     return
                 con = db()
                 rows = con.execute(
-                    "SELECT * FROM sensors ORDER BY id DESC LIMIT 300"
+                    "SELECT * FROM sensors WHERE channel != 'CH6' ORDER BY id DESC LIMIT 300"
                 ).fetchall()
                 con.close()
                 self._send(200, {"rows": [sensor_row_public(dict(r)) for r in rows]})
@@ -457,8 +484,13 @@ def create_handler(app):
                 con = db()
                 rows = con.execute(
                     """SELECT uid, anchor_time AS time, time_precision AS precision,
-                              horizon, project, title, content, synced
-                       FROM anchors ORDER BY anchor_time DESC, id DESC LIMIT 200"""
+                              horizon, project, title, content, badge, badge_kind, synced
+                       FROM anchors
+                       WHERE uid GLOB 'legacy-anchor-*' OR id IN (
+                           SELECT id FROM anchors WHERE uid NOT GLOB 'legacy-anchor-*'
+                           ORDER BY anchor_time DESC, id DESC LIMIT 200
+                       )
+                       ORDER BY anchor_time DESC, id DESC"""
                 ).fetchall()
                 con.close()
                 self._send(200, {"ok": True, "rows": [dict(r) for r in rows]})
@@ -737,8 +769,24 @@ def create_handler(app):
             data = self._json_body()
             if data is None:
                 return
+            edit_uid = str(data.get("uid") or "").strip()
+            if edit_uid and not re.fullmatch(r"[a-zA-Z0-9_-]{16,80}", edit_uid):
+                self._send(400, {"ok": False, "error": "invalid uid"})
+                return
+            card = False
+            if edit_uid.startswith("legacy-anchor-"):
+                try:
+                    with open(os.path.join(SITE_ROOT, "journal.html"), encoding="utf-8") as source:
+                        card = edit_uid in re.findall(r'data-anchor-uid="([a-zA-Z0-9_-]+)"', source.read())
+                except OSError:
+                    pass
+                if not card:
+                    self._send(404, {"ok": False, "error": "要编辑的锚点不存在"})
+                    return
             title = str(data.get("title") or "").strip()
             content = str(data.get("content") or "").strip()
+            badge = str(data.get("badge") or "").strip() if card else ""
+            badge_kind = str(data.get("badge_kind") or "").strip() if card else ""
             anchor_time = str(data.get("time") or "").strip()
             horizon = str(data.get("horizon") or "").strip()
             project = str(data.get("project") or "").strip()
@@ -748,6 +796,9 @@ def create_handler(app):
             if len(title) > 120 or len(content) > 4000:
                 self._send(400, {"error": "标题或内容过长"})
                 return
+            if card and (not badge or len(badge) > 32 or badge_kind not in ("done", "doing", "dream")):
+                self._send(400, {"error": "请填写状态文字并选择状态样式"})
+                return
             if horizon not in ("now", "future"):
                 self._send(400, {"error": "时间视角必须是 now 或 future"})
                 return
@@ -755,26 +806,43 @@ def create_handler(app):
                 self._send(400, {"error": "请选择锚点所属项目"})
                 return
             time_precision = "second"
-            if not anchor_time:
+            if card:
+                # 原卡片没有日期；编辑后仍保留原来的无日期格式。
+                anchor_time = ""
+                time_precision = "none"
+            elif not anchor_time:
                 anchor_time = now_iso()
             elif re.fullmatch(r"\d{4}-\d{2}-\d{2}", anchor_time):
                 anchor_time += "T00:00:00+08:00"
                 time_precision = "date"
-            if not re.fullmatch(
+            if not card and not re.fullmatch(
                 r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})?",
                 anchor_time,
             ):
                 self._send(400, {"error": "时间格式不正确"})
                 return
-            if not re.search(r"(?:Z|[+-]\d{2}:\d{2})$", anchor_time):
+            if not card and not re.search(r"(?:Z|[+-]\d{2}:\d{2})$", anchor_time):
                 anchor_time += "+08:00"
             # 带 uid = 编辑既有锚点；不带 = 新建。
-            edit_uid = (data.get("uid") or "").strip()
-            if edit_uid and not re.match(r"^[a-zA-Z0-9_-]{16,80}$", edit_uid):
-                self._send(400, {"ok": False, "error": "invalid uid"})
-                return
             con = db()
-            if edit_uid:
+            if card:
+                # 第一次编辑把原卡片存为覆盖记录，之后按同一 uid 原位更新。
+                con.execute(
+                    """INSERT INTO anchors(uid, created_at, anchor_time, time_precision,
+                           horizon, project, title, content, badge, badge_kind, synced)
+                       VALUES(?,?,?,?,?,?,?,?,?,?,0)
+                       ON CONFLICT(uid) DO UPDATE SET anchor_time=excluded.anchor_time,
+                           time_precision=excluded.time_precision, horizon=excluded.horizon,
+                           project=excluded.project, title=excluded.title, content=excluded.content,
+                           badge=excluded.badge, badge_kind=excluded.badge_kind, synced=0""",
+                    (edit_uid, now_iso(), anchor_time, time_precision, horizon, project,
+                     title, content, badge, badge_kind),
+                )
+                con.commit()
+                con.close()
+                uid_value = edit_uid
+                updated = True
+            elif edit_uid:
                 cur = con.execute(
                     """UPDATE anchors SET anchor_time=?, time_precision=?, horizon=?, project=?,
                            title=?, content=?, synced=0 WHERE uid=?""",
@@ -819,7 +887,7 @@ def create_handler(app):
             con = db()
             saved = con.execute(
                 """SELECT uid, anchor_time AS time, time_precision AS precision,
-                          horizon, project, title, content, synced
+                          horizon, project, title, content, badge, badge_kind, synced
                    FROM anchors WHERE uid = ?""",
                 (uid_value,),
             ).fetchone()
@@ -1211,6 +1279,23 @@ def create_handler(app):
                 return None
             return data
 
+        def _api_resource_update(self):
+            data = self._json_body()
+            if data is None:
+                return
+            try:
+                entry = resource_service.update_card(data)
+            except ValueError as exc:
+                self._send(400, {"ok": False, "error": str(exc)})
+                return
+            except LookupError as exc:
+                self._send(404, {"ok": False, "error": str(exc)})
+                return
+            except OSError:
+                self._send(503, {"ok": False, "error": "资源信息暂时无法保存，请重试"})
+                return
+            self._send(200, {"ok": True, "entry": entry})
+
         def _api_resource_prepare(self):
             data = self._json_body()
             if data is None:
@@ -1285,6 +1370,8 @@ def create_handler(app):
             self._send(200, {"ok": True, "removed_files": removed})
 
         def _api_resource_publish(self):
+            if self._json_body() is None:
+                return
             ok, note = resource_service.publish()
             self._send(200 if ok else 502, {"ok": ok, "note": note})
 
@@ -1348,6 +1435,21 @@ def create_handler(app):
             except Exception as exc:
                 self._send(getattr(exc, "status", 502), {"ok": False, "error":
                     str(exc) if hasattr(exc, "status") else "固件上传失败"})
+
+        def _api_sensor_firmware(self):
+            try:
+                if self.headers.get("Content-Type") != "application/octet-stream":
+                    self._send(400, {"ok": False, "error": "请选择应用固件文件"})
+                    return
+                length = int(self.headers.get("Content-Length") or 0)
+                self.connection.settimeout(30)
+                result = sensor_device_service.upload_firmware(self.rfile, length)
+                self._send(200, result)
+            except ValueError:
+                self._send(400, {"ok": False, "error": "非法文件长度"})
+            except Exception as exc:
+                self._send(getattr(exc, "status", 502), {"ok": False, "error":
+                    str(exc) if hasattr(exc, "status") else "感知板固件上传失败"})
 
         def _api_audio_recording(self, name):
             connection = None

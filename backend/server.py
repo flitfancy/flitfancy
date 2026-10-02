@@ -26,6 +26,7 @@ from http.server import ThreadingHTTPServer
 from flitfancy_auth import AdminAuth, MIN_NEW_PASSWORD_LENGTH
 from flitfancy_launcher import LauncherService
 from flitfancy_audio import AudioService
+from flitfancy_sensor_device import SensorDeviceService
 from flitfancy_bridge import BridgeService
 from flitfancy_activity import ActivityService
 from flitfancy_core import (
@@ -40,6 +41,7 @@ from flitfancy_http import HttpDependencies, create_handler
 from flitfancy_observations import ObservationService, decode_tags
 from flitfancy_resources import ResourceService
 from flitfancy_sensors import (
+    public_environment_rows,
     normalize_sensor_row,
     parse_sensor_csv_line,
     sensor_row_public,
@@ -103,7 +105,7 @@ def compute_history_buckets(hours, channel=None):
 def sync_public_history(hours=26):
     """把最近 N 小时的分桶历史幂等同步到 Worker（历史上云）。
     返回 (是否成功, 提示)。失败不影响本地。"""
-    rows = compute_history_buckets(hours)
+    rows = public_environment_rows(compute_history_buckets(hours))
     if not rows:
         return True, "暂无数据"
     ok, note = worker_post(
@@ -339,7 +341,15 @@ def sync_public_anchor(anchor):
         "project": anchor["project"],
         "title": anchor["title"],
         "content": anchor["content"],
+        "badge": anchor.get("badge", ""),
+        "badge_kind": anchor.get("badge_kind", ""),
     }
+    if anchor["time_precision"] == "none":
+        # 旧 Worker 会忽略卡片状态；明确确认后才清除待同步标记。
+        return _worker_client.post(
+            "/admin/anchors", payload, 8, "公网锚点接口",
+            expected_response={"precision": "none", "badge": payload["badge"], "badge_kind": payload["badge_kind"]},
+        )
     return worker_post("/admin/anchors", payload, 8, "公网锚点接口")
 
 
@@ -449,13 +459,14 @@ def sync_pending_observation_links(limit=40):
 
 def sync_public_sensors(rows):
     """把一批最新传感器快照同步到 Worker。网络失败不影响本地采集。"""
+    rows = public_environment_rows(rows)
     if not rows:
         return False
     ok, _ = worker_post("/admin/sensors", {"rows": rows}, 8, "公网传感器接口")
     return ok
 
 def queue_public_sensor_sync(rows):
-    _sensor_sync_queue.enqueue(rows)
+    _sensor_sync_queue.enqueue(public_environment_rows(rows))
 
 
 _sensor_sync_queue = LatestSensorSyncQueue(
@@ -533,6 +544,7 @@ _activity_service = ActivityService(
 )
 
 Handler = create_handler(HttpDependencies(
+    sensor_device_service=SensorDeviceService(),
     audio_service=_audio_service,
     activity_service=_activity_service,
     launcher_service=LauncherService(os.path.join(os.path.dirname(DB_PATH), "launcher")),

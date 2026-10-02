@@ -17,3 +17,14 @@ function Wait-LocalHelperProcess {
     if ($null -eq $Process.ExitCode) { throw 'The restart controller exited without an available result code.' }
     return [int]$Process.ExitCode
 }
+
+function Invoke-LocalBootStarter {
+    param([Parameter(Mandatory=$true)][string]$Scripts,
+          [Parameter(Mandatory=$true)][string]$OutLog,
+          [Parameter(Mandatory=$true)][string]$ErrLog)
+    $arguments = '/d /c ""' + (Join-Path $Scripts 'start_flitfancy.bat') + '" all"'
+    $starter = Start-Process -FilePath $env:ComSpec -ArgumentList $arguments -WorkingDirectory $Scripts `
+        -WindowStyle Hidden -PassThru -RedirectStandardOutput $OutLog -RedirectStandardError $ErrLog
+    try { return (Wait-LocalHelperProcess -Process $starter -TimeoutSeconds 180) }
+    finally { $starter.Dispose() }
+}

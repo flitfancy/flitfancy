@@ -7,8 +7,8 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='24' fill='%23f5b84b' opacity='0.22'/%3E%3Ccircle cx='32' cy='32' r='12' fill='%23f5b84b'/%3E%3Ccircle cx='32' cy='32' r='5' fill='%23ffe9c4'/%3E%3C/svg%3E">
   <title>资源 — 云萤 · FlitFancy</title>
   <meta name="description" content="FireFly 天心、NatureCraft 天工与 FlitFancy 云萤的资料库：固件、PCB 与物料清单下载。">
-  <link rel="stylesheet" href="assets/style.css?v=1.24.1">
-  <script src="assets/track.js?v=1.24.1" defer></script>
+  <link rel="stylesheet" href="assets/style.css?v=1.28.1">
+  <script src="assets/track.js?v=1.28.1" defer></script>
 </head>
 <body>
   <canvas id="sky" aria-hidden="true"></canvas>
@@ -98,6 +98,7 @@
         <button class="btn btn-ghost" data-role="res-collapse">收起</button>
       </div>
     </div>
+    <div data-role="res-upload-form">
     <div class="memory-form-grid">
       <label>目标资源
         <select data-role="res-target">
@@ -136,6 +137,34 @@
       <button class="btn" data-role="res-save">上传并发布</button>
       <span class="hint" data-role="res-status" aria-live="polite"></span>
     </div>
+    </div>
+    <div data-role="res-edit-form" hidden>
+      <h3>编辑资源信息</h3>
+      <div class="memory-form-grid">
+        <label>标题
+          <input type="text" maxlength="120" data-role="res-edit-title">
+        </label>
+        <label>栏目
+          <select data-role="res-edit-group">
+            <option value="naturecraft">NatureCraft · 天工</option>
+            <option value="firefly">FireFly · 天心</option>
+            <option value="flitfancy">FlitFancy · 云萤</option>
+          </select>
+        </label>
+      </div>
+      <label class="memory-content-field">简介
+        <textarea rows="2" maxlength="400" data-role="res-edit-desc"></textarea>
+      </label>
+      <label class="memory-content-field">详情
+        <textarea rows="4" maxlength="6000" data-role="res-edit-details"></textarea>
+      </label>
+      <div class="memory-compose-actions">
+        <button class="btn" data-role="res-edit-save">保存修改</button>
+        <button class="btn btn-ghost" data-role="res-edit-cancel">返回上传</button>
+        <button class="btn btn-ghost" data-role="res-edit-publish">发布更新</button>
+      </div>
+      <p class="hint" data-role="res-edit-status" aria-live="polite"></p>
+    </div>
     <div class="essay-library-toolbar">
       <span class="hint" data-role="res-list-status" aria-live="polite"></span>
       <button class="btn btn-ghost" data-role="res-reload">重新加载</button>
@@ -159,8 +188,8 @@
 
   <div class="js-error" data-role="js-error" hidden></div>
 
-  <script src="assets/admin-core.js?v=1.24.1"></script>
-  <script src="assets/admin-panel-shell.js?v=1.24.1"></script>
-  <script src="assets/resources-admin.js?v=1.24.1"></script>
+  <script src="assets/admin-core.js?v=1.28.1"></script>
+  <script src="assets/admin-panel-shell.js?v=1.28.1"></script>
+  <script src="assets/resources-admin.js?v=1.28.1"></script>
 </body>
 </html>

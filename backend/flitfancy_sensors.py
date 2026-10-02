@@ -14,13 +14,18 @@ SENSOR_CSV_FIELDS = (
     "co2_ppm", "pressure_pa", "as7341_atime", "as7341_astep",
     "as7341_gainx", "sample_age_ms", "sample_seq", "error_streak",
     "firmware_version", "schema_version", "scheduler", "flicker_hz",
-    "rssi_dbm",
+    "rssi_dbm", "heart_rate_bpm", "hr_connected", "hr_contact", "hr_state",
 )
-SENSOR_TEXT_FIELDS = {"firmware_version", "scheduler"}
+SENSOR_TEXT_FIELDS = {"firmware_version", "scheduler", "hr_state"}
 SENSOR_VALUE_FIELDS = (
     "temp_c", "rh_pct", "pressure_pa", "als_raw", "uv_raw", "voc_index",
     "nox_index", "co2_ppm",
 )
+
+
+def public_environment_rows(rows):
+    """Logical CH6 contains personal heart-rate data and stays on the local service."""
+    return [row for row in (rows or []) if str(row.get("channel", "")).upper() != "CH6"]
 
 
 def sensor_number(value, integer=False):

@@ -68,18 +68,11 @@ set "BE_WD_PIDFILE=%LOG_DIR%\backend-watchdog.pid"
 set "BE_NEED_START=1"
 if exist "%BE_WD_PIDFILE%" (
   for /f "usebackq delims=" %%Q in ("%BE_WD_PIDFILE%") do (
-    %PSH% -Action is-alive -ProcessId %%Q
-    if not errorlevel 1 (
-      %PSH% -Action backend-health
-      if not errorlevel 1 set "BE_NEED_START=0"
-    )
+    %PSH% -Action backend-watchdog-alive -ProcessId %%Q -Watchdog "%ROOT%\site\scripts\watch_backend.ps1"
+    if not errorlevel 1 set "BE_NEED_START=0"
   )
 )
 if "%BE_NEED_START%"=="1" (
-  if exist "%BE_WD_PIDFILE%" (
-    for /f "usebackq delims=" %%Q in ("%BE_WD_PIDFILE%") do %PSH% -Action stop-process -ProcessId %%Q
-    del "%BE_WD_PIDFILE%" >nul 2>nul
-  )
   %PSH% -Action start-backend-watchdog -Watchdog "%ROOT%\site\scripts\watch_backend.ps1" -Server "%SERVER%" -Exe "%PYTHON_EXE%" -WorkDir "%BACKEND%" -OutLog "%LOG_DIR%\backend-watchdog.out.log" -ErrLog "%LOG_DIR%\backend-watchdog.err.log" -PidFile "%LOG_DIR%\backend.pid"
   call :log "Backend: watchdog started (guards the backend process)"
 ) else (
@@ -87,7 +80,7 @@ if "%BE_NEED_START%"=="1" (
 )
 %PSH% -Action wait-backend
 if errorlevel 1 (
-  call :log "ERROR: backend not ready within 20s (see %LOG_DIR%\server.err.log)"
+  call :log "ERROR: backend not ready within 40s (see %LOG_DIR%\server.err.log)"
   goto :eof
 )
 call :log "Backend ready: http://localhost:2671"

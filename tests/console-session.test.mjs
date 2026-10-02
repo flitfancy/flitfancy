@@ -19,6 +19,7 @@ async function run(status, fault = "", page = "presence", publicHost = false, si
     addEventListener: (name, callback) => { lifecycle[name] = callback; },
     FlitFancyHeartbeats: { create: options => { heartbeatCreates++; heartbeatOptions = options; return {start:noop,refresh:noop,clearPrivate:noop,dispose:noop}; } },
     FlitFancySensorState: {}, FlitFancyConsoleOverview: {}, FlitFancyBridgeHash: {}, FlitFancyBridgeFiles: {},
+    FlitFancySensorOta: { create: () => ({start:noop,clearPrivate:noop,dispose:noop}) },
     FlitFancyConsoleBridge: { create: () => ({ start: noop, refresh: noop, clearPrivate: noop }) },
     FlitFancyConsoleActivity: { create: options => {
       activityOptions = options;

@@ -32,8 +32,13 @@ export async function handleAnchors(env) {
   await ensureAnchorsTable(env);
   const rows = await env.DB.prepare(
     `SELECT uid, created_ts, anchor_time AS time, time_precision AS precision,
-            horizon, project, title, content
-     FROM anchors ORDER BY anchor_time DESC, id DESC LIMIT 200`
+            horizon, project, title, content, badge, badge_kind
+     FROM anchors
+     WHERE uid GLOB 'legacy-anchor-*' OR id IN (
+       SELECT id FROM anchors WHERE uid NOT GLOB 'legacy-anchor-*'
+       ORDER BY anchor_time DESC, id DESC LIMIT 200
+     )
+     ORDER BY anchor_time DESC, id DESC`
   ).all();
   return json({ ok: true, rows: rows.results || [] }, 200, {
     "Cache-Control": "no-store",
@@ -82,13 +87,20 @@ export async function handleAnchorCreate(request, env) {
   const content = String(body.content || "").trim().slice(0, 4000);
   const horizon = String(body.horizon || "").trim();
   const project = String(body.project || "").trim();
+  const card = uid.startsWith("legacy-anchor-");
+  const badge = card ? String(body.badge || "").trim() : "";
+  const badgeKind = card ? String(body.badge_kind || "").trim() : "";
+  if (card && (!badge || badge.length > 32 || !["done", "doing", "dream"].includes(badgeKind))) {
+    return json({ ok: false, error: "invalid badge" }, 400);
+  }
   let anchorTime = String(body.time || "").trim();
-  const timePrecision = body.precision === "date" ? "date" : "second";
-  if (!anchorTime) anchorTime = new Date().toISOString();
-  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})?$/.test(anchorTime)) {
+  const timePrecision = card ? "none" : body.precision === "date" ? "date" : "second";
+  if (card) anchorTime = "";
+  else if (!anchorTime) anchorTime = new Date().toISOString();
+  if (!card && !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})?$/.test(anchorTime)) {
     return json({ ok: false, error: "time must include seconds" }, 400);
   }
-  if (!/(?:Z|[+-]\d{2}:\d{2})$/.test(anchorTime)) anchorTime += "+08:00";
+  if (!card && !/(?:Z|[+-]\d{2}:\d{2})$/.test(anchorTime)) anchorTime += "+08:00";
   if (!title || !content) {
     return json({ ok: false, error: "title and content required" }, 400);
   }
@@ -105,19 +117,21 @@ export async function handleAnchorCreate(request, env) {
   await ensureAnchorsTable(env);
   await env.DB.prepare(
     `INSERT INTO anchors(
-       uid, created_ts, anchor_time, time_precision, horizon, project, title, content
-     ) VALUES(?,?,?,?,?,?,?,?)
+       uid, created_ts, anchor_time, time_precision, horizon, project, title, content, badge, badge_kind
+     ) VALUES(?,?,?,?,?,?,?,?,?,?)
      ON CONFLICT(uid) DO UPDATE SET
        anchor_time = excluded.anchor_time,
        time_precision = excluded.time_precision,
        horizon = excluded.horizon,
        project = excluded.project,
        title = excluded.title,
-       content = excluded.content`
+       content = excluded.content,
+       badge = excluded.badge,
+       badge_kind = excluded.badge_kind`
   )
-    .bind(uid, createdTs, anchorTime, timePrecision, horizon, project, title, content)
+    .bind(uid, createdTs, anchorTime, timePrecision, horizon, project, title, content, badge, badgeKind)
     .run();
-  return json({ ok: true, uid });
+  return json({ ok: true, uid, ...(card ? { precision: timePrecision, badge, badge_kind: badgeKind } : {}) });
 }
 
 function toDisplayOrder(value) {

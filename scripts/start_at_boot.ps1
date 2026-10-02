@@ -1,5 +1,6 @@
 param([Parameter(Mandatory = $true)][string]$PythonExe)
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'process_wait.ps1')
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $logs = Join-Path $root 'logs'
 [IO.Directory]::CreateDirectory($logs) | Out-Null
@@ -29,11 +30,11 @@ try {
         $file = Get-Item -LiteralPath (Join-Path $logs $name) -ErrorAction SilentlyContinue
         if ($file -and $file.LastWriteTimeUtc -lt $bootTime) { Remove-Item -LiteralPath $file.FullName -Force }
     }
-    Push-Location $PSScriptRoot
-    try {
-        & cmd.exe /c call start_flitfancy.bat all *> (Join-Path $logs 'autostart.log')
-        if ($LASTEXITCODE -ne 0) { throw 'Service launcher returned an error.' }
-    } finally { Pop-Location }
+    # Only wait for the starter itself. A native pipeline can keep waiting on
+    # handles inherited by the permanent watchdogs and never write the report.
+    $starterCode = Invoke-LocalBootStarter -Scripts $PSScriptRoot `
+        -OutLog (Join-Path $logs 'autostart.log') -ErrLog (Join-Path $logs 'autostart.err.log')
+    if ($starterCode -ne 0) { throw 'Service launcher returned an error.' }
     $deadline = [datetime]::UtcNow.AddSeconds(60)
     do {
         $backendReady = $false

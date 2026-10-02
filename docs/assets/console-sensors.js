@@ -9,6 +9,7 @@
     CH3: { name: "环境光与紫外", sensor: "LTR390" },
     CH4: { name: "空气质量", sensor: "SGP41" },
     CH5: { name: "二氧化碳", sensor: "SCD40" },
+    CH6: { name: "手表心率", sensor: "BLE" },
   };
 
   function formatValue(value, digits) {
@@ -29,8 +30,17 @@
     let cardParts = {};
     let overview = null;
 
+    function channels() {
+      return Object.keys(SENSOR_META).filter(function (channel) {
+        return channel !== "CH6" || (opts.isAdminReady && opts.isAdminReady());
+      });
+    }
+
     function rowValues(channel, row) {
       if (!row || Number(row.ok) !== 1) return [];
+      if (channel === "CH6") {
+        return state.isOnline(row, Date.now()) ? [formatValue(row.heart_rate_bpm, 0) + " bpm"] : [];
+      }
       if (channel === "CH0") {
         return [formatValue(row.temp_c, 1) + " °C", formatValue(row.rh_pct, 0) + " %RH"];
       }
@@ -95,6 +105,7 @@
 
     function derivedLine(channel, row) {
       if (!row || Number(row.ok) !== 1) return "";
+      if (channel === "CH6") return "Xiaomi C4A9 · 心率广播";
       if (channel === "CH0") {
         const temperature = Number(row.temp_c);
         const humidity = Number(row.rh_pct);
@@ -139,6 +150,14 @@
 
     function sensorStateText(row) {
       if (!row) return "等待";
+      if (row.channel === "CH6") {
+        if (state.snapshotAgeMs(row, Date.now()) > 30000) return "离线 · 感知板快照已停止更新";
+        if (state.isOnline(row, Date.now())) return "已连接 · " + sampleAgeText(row);
+        if (row.hr_state === "no_contact") return "请戴好手表";
+        if (Number(row.hr_connected) === 1) return row.hr_state === "waiting" ? "已连接 · 等待心率" : "已连接 · 心率已过期";
+        return { starting: "启动中", scanning: "寻找手表", connecting: "连接中",
+          subscribing: "订阅心率", retrying: "等待重连", error: "蓝牙暂不可用" }[row.hr_state] || "等待手表";
+      }
       const online = state.isOnline(row, Date.now());
       const age = sampleAgeText(row);
       return online ? "在线" + (age ? " · " + age : "") :
@@ -148,17 +167,23 @@
     function render(rows) {
       const grid = query('[data-role="sensor-grid"]');
       const updated = query('[data-role="sensor-updated"]');
-      lastRows = rows || [];
+      rows = (rows || []).filter(function (row) { return channels().includes(row.channel); });
+      lastRows = rows;
       if (overview.isOpen()) return;
       const fingerprint = state.fingerprint(rows);
       if (fingerprint === lastFingerprint && Object.keys(cardParts).length) {
         const byChannel = {};
         (rows || []).forEach(function (row) { byChannel[row.channel] = row; });
-        Object.keys(SENSOR_META).forEach(function (channel) {
+        channels().forEach(function (channel) {
           const parts = cardParts[channel];
           if (!parts) return;
           const row = byChannel[channel];
           parts.state.textContent = sensorStateText(row);
+          if (channel === "CH6") {
+            const values = rowValues(channel, row);
+            parts.values.textContent = values.length ? values.join("  ·  ") : "—";
+            parts.card.className = "sensor-card" + (state.isOnline(row, Date.now()) ? "" : " is-offline");
+          }
           parts.derived.textContent = derivedLine(channel, row);
         });
         return;
@@ -168,7 +193,7 @@
       const byChannel = {};
       (rows || []).forEach(function (row) { byChannel[row.channel] = row; });
       grid.textContent = "";
-      Object.keys(SENSOR_META).forEach(function (channel) {
+      channels().forEach(function (channel) {
         const meta = SENSOR_META[channel];
         const row = byChannel[channel];
         const online = state.isOnline(row, Date.now());
@@ -193,7 +218,7 @@
         card.appendChild(top);
         card.appendChild(values);
         card.appendChild(derived);
-        cardParts[channel] = { state: status, derived: derived };
+        cardParts[channel] = { state: status, derived: derived, values: values, card: card };
         card.addEventListener("click", function () { overview.toggle(channel); });
         grid.appendChild(card);
       });
@@ -238,7 +263,13 @@
       render: render,
       notePressure: notePressure,
       overview: overview,
-      clearPrivate: function () { overview.clearPrivate(); },
+      clearPrivate: function () {
+        lastRows = lastRows.filter(function (row) { return row.channel !== "CH6"; });
+        overview.clearPrivate();
+        lastFingerprint = "";
+        cardParts = {};
+        render(lastRows);
+      },
       dispose: function () { overview.dispose(); },
     };
   }

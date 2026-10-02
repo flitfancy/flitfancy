@@ -5,7 +5,7 @@
   公网页面按栏目动态渲染卡片；
 - 卡片 = 稳定 id，重复上传 = 追加版本（新版本插最前，默认展示最新）；
 - 文件存 docs/resources/files/<id>/，历史版本文件保留；
-- 发布 = git add docs/resources + commit + push（只允许这一组操作）；
+- 发布仅提交 docs/resources，推送前检查全部待推送提交的范围；
 - 上传走两段式：prepare（元数据 JSON，返回一次性 token）→
   upload（原始字节流，按 token 定位临时文件），由 HTTP 层流式写盘。
 """
@@ -87,6 +87,40 @@ class ResourceService:
                     p = os.path.join(self.resources_root, rel.replace("/", os.sep))
                     v["exists"] = os.path.isfile(p)
         return entries
+
+    def update_card(self, meta):
+        """修改既有卡片文字；明确的空字符串可清空简介/详情，不创建版本。"""
+        if not isinstance(meta, dict) or not isinstance(meta.get("id"), str):
+            raise ValueError("请选择要编辑的资源")
+        res_id = meta["id"].strip()
+        if not res_id or len(res_id) > 120:
+            raise ValueError("请选择要编辑的资源")
+        updates = {}
+        for field, limit in (("title", 120), ("desc", 400), ("details", 6000), ("group", 32)):
+            if field not in meta:
+                continue
+            if not isinstance(meta[field], str):
+                raise ValueError("资源信息必须是文字")
+            value = meta[field].strip()
+            if len(value) > limit:
+                raise ValueError("资源信息过长")
+            updates[field] = value
+        if not updates:
+            raise ValueError("请填写要修改的资源信息")
+        if "title" in updates and not updates["title"]:
+            raise ValueError("资源标题不能为空")
+        if "group" in updates:
+            updates["group"] = updates["group"].lower()
+            if updates["group"] not in GROUPS:
+                raise ValueError("请选择有效的资源栏目")
+        with self._lock:
+            entries = self.load_manifest()
+            card = next((entry for entry in entries if entry.get("id") == res_id), None)
+            if card is None:
+                raise LookupError("要编辑的资源不存在")
+            card.update(updates)
+            self._save_manifest(entries)
+        return dict(card)
 
     # ---------- 上传两段式 ----------
     def begin_upload(self, meta):
@@ -240,7 +274,7 @@ class ResourceService:
             timeout=30, encoding="utf-8", errors="replace",
         )
         branch = r.stdout.strip() if r.returncode == 0 else ""
-        return branch or "main"
+        return branch if branch != "HEAD" else ""
 
     def publish(self):
         def run(args, timeout=180):
@@ -250,21 +284,67 @@ class ResourceService:
                 errors="replace",
             )
 
+        def publication_error(base, head):
+            if run(["merge-base", "--is-ancestor", base, head]).returncode != 0:
+                return "本地分支与远端不一致，请先完成代码同步；资源修改已保留"
+            history = run(["rev-list", "--parents", base + ".." + head])
+            if history.returncode != 0:
+                return "无法检查待发布提交，资源修改已保留"
+            for row in history.stdout.splitlines():
+                commits = row.split()
+                if len(commits) != 2:
+                    return "待推送历史包含合并提交，请先完成代码发布；资源修改已保留"
+                files = run(["diff-tree", "--no-commit-id", "--name-only", "--no-renames",
+                             "-r", "-z", commits[0]])
+                if files.returncode != 0:
+                    return "无法检查待发布文件，资源修改已保留"
+                if any(not path.startswith("docs/resources/") for path in files.stdout.split("\0") if path):
+                    return "存在尚未推送的其他代码提交，请先完成代码发布；资源修改已保留"
+            return ""
+
         with self._publish_lock:
-            added = run(["add", "docs/resources"])
-            if added.returncode != 0:
-                return False, "git add 失败：" + (added.stderr or "").strip()
-            status = run(["status", "--porcelain", "docs/resources"])
+            branch = self._current_branch()
+            if not branch:
+                return False, "当前不在可发布分支，资源修改已保留"
+            remote_ref = "refs/remotes/origin/" + branch
+            fetched = run(["fetch", "--no-tags", "origin",
+                           "refs/heads/" + branch + ":" + remote_ref])
+            if fetched.returncode != 0:
+                return False, "无法读取远端分支，资源修改已保留，请稍后重试发布"
+            base = run(["rev-parse", "--verify", remote_ref]).stdout.strip()
+            before = run(["rev-parse", "--verify", "HEAD"]).stdout.strip()
+            if not base or not before:
+                return False, "无法确认发布版本，资源修改已保留"
+            error = publication_error(base, before)
+            if error:
+                return False, error
             note_parts = []
-            if status.stdout.strip():
-                title = "resources: update via console"
-                c = run(["commit", "-m", title])
-                if c.returncode != 0:
-                    return False, "git commit 失败：" + (c.stderr or "").strip()
-                note_parts.append("本地已提交")
-            else:
-                note_parts.append("无新变更")
-            push = run(["push", "origin", self._current_branch()], timeout=300)
+            with self._lock:
+                if self._current_branch() != branch or run(["rev-parse", "HEAD"]).stdout.strip() != before:
+                    return False, "发布期间代码版本已变化，请稍后重试发布"
+                added = run(["add", "--", "docs/resources"])
+                if added.returncode != 0:
+                    return False, "git add 失败：" + (added.stderr or "").strip()
+                status = run(["status", "--porcelain", "--", "docs/resources"])
+                if status.returncode != 0:
+                    return False, "无法确认资源变更，资源修改已保留"
+                if status.stdout.strip():
+                    # --only commits these paths while preserving unrelated staged entries.
+                    c = run(["commit", "--only", "-m", "docs: update published resources",
+                             "--", "docs/resources"])
+                    if c.returncode != 0:
+                        return False, "git commit 失败：" + (c.stderr or "").strip()
+                    note_parts.append("本地已提交")
+                else:
+                    note_parts.append("无新变更")
+                head = run(["rev-parse", "--verify", "HEAD"]).stdout.strip()
+                if not head or self._current_branch() != branch:
+                    return False, "发布期间代码版本已变化，请检查本地资源提交后重试"
+                error = publication_error(base, head)
+                if error:
+                    return False, error
+            # Pin the checked revision so later local commits cannot enter this push.
+            push = run(["push", "origin", head + ":refs/heads/" + branch], timeout=300)
             if push.returncode != 0:
                 return False, ("推送失败（本地提交已保留，稍后重试发布即可）："
                                + (push.stderr or "").strip()[-200:])

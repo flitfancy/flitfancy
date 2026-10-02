@@ -32,10 +32,13 @@ $localServiceScripts = $PSScriptRoot
 $backendScripts = $PSScriptRoot
 if ($Mode -eq 'window') { Restart-ServiceFromWindow 'listener' }
 elseif ($Mode -eq 'backend') { Restart-BackendFromWindow }
+elseif ($Mode -eq 'boot') {
+    if ((Invoke-LocalBootStarter -Scripts $PSScriptRoot -OutLog (Join-Path $PSScriptRoot 'boot-starter.out') -ErrLog (Join-Path $PSScriptRoot 'boot-starter.err')) -ne 0) { throw 'Boot starter failed.' }
+}
 else { Invoke-LocalServiceStart 'listener' }
 [IO.File]::WriteAllText((Join-Path $PSScriptRoot ($Mode + '.done')), 'completed')
 '@)
-    foreach ($mode in @('window', 'starter', 'backend')) {
+    foreach ($mode in @('window', 'starter', 'backend', 'boot')) {
         $arguments = '-NoProfile -ExecutionPolicy Bypass -File "' + (Join-Path $testRoot 'runner.ps1') + '" -Scripts "' + $scripts + '" -Mode ' + $mode
         $runner = Start-Process powershell.exe -ArgumentList $arguments -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $testRoot ($mode + '.out')) -RedirectStandardError (Join-Path $testRoot ($mode + '.err'))
         $deadline = [datetime]::UtcNow.AddSeconds(8)
@@ -55,7 +58,7 @@ else { Invoke-LocalServiceStart 'listener' }
         Remove-Item -LiteralPath (Join-Path $testRoot 'child.pid') -Force -ErrorAction SilentlyContinue
     }
     if ($failures.Count) { throw ('Waiting incorrectly included the persistent service child: ' + ($failures -join ', ')) }
-    Write-Output 'Service process waits: auxiliary menu, backend menu and starter return while persistent children remain running.'
+    Write-Output 'Service process waits: auxiliary menu, backend menu, starter and boot launcher return while persistent children remain running.'
 } finally {
     Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -ne $PID -and $_.Name -match '^(powershell|cmd)\.exe$' -and $_.CommandLine -and $_.CommandLine.Contains($testRoot) } |
         ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue; Wait-Process -Id $_.ProcessId -Timeout 3 -ErrorAction SilentlyContinue }

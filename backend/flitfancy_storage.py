@@ -151,6 +151,11 @@ class SQLiteStore:
             connection.execute(
                 "ALTER TABLE anchors ADD COLUMN project TEXT NOT NULL DEFAULT 'pending'"
             )
+        for column in ("badge", "badge_kind"):
+            if column not in anchor_columns:
+                connection.execute(
+                    "ALTER TABLE anchors ADD COLUMN " + column + " TEXT NOT NULL DEFAULT ''"
+                )
         connection.execute(
             """CREATE TABLE IF NOT EXISTS essays(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -243,8 +248,11 @@ class SQLiteStore:
             "f1_415", "f2_445", "f3_480", "f4_515",
             "f5_555", "f6_590", "f7_630", "f8_680",
             "sraw_voc", "sraw_nox",
+            "heart_rate_bpm",
         ):
             expression = "CAST(json_extract(extra, '$." + column + "') AS REAL)"
+            if column == "heart_rate_bpm":
+                expression = "CASE WHEN ok = 1 THEN " + expression + " END"
             aggregate_parts.append(
                 "AVG(%s) AS %s, MIN(%s) AS %s_min, MAX(%s) AS %s_max"
                 % (expression, column, expression, column, expression, column)

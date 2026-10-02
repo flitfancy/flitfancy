@@ -13,7 +13,8 @@
 #   - 监听 TCP -Port（0.0.0.0），逐连接读取板端行流；
 #   - "PING <n>" -> 回 "PONG <n>"（双向心跳；板端每 3 s 发 PING 确认链路）；
 #   - "HELLO,..." 记录固件元数据，不转发；
-#   - "CSV,uptime_ms,..." 是固件自带表头：写一次 pc_time, 前缀后落盘，不转发；
+#   - "CSV,uptime_ms,..." 是固件自带表头：每会话写一次 pc_time, 前缀，不转发；
+#     表头变化时保留旧会话、创建新文件并重置 live；同表头重连继续原会话；
 #   - "CSV,..." 数据行：加 pc_time 前缀，写会话文件 + live 文件，并 POST 到
 #     本机后端 /api/ingest（除非 -NoFlitFancy）；
 #   - 任何读写异常（TCP RST/断线）只释放当前连接并回到 accept 循环，绝不退出；
@@ -79,14 +80,16 @@ try {
     Log-Error ('session archive failed: ' + $_.Exception.Message)
 }
 
-# 会话文件：每次监听进程运行一个（$stamp 启动时生成）。
+# 每个 schema 一份会话；同秒切换或残留同名文件用递增后缀区分。
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-$OutFile = Join-Path $sessionsRoot "wifi-$stamp.csv"
+$sessionStem = "wifi-$stamp"
+$nextSessionIndex = 0
+$OutFile = $null
 $LiveFile = Join-Path $liveDir 'firefly_live.csv'
 
 $writer = $null          # 会话文件（UTF-8 BOM，逐行 flush，避免异常退出丢尾行）
 $liveWriter = $null      # live 文件（UTF-8 无 BOM，AutoFlush）
-$headerWritten = $false
+$csvHeader = $null
 
 # 转发客户端（复用连接，避免逐行重建）。
 $http = $null
@@ -141,42 +144,69 @@ function Forward-Line([string]$Fields) {
     }
 }
 
-function Write-CsvRow([string]$Fields) {
-    $pcTime = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss.fff')
+function Open-CsvWriters {
     if ($null -eq $script:writer) {
-        $script:writer = [System.IO.StreamWriter]::new(
-            $script:OutFile, $false, [System.Text.UTF8Encoding]::new($true))
-        $script:writer.AutoFlush = $true
+        while ($null -eq $script:writer) {
+            $suffix = if ($script:nextSessionIndex -eq 0) { '' } else {
+                '-' + $script:nextSessionIndex
+            }
+            $script:nextSessionIndex++
+            $candidatePath = Join-Path $sessionsRoot ($sessionStem + $suffix + '.csv')
+            try {
+                # CreateNew is atomic: no existing file can be truncated, even after a collision.
+                $sessionStream = [System.IO.File]::Open($candidatePath,
+                    [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write,
+                    [System.IO.FileShare]::Read)
+            } catch [System.IO.IOException] {
+                if (Test-Path -LiteralPath $candidatePath -PathType Leaf) { continue }
+                throw
+            }
+            try {
+                $script:writer = [System.IO.StreamWriter]::new(
+                    $sessionStream, [System.Text.UTF8Encoding]::new($true))
+                $script:writer.AutoFlush = $true
+                $script:OutFile = $candidatePath
+            } catch {
+                $sessionStream.Dispose()
+                throw
+            }
+        }
     }
     if ($null -eq $script:liveWriter) {
         $script:liveWriter = [System.IO.StreamWriter]::new(
             $script:LiveFile, $false, [System.Text.UTF8Encoding]::new($false))
         $script:liveWriter.AutoFlush = $true
     }
+}
+
+function Write-CsvRow([string]$Fields) {
+    $pcTime = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss.fff')
+    Open-CsvWriters
     $row = $pcTime + ',' + $Fields
     $script:writer.WriteLine($row)
     $script:liveWriter.WriteLine($row)
 }
 
 function Write-CsvHeader([string]$Fields) {
-    if ($script:headerWritten) {
+    if ($script:csvHeader -ceq $Fields) {
         return
     }
-    if ($null -eq $script:writer) {
-        $script:writer = [System.IO.StreamWriter]::new(
-            $script:OutFile, $false, [System.Text.UTF8Encoding]::new($true))
-        $script:writer.AutoFlush = $true
+    if ($null -ne $script:writer) {
+        # Keep the completed file intact; only the live cache is replaced.
+        $script:writer.Dispose()
+        $script:writer = $null
     }
-    if ($null -eq $script:liveWriter) {
-        $script:liveWriter = [System.IO.StreamWriter]::new(
-            $script:LiveFile, $false, [System.Text.UTF8Encoding]::new($false))
-        $script:liveWriter.AutoFlush = $true
+    if ($null -ne $script:liveWriter) {
+        $script:liveWriter.Dispose()
+        $script:liveWriter = $null
     }
+    $script:csvHeader = $null
+    Open-CsvWriters
     $header = 'pc_time,' + $Fields
     $script:writer.WriteLine($header)
     $script:writer.Flush()
     $script:liveWriter.WriteLine($header)
-    $script:headerWritten = $true
+    $script:csvHeader = $Fields
 }
 
 function Handle-Connection($Client) {
@@ -240,7 +270,7 @@ function Handle-Connection($Client) {
                     if ($line.StartsWith('CSV,')) {
                         $fields = $line.Substring(4)
                         if ($fields.StartsWith('uptime_ms,')) {
-                            # 固件自带表头：只落盘一次，不转发。
+                            # 固件自带表头：每个 schema 单独落盘，不转发。
                             Write-CsvHeader $fields
                             continue
                         }

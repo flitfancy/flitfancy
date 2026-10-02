@@ -147,6 +147,13 @@ async function ensureAnchorsTableOnce(env) {
       "ALTER TABLE anchors ADD COLUMN project TEXT NOT NULL DEFAULT 'pending'"
     ).run();
   }
+  for (const column of ["badge", "badge_kind"]) {
+    if (!names.includes(column)) {
+      await env.DB.prepare(
+        `ALTER TABLE anchors ADD COLUMN ${column} TEXT NOT NULL DEFAULT ''`
+      ).run();
+    }
+  }
   return true;
 }
 

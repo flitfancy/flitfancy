@@ -7,9 +7,9 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='24' fill='%23f5b84b' opacity='0.22'/%3E%3Ccircle cx='32' cy='32' r='12' fill='%23f5b84b'/%3E%3Ccircle cx='32' cy='32' r='5' fill='%23ffe9c4'/%3E%3C/svg%3E">
   <title>存在 — 云萤 · FlitFancy</title>
   <meta name="description" content="小流萤的存在：感知周围，侧耳倾听，与你对话。">
-  <link rel="stylesheet" href="assets/style.css?v=1.24.1">
-  <link rel="stylesheet" href="assets/console-activity.css?v=1.24.1">
-  <script src="assets/track.js?v=1.24.1" defer></script>
+  <link rel="stylesheet" href="assets/style.css?v=1.28.1">
+  <link rel="stylesheet" href="assets/console-activity.css?v=1.28.1">
+  <script src="assets/track.js?v=1.28.1" defer></script>
 </head>
 <body class="console-page presence-page">
   <canvas id="sky" aria-hidden="true"></canvas>
@@ -49,7 +49,30 @@
       <div class="sensor-board">
         <div class="sensor-board-head">
           <span>现实感知</span>
-          <span class="sensor-updated" data-role="sensor-updated">等待第一组数据</span>
+          <div class="sensor-board-actions">
+            <span class="sensor-updated" data-role="sensor-updated">等待第一组数据</span>
+            <button class="btn btn-ghost" data-role="sensor-ota-toggle" aria-controls="sensor-ota-panel" aria-expanded="false">固件升级</button>
+          </div>
+        </div>
+        <div class="audio-ota" data-role="sensor-ota-panel" id="sensor-ota-panel" hidden>
+          <div class="audio-ota-head">
+            <span class="audio-ota-title">FIREFLY-SENSE</span>
+            <span class="audio-ota-version" data-role="sensor-ota-version">等待版本信息</span>
+          </div>
+          <div class="audio-ota-file-row">
+            <input type="file" accept=".bin" data-role="sensor-ota-file" aria-label="选择感知板应用固件" hidden>
+            <span class="audio-ota-format" aria-hidden="true">.bin</span>
+            <span class="audio-ota-name" data-role="sensor-ota-name">选择 FIREFLY-SENSE 应用固件</span>
+            <button class="btn btn-ghost" data-role="sensor-ota-select">选择固件</button>
+          </div>
+          <div class="audio-ota-footer">
+            <div class="audio-ota-notes">
+              <p class="audio-ota-status" data-role="sensor-ota-status" role="status">等待固件信息</p>
+              <p class="audio-ota-hint">升级期间请保持供电</p>
+            </div>
+            <button class="btn" data-role="sensor-ota-start" disabled>开始升级</button>
+          </div>
+          <progress class="sensor-ota-progress" data-role="sensor-ota-progress" aria-label="固件上传进度" max="100" value="0" hidden></progress>
         </div>
         <div class="sensor-grid" data-role="sensor-grid"></div>
       </div>
@@ -288,20 +311,21 @@
 
   <div class="js-error" data-role="js-error" hidden></div>
 
-  <script src="assets/firefly.js?v=1.24.1"></script>
-  <script src="assets/sitefx.js?v=1.24.1"></script>
-  <script src="assets/sensor-state.js?v=1.24.1" data-console-module="FlitFancySensorState"></script>
-  <script src="assets/admin-core.js?v=1.24.1" data-console-module="FlitFancyAdmin"></script>
-  <script src="assets/refresh-scheduler.js?v=1.24.1" data-console-module="FlitFancyRefresh"></script>
-  <script src="assets/console-overview.js?v=1.24.1" data-console-module="FlitFancyConsoleOverview"></script>
-  <script src="assets/console-sensors.js?v=1.24.1" data-console-module="FlitFancyConsoleSensors"></script>
-  <script src="assets/console-chat.js?v=1.24.1" data-console-module="FlitFancyConsoleChat"></script>
-  <script src="assets/console-dialogue.js?v=1.24.1" data-console-module="FlitFancyConsoleDialogue"></script>
-  <script src="assets/console-admin.js?v=1.24.1" data-console-module="FlitFancyConsoleAdmin"></script>
-  <script src="assets/console-services.js?v=1.24.1" data-console-module="FlitFancyConsoleServices"></script>
-  <script src="assets/console-activity.js?v=1.24.1" data-console-module="FlitFancyConsoleActivity"></script>
-  <script src="assets/console-audio-history.js?v=1.24.1" data-console-module="FlitFancyAudioHistory"></script>
-  <script src="assets/console-audio.js?v=1.24.1" data-console-module="FlitFancyConsoleAudio"></script>
-  <script src="assets/console.js?v=1.24.1"></script>
+  <script src="assets/firefly.js?v=1.28.1"></script>
+  <script src="assets/sitefx.js?v=1.28.1"></script>
+  <script src="assets/sensor-state.js?v=1.28.1" data-console-module="FlitFancySensorState"></script>
+  <script src="assets/admin-core.js?v=1.28.1" data-console-module="FlitFancyAdmin"></script>
+  <script src="assets/refresh-scheduler.js?v=1.28.1" data-console-module="FlitFancyRefresh"></script>
+  <script src="assets/console-overview.js?v=1.28.1" data-console-module="FlitFancyConsoleOverview"></script>
+  <script src="assets/console-sensors.js?v=1.28.1" data-console-module="FlitFancyConsoleSensors"></script>
+  <script src="assets/console-sensor-ota.js?v=1.28.1" data-console-module="FlitFancySensorOta"></script>
+  <script src="assets/console-chat.js?v=1.28.1" data-console-module="FlitFancyConsoleChat"></script>
+  <script src="assets/console-dialogue.js?v=1.28.1" data-console-module="FlitFancyConsoleDialogue"></script>
+  <script src="assets/console-admin.js?v=1.28.1" data-console-module="FlitFancyConsoleAdmin"></script>
+  <script src="assets/console-services.js?v=1.28.1" data-console-module="FlitFancyConsoleServices"></script>
+  <script src="assets/console-activity.js?v=1.28.1" data-console-module="FlitFancyConsoleActivity"></script>
+  <script src="assets/console-audio-history.js?v=1.28.1" data-console-module="FlitFancyAudioHistory"></script>
+  <script src="assets/console-audio.js?v=1.28.1" data-console-module="FlitFancyConsoleAudio"></script>
+  <script src="assets/console.js?v=1.28.1"></script>
 </body>
 </html>

@@ -31,7 +31,7 @@ def run():
         validations.append((token, ip))
         return token == 'fixture-valid' and ip == '127.0.0.1'
     deps = {f.name: reached for f in fields(HttpDependencies)}
-    for key in ('audio_service', 'activity_service', 'bridge_service', 'launcher_service', 'observation_service',
+    for key in ('audio_service', 'sensor_device_service', 'activity_service', 'bridge_service', 'launcher_service', 'observation_service',
                 'resource_service', 'worker_client', 'ai_opener'):
         deps[key] = Domain()
     deps.update(admin_token_valid=valid, now_iso=lambda: '2026-09-20T00:00:00+08:00',
@@ -68,6 +68,8 @@ def run():
 
     private_get = [
         '/api/refresh/status',
+        '/api/sensors/device',
+        '/api/sensors/heart-rate', '/api/sensors/heart-rate/history',
         '/api/activity/summary', '/api/activity/export',
         '/api/notes', '/api/audio/status', '/api/audio/history', '/api/audio/recording?name=test.wav',
         '/api/admin/session', '/api/admin/config', '/api/admin/essays', '/api/admin/observations', '/api/admin/observation-links',
@@ -77,8 +79,8 @@ def run():
         '/api/command', '/api/notes', '/api/memories', '/api/memories/import-static', '/api/anchors',
         '/api/essays', '/api/essays/featured', '/api/observations', '/api/observation-links', '/api/reflections',
         '/api/chat', '/api/dialogue/messages', '/api/audio/control', '/api/audio/play-file?filename=test.wav',
-        '/api/audio/firmware', '/api/admin/config', '/api/admin/logout', '/api/resources/prepare',
-        '/api/resources/upload?token=test', '/api/resources/delete', '/api/resources/publish',
+        '/api/audio/firmware', '/api/sensors/firmware', '/api/admin/config', '/api/admin/logout', '/api/resources/prepare',
+        '/api/resources/upload?token=test', '/api/resources/update', '/api/resources/delete', '/api/resources/publish',
         '/api/launcher/save', '/api/launcher/delete', '/api/launcher/run', '/api/launcher/pick', '/api/launcher/resolve',
         '/api/bridge/config', '/api/bridge/test', '/api/bridge/directories', '/api/bridge/transfers', '/api/bridge/batches',
         '/api/bridge/transfers/commit', '/api/bridge/transfers/cancel', '/api/bridge/transfers/chunk?id=test&offset=0',

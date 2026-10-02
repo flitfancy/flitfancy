@@ -24,6 +24,7 @@
 #   - 单实例保护（backend-watchdog.pid），由 start_flitfancy.bat 幂等启动。
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'backend_identity.ps1')
 
 $logsRoot = Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'logs'
 if (-not $OutLog) { $OutLog = Join-Path $logsRoot 'server.out.log' }
@@ -36,7 +37,8 @@ if (Test-Path -LiteralPath $myPidFile) {
     $existingText = Get-Content -LiteralPath $myPidFile -Raw -ErrorAction SilentlyContinue
     if ($existingText -match '^\s*(\d+)\s*$') {
         $existingPid = [int]$Matches[1]
-        if (Get-Process -Id $existingPid -ErrorAction SilentlyContinue) {
+        $existing = Get-CimInstance Win32_Process -Filter "ProcessId=$existingPid" -ErrorAction SilentlyContinue
+        if ((Test-BackendScriptProcess $existing $PSCommandPath -Watchdog) -or (Test-UnreadableBackendWatchdog $existing)) {
             Write-Host "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') Another backend watchdog is already running (PID $existingPid); this instance exits."
             exit 0
         }
@@ -59,14 +61,18 @@ function Start-Backend {
         $old = Get-Content -LiteralPath $PidFile -Raw -ErrorAction SilentlyContinue
         if ($old -match '^\s*(\d+)\s*$') {
             $oldPid = [int]$Matches[1]
-            if (Get-Process -Id $oldPid -ErrorAction SilentlyContinue) {
-                Stop-Process -Id $oldPid -Force -ErrorAction SilentlyContinue
-                Start-Sleep -Seconds 1
+            $oldProcess = Get-CimInstance Win32_Process -Filter "ProcessId=$oldPid" -ErrorAction SilentlyContinue
+            if (Test-BackendScriptProcess $oldProcess $ServerPath) {
+                $current = Get-CimInstance Win32_Process -Filter "ProcessId=$oldPid" -ErrorAction SilentlyContinue
+                if ($current -and $current.CreationDate -eq $oldProcess.CreationDate -and
+                    (Test-BackendScriptProcess $current $ServerPath)) {
+                    Stop-Process -Id $oldPid -Force -ErrorAction SilentlyContinue
+                    Start-Sleep -Seconds 1
+                }
             }
         }
-        Remove-Item -LiteralPath $PidFile -Force -ErrorAction SilentlyContinue
     }
-    $proc = Start-Process -FilePath $Exe -ArgumentList $ServerPath -WorkingDirectory $WorkDir -WindowStyle Hidden -RedirectStandardOutput $OutLog -RedirectStandardError $ErrLog -PassThru
+    $proc = Start-Process -FilePath $Exe -ArgumentList ('"' + $ServerPath + '"') -WorkingDirectory $WorkDir -WindowStyle Hidden -RedirectStandardOutput $OutLog -RedirectStandardError $ErrLog -PassThru
     if ($PidFile) {
         [System.IO.File]::WriteAllText($PidFile, [string]$proc.Id)
     }

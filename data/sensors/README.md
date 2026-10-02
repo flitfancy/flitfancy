@@ -70,4 +70,17 @@ sraw_nox, co2_ppm, pressure_pa`
 3. FlitFancy 在 SQLite 保留最近 14 天的查询副本；后端异步同步每个通道的最新快照到 Cloudflare Worker，
    公网控制台读取的是最新快照，不是全部历史。
 
-当前板上运行 FW 1.2 独立调度固件；旧 24/25 字段归档仍保持只读兼容。
+## 手表心率（FW 1.3.5 / schema 5）
+
+板端字段尾部追加 `heart_rate_bpm,hr_connected,hr_contact,hr_state`，旧字段位置不变。
+CH0–CH5 仍对应原有六路环境传感器；逻辑 CH6 为 BLE 心率，每 2 秒输出一条状态快照。
+`hr_contact=NA` 表示手表不提供佩戴接触信息。断线、接触不良或有效心率超过 15 秒未更新时，
+`ok=0` 且 `heart_rate_bpm=NA`；缺测不是 0 bpm。
+
+心率原始数据包含个人生理读数，保存在本机 session/live CSV 和 14 天 SQLite 查询副本。
+后端仅通过管理员接口 `/api/sensors/heart-rate` 与 `/api/sensors/heart-rate/history` 提供，
+公开环境快照、匿名环境历史和 Worker 同步均排除 CH6。退出登录后网页清除心率卡片及历史。
+此目录内全部运行数据继续遵循 AGENTS.md：不提交到 Git。
+
+固件采用独立调度；当前实板版本和验收状态以固件工程 `CURRENT_HANDOFF.md` 为准。
+旧 24/25 字段归档仍保持只读兼容。

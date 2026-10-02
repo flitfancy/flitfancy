@@ -129,14 +129,15 @@
   const services = query('[data-role="ffs-start"]') ? createModule("服务状态", window.FlitFancyConsoleServices) : null;
   const sensors = query('[data-role="sensor-grid"]') ? createModule("环境数据", window.FlitFancyConsoleSensors, {
     query:query, request:request, publicBase:PUBLIC_BASE, overviewRefreshMs:CONFIG_REFRESH_MS, scheduler:scheduler,
+    isAdminReady:function () { return serverOnline && authenticated; },
   }, [window.FlitFancySensorState, window.FlitFancyConsoleOverview]) : null;
   const authOnly = !query('[data-role="admin-panel"]');
   const admin = createModule("管理面板", window.FlitFancyConsoleAdmin, {
     query:query, authOnly:authOnly, isServerOnline:function () { return serverOnline; },
     onAuthenticated:function () { syncContext(true); },
     onSignedOut:function () {
-      clearPrivateViews();
       authenticated = false; authRevision++;
+      clearPrivateViews();
       scheduler.reconcile({authenticated:false});
     },
   }, authOnly ? [] : [window.FlitFancyPanelShell, window.FlitFancyVisits]);
@@ -153,6 +154,12 @@
     fetchRaw:function (url) { return window.FlitFancyAdmin.fetchRaw(url); },
     onLoginRequired:function () { updateLoginRequired(true); },
     onState:function (state) { call(chat,"updateState",state); },
+  }) : null;
+  const sensorOta = query('[data-role="sensor-ota-toggle"]') ? createModule("感知板固件", window.FlitFancySensorOta, {
+    query:query, request:request, scheduler:scheduler,
+    isServerOnline:function () { return serverOnline; },
+    isAdmin:function () { return !!call(admin,"token"); },
+    onLoginRequired:function () { updateLoginRequired(true); },
   }) : null;
   const launcher = query('[data-role="launcher-panel"]') ? createModule("本机启动", window.FlitFancyConsoleLauncher, {
     query:query, request:request, scheduler:scheduler,
@@ -178,7 +185,7 @@
 
   function clearPrivateViews() {
     call(chat,"updateState",null);
-    for (const module of [audio,activity,bridge,launcher,sensors,heartbeats]) call(module,"clearPrivate");
+    for (const module of [audio,sensorOta,activity,bridge,launcher,sensors,heartbeats]) call(module,"clearPrivate");
   }
   function syncContext(runNow) {
     const signedIn = !!call(admin,"token");
@@ -225,6 +232,11 @@
     try {
       const latest = await request("/api/sensors/latest");
       if (epoch !== authRevision) return {skipped:true};
+      if (authenticated) {
+        const privateHeartRate = await request("/api/sensors/heart-rate");
+        if (epoch !== authRevision) return {skipped:true};
+        latest.rows = (latest.rows || []).concat(privateHeartRate.rows || []);
+      }
       (latest.rows || []).forEach(function (row) { call(sensors,"notePressure",row); });
       call(sensors,"render",latest.rows || []);
       return {ok:true};
@@ -243,7 +255,7 @@
   call(sensors,"render",[]);
   call(services,"update",null);
   syncContext();
-  for (const module of [admin,chat,audio,launcher,bridge,activity,heartbeats]) call(module,"start");
+  for (const module of [admin,chat,audio,sensorOta,launcher,bridge,activity,heartbeats]) call(module,"start");
   if (!serverOnline) setStatus(false,sensors ? "公开感知" : "公开访问");
   scheduler.start();
   document.addEventListener("visibilitychange",function () { syncContext(); });
@@ -257,7 +269,7 @@
         return;
       }
       scheduler.dispose();
-      for (const module of [audio,activity,sensors,launcher,bridge,heartbeats]) call(module,"dispose");
+      for (const module of [audio,sensorOta,activity,sensors,launcher,bridge,heartbeats]) call(module,"dispose");
     });
     window.addEventListener('pageshow',function (event) { if (event.persisted) syncContext(true); });
   }

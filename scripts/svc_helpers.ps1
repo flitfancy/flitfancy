@@ -6,7 +6,7 @@
 
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('is-alive', 'backend-health', 'backend-stale-kill', 'stop-process',
+    [ValidateSet('is-alive', 'backend-watchdog-alive', 'backend-health', 'backend-stale-kill', 'stop-process',
         'start-backend', 'start-backend-watchdog', 'wait-backend',
         'listener-health', 'audio-health', 'start-audio', 'wait-audio', 'write-port-pid',
         'start-watchdog')]
@@ -26,6 +26,7 @@ param(
     [int]$Port = 0,
     [string]$Url = 'http://127.0.0.1:2671/api/status'
 )
+. (Join-Path $PSScriptRoot 'backend_identity.ps1')
 
 function Test-ProcessById {
     param([string]$Id)
@@ -45,6 +46,12 @@ function Test-Status {
 }
 
 switch ($Action) {
+    'backend-watchdog-alive' {
+        if (-not $ProcessId -or $ProcessId -notmatch '^\d+$' -or -not $Watchdog) { exit 1 }
+        $candidate = Get-CimInstance Win32_Process -Filter "ProcessId=$ProcessId" -ErrorAction SilentlyContinue
+        if ((Test-BackendScriptProcess $candidate $Watchdog -Watchdog) -or (Test-UnreadableBackendWatchdog $candidate)) { exit 0 }
+        exit 1
+    }
     'is-alive' {
         if (Test-ProcessById $ProcessId) { exit 0 } else { exit 1 }
     }
@@ -69,7 +76,7 @@ switch ($Action) {
         exit 0
     }
     'wait-backend' {
-        $deadline = (Get-Date).AddSeconds(20)
+        $deadline = (Get-Date).AddSeconds(40)
         do {
             if (Test-Status $Url 1) { exit 0 }
             Start-Sleep -Seconds 1
@@ -114,7 +121,9 @@ switch ($Action) {
         if (-not $Watchdog -or -not $Server -or -not $Exe -or -not $WorkDir) { exit 1 }
         # 与 start-watchdog 同款引号写法：路径含空格必须手工嵌双引号。
         $q = [char]34
-        $argList = "-NoProfile -ExecutionPolicy Bypass -File $q$Watchdog$q -ServerPath $q$Server$q -Exe $q$Exe$q -WorkDir $q$WorkDir$q -OutLog $q$OutLog$q -ErrLog $q$ErrLog$q -PidFile $q$PidFile$q"
+        # Watchdog output and Python output must use separate files; the watcher
+        # resolves server.out.log/server.err.log from its own workspace.
+        $argList = "-NoProfile -ExecutionPolicy Bypass -File $q$Watchdog$q -ServerPath $q$Server$q -Exe $q$Exe$q -WorkDir $q$WorkDir$q -PidFile $q$PidFile$q"
         Start-Process -FilePath 'powershell.exe' -ArgumentList $argList -WindowStyle Hidden -RedirectStandardOutput $OutLog -RedirectStandardError $ErrLog
         exit 0
     }

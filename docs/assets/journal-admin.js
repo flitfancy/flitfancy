@@ -5,12 +5,14 @@
   const ADMIN_KEY = "flitfancy.admin.token";
   /* 令牌读写与主机判定委托共享核心（assets/admin-core.js） */
   const adminSurface = window.FlitFancyAdmin.isAdminHost();
+  let sessionRevision = 0;
 
   function token() {
     return window.FlitFancyAdmin.token(ADMIN_KEY);
   }
 
   function setToken(value) {
+    sessionRevision++;
     window.FlitFancyAdmin.setToken(ADMIN_KEY, value);
   }
 
@@ -23,8 +25,10 @@
     const fresh = nowForInput();   // YYYY-MM-DDTHH:MM:SS
     $('[data-role="memory-date"]').value = fresh.slice(0, 10);
     $('[data-role="memory-time"]').value = fresh.slice(11, 19);
-    $('[data-role="anchor-date"]').value = fresh.slice(0, 10);
-    $('[data-role="anchor-time"]').value = fresh.slice(11, 19);
+    if (!$('[data-role="anchor-uid"]').value) {
+      $('[data-role="anchor-date"]').value = fresh.slice(0, 10);
+      $('[data-role="anchor-time"]').value = fresh.slice(11, 19);
+    }
   }
 
   async function api(path, options) {
@@ -40,7 +44,9 @@
     panelShell.show();
     $('[data-role="memory-login-overlay"]').hidden = true;
     fillNow();
-    $('[data-role="memory-content"]').focus();
+    showEditorPane(window.location.hash === "#anchors" ? "anchor" : "flow");
+    document.dispatchEvent(new CustomEvent("flitfancy:journal-authenticated"));
+    $(window.location.hash === "#anchors" ? '[data-role="anchor-title"]' : '[data-role="memory-content"]').focus();
   }
 
   function showLogin() {
@@ -157,22 +163,31 @@
 
   async function saveAnchor() {
     const button = $('[data-role="anchor-save"]');
+    if (button.disabled) return;
+    const session = token(), revision = sessionRevision;
+    if (!session) { showLogin(); return; }
     const editing = !!($('[data-role="anchor-uid"]') || { value: "" }).value.trim();
+    const card = $('[data-role="anchor-uid"]').value.startsWith("legacy-anchor-");
     const anchorDate = $('[data-role="anchor-date"]').value.trim();
     const anchorTime = $('[data-role="anchor-time"]').value.trim();
     const payload = {
       uid: ($('[data-role="anchor-uid"]') || { value: "" }).value.trim(),
       title: $('[data-role="anchor-title"]').value.trim(),
-      time: anchorTime ? anchorDate + "T" + anchorTime : anchorDate,
+      time: card ? "" : anchorTime ? anchorDate + "T" + anchorTime : anchorDate,
       horizon: $('[data-role="anchor-horizon"]').value,
       project: $('[data-role="anchor-project"]').value,
       content: $('[data-role="anchor-content"]').value.trim()
     };
-    if (!payload.title || !anchorDate || !payload.horizon || !payload.project || !payload.content) {
-      setStatus('[data-role="anchor-write-status"]', "标题、分类、日期和内容都要填写");
+    if (card) {
+      payload.badge = $('[data-role="anchor-badge"]').value.trim();
+      payload.badge_kind = $('[data-role="anchor-badge-kind"]').value;
+    }
+    if (!payload.title || (!card && !anchorDate) || !payload.horizon || !payload.project || !payload.content || (card && !payload.badge)) {
+      setStatus('[data-role="anchor-write-status"]', card ? "标题、分类、状态和内容都要填写" : "标题、分类、日期和内容都要填写");
       return;
     }
     button.disabled = true;
+    $('[data-role="anchor-cancel-edit"]').disabled = true;
     button.textContent = "保存中…";
     setStatus('[data-role="anchor-write-status"]', "正在保存到本机并同步云端…");
     try {
@@ -180,22 +195,49 @@
         method: "POST",
         body: JSON.stringify(payload)
       });
-      $('[data-role="anchor-title"]').value = "";
-      $('[data-role="anchor-content"]').value = "";
-      $('[data-role="anchor-horizon"]').value = "now";
-      $('[data-role="anchor-project"]').value = "";
-      fillNow();
-      if ($('[data-role="anchor-uid"]')) $('[data-role="anchor-uid"]').value = "";
+      if (revision !== sessionRevision || token() !== session) return;
+      resetAnchorEditor();
       setStatus('[data-role="anchor-write-status"]', data.public_sync
         ? (editing ? "修改已保存，列表正在更新" : "锚点已建立，列表正在更新")
-        : "已保存在本机，公网稍后自动补传");
-      document.dispatchEvent(new CustomEvent("flitfancy:anchor-saved"));
+        : "已保存在本机；" + (typeof data.public_sync_note === "string" && data.public_sync_note.trim()
+          ? data.public_sync_note.trim() : "公网稍后自动补传"));
+      document.dispatchEvent(new CustomEvent("flitfancy:anchor-saved", { detail: data.anchor }));
     } catch (e) {
-      if (window.FlitFancyAdmin.isUnauthorized(e)) setToken("");
+      const expired = window.FlitFancyAdmin.isUnauthorized(e);
+      // The shared request core clears an expired token before rejecting.
+      if (revision !== sessionRevision || (token() !== session && !(expired && !token()))) return;
+      if (expired) {
+        setToken("");
+        showLogin();
+        setStatus('[data-role="memory-login-status"]', "登录已过期，请重新登录");
+        setStatus('[data-role="anchor-write-status"]', "保存失败：登录已过期，请重新登录后重试");
+        return;
+      }
       setStatus('[data-role="anchor-write-status"]', e.message || "保存失败");
+    } finally {
+      button.disabled = false;
+      $('[data-role="anchor-cancel-edit"]').disabled = false;
+      button.textContent = $('[data-role="anchor-uid"]').value ? "保存修改" : "建立锚点";
     }
-    button.disabled = false;
-    button.textContent = "建立锚点";
+  }
+
+  function anchorFields(card) {
+    $('[data-role="anchor-badge-field"]').hidden = !card;
+    $('[data-role="anchor-badge-kind-field"]').hidden = !card;
+    $('[data-role="anchor-date-field"]').hidden = card;
+    $('[data-role="anchor-time-field"]').hidden = card;
+  }
+
+  function resetAnchorEditor() {
+    for (const role of ["uid", "title", "content", "project", "badge"]) $('[data-role="anchor-' + role + '"]').value = "";
+    $('[data-role="anchor-horizon"]').value = "now";
+    $('[data-role="anchor-badge-kind"]').value = "done";
+    const fresh = nowForInput();
+    $('[data-role="anchor-date"]').value = fresh.slice(0, 10);
+    $('[data-role="anchor-time"]').value = fresh.slice(11, 19);
+    $('[data-role="anchor-save"]').textContent = "建立锚点";
+    $('[data-role="anchor-cancel-edit"]').hidden = true;
+    anchorFields(false);
   }
 
   /* 随笔列表：载入全部 -> 行内编辑/删除/新增 -> 整表保存。
@@ -268,8 +310,10 @@
   }
 
   async function logout() {
+    sessionRevision++;
     try { await api("/api/admin/logout", { method: "POST" }); } catch (e) { /* ignore */ }
     setToken("");
+    resetAnchorEditor();
     $('[data-role="memory-editor"]').hidden = true;
     document.body.classList.remove("editor-open");
   }
@@ -296,6 +340,10 @@
   });
   $('[data-role="memory-logout"]').addEventListener("click", logout);
   $('[data-role="anchor-save"]').addEventListener("click", saveAnchor);
+  $('[data-role="anchor-cancel-edit"]').addEventListener("click", function () {
+    resetAnchorEditor();
+    setStatus('[data-role="anchor-write-status"]', "");
+  });
   $('[data-role="reflection-save-list"]').addEventListener("click", saveReflectionList);
   document.querySelectorAll('[data-role="editor-tab"]').forEach(function (b) {
     b.addEventListener("click", function () {
@@ -346,7 +394,7 @@
   });
   document.addEventListener("flitfancy:edit-anchor", function (event) {
     const a = event.detail || {};
-    if (!a || !a.uid) return;
+    if (!a || !a.uid || !adminSurface || !token() || $('[data-role="anchor-save"]').disabled) return;
     showEditor();
     showEditorPane("anchor");
     $('[data-role="anchor-uid"]').value = a.uid;
@@ -361,6 +409,12 @@
       ? ""
       : (anchorTimeText.length >= 19 ? anchorTimeText.slice(11, 19) : "");
     $('[data-role="anchor-content"]').value = String(a.content || "");
+    const card = a.card === true;
+    anchorFields(card);
+    $('[data-role="anchor-badge"]').value = card ? String(a.badge || "") : "";
+    $('[data-role="anchor-badge-kind"]').value = card ? a.badge_kind : "done";
+    $('[data-role="anchor-save"]').textContent = "保存修改";
+    $('[data-role="anchor-cancel-edit"]').hidden = false;
     setStatus('[data-role="anchor-write-status"]', a.project === "pending"
       ? "旧锚点尚未归类，请选择所属项目后保存"
       : "正在编辑既有锚点，保存后覆盖原条目");

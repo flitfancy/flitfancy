@@ -22,6 +22,14 @@ assert.strictEqual(sensorState.isOnline(fresh, now), true,
 assert.strictEqual(sensorState.effectiveSampleAgeMs(stale, now), 42000,
   "实采年龄必须包含快照从本地传到网页后继续流逝的时间");
 
+const heart = { channel: "CH6", ok: 1, ts: new Date(now - 1000).toISOString(),
+  sample_age_ms: 1000, heart_rate_bpm: 76, hr_connected: 1 };
+assert.equal(sensorState.isOnline(heart, now), true);
+assert.equal(sensorState.isOnline(heart, now + 14000), false, "运输时间与实采年龄合计超过15秒清除心率");
+assert.equal(sensorState.isOnline({...heart, hr_connected: 0}, now), false);
+assert.equal(sensorState.isOnline({...heart, heart_rate_bpm: null}, now), false);
+assert.equal(sensorState.isOnline({...heart, heart_rate_bpm: 0}, now), false);
+
 /* 指纹 = 轻量刷新路径的决策核心：数据未变时不重建卡片。 */
 const rowsA = [
   { channel: "CH0", ts: "t1", ok: 1 },

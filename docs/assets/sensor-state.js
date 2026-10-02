@@ -21,6 +21,11 @@
   }
 
   function isOnline(row, nowMs) {
+    if (row && row.channel === "CH6") {
+      const age = effectiveSampleAgeMs(row, nowMs);
+      if (Number(row.hr_connected) !== 1 || row.heart_rate_bpm == null || !(Number(row.heart_rate_bpm) > 0) ||
+          age == null || age > 15000) return false;
+    }
     return !!row && Number(row.ok) === 1 &&
       snapshotAgeMs(row, nowMs) <= SNAPSHOT_TIMEOUT_MS;
   }

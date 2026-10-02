@@ -7,9 +7,9 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='24' fill='%23f5b84b' opacity='0.22'/%3E%3Ccircle cx='32' cy='32' r='12' fill='%23f5b84b'/%3E%3Ccircle cx='32' cy='32' r='5' fill='%23ffe9c4'/%3E%3C/svg%3E">
   <title>旅途 — 云萤 · FlitFancy</title>
   <meta name="description" content="旅途：云萤与我的锚点和日记，时间会记得我们的存在。">
-  <link rel="stylesheet" href="assets/style.css?v=1.24.1">
-  <link rel="stylesheet" href="assets/observation-editor.css?v=1.24.1">
-  <script src="assets/track.js?v=1.24.1" defer></script>
+  <link rel="stylesheet" href="assets/style.css?v=1.28.1">
+  <link rel="stylesheet" href="assets/observation-editor.css?v=1.28.1">
+  <script src="assets/track.js?v=1.28.1" defer></script>
 </head>
 <body class="journal-page">
   <canvas id="sky" aria-hidden="true"></canvas>
@@ -51,12 +51,12 @@
             </div>
             <p class="how">如何存在</p>
             <div class="mini-grid">
-              <div class="mini-card">
+              <div class="mini-card" data-anchor-uid="legacy-anchor-firefly-brain" data-project="firefly" data-horizon="now">
                 <span class="badge done">已跑通</span>
                 <h3>大脑</h3>
                 <p>Character Knowledge Studio + AstrBot + Ollama：本地角色知识流水线，人格提示词与 RAG 已生成，QQ 接入会说话。</p>
               </div>
-              <div class="mini-card">
+              <div class="mini-card" data-anchor-uid="legacy-anchor-firefly-memory" data-project="firefly" data-horizon="future">
                 <span class="badge dream">规划</span>
                 <h3>记忆</h3>
                 <p>流明的记忆层将作为她的外置记忆——感知数据、便签、日志，她都能读得到。</p>
@@ -70,17 +70,17 @@
             </div>
             <p class="how">如何感受</p>
             <div class="mini-grid">
-              <div class="mini-card">
+              <div class="mini-card" data-anchor-uid="legacy-anchor-skywork-sense" data-project="skywork" data-horizon="now">
                 <span class="badge done">已实测</span>
                 <h3>FIREFLY 感知板 R1.1</h3>
                 <p>六路环境传感器全部通过，WiFi 数据上行，上电自动巡检。</p>
               </div>
-              <div class="mini-card">
+              <div class="mini-card" data-anchor-uid="legacy-anchor-skywork-audio" data-project="skywork" data-horizon="now">
                 <span class="badge doing">进行中</span>
                 <h3>FIREFLY 音频板</h3>
                 <p>双麦本地唤醒 + Wi-Fi 双向音频，原理图与 EasyEDA 脚本就绪。</p>
               </div>
-              <div class="mini-card">
+              <div class="mini-card" data-anchor-uid="legacy-anchor-skywork-motion" data-project="skywork" data-horizon="future">
                 <span class="badge dream">展望</span>
                 <h3>运动控制板</h3>
                 <p>电机与舵机运动控制，让她能真正动起来。</p>
@@ -94,22 +94,22 @@
             </div>
             <p class="how">如何交流</p>
             <div class="mini-grid">
-              <div class="mini-card">
+              <div class="mini-card" data-anchor-uid="legacy-anchor-flitfancy-site" data-project="flitfancy" data-horizon="now">
                 <span class="badge done">已上线</span>
                 <h3>网站</h3>
                 <p>flitfancy.com + HTTPS，首页星空与彩蛋。</p>
               </div>
-              <div class="mini-card">
+              <div class="mini-card" data-anchor-uid="legacy-anchor-flitfancy-console" data-project="flitfancy" data-horizon="now">
                 <span class="badge doing">雏形</span>
                 <h3>控制台与记忆</h3>
                 <p>本地 server.py + SQLite，实时数据、命令与记忆 API。</p>
               </div>
-              <div class="mini-card">
+              <div class="mini-card" data-anchor-uid="legacy-anchor-flitfancy-cloud" data-project="flitfancy" data-horizon="future">
                 <span class="badge dream">规划</span>
                 <h3>云端大脑</h3>
                 <p>本地日常 + 云端满血按需升级的混合路由。</p>
               </div>
-              <div class="mini-card">
+              <div class="mini-card" data-anchor-uid="legacy-anchor-flitfancy-modes" data-project="flitfancy" data-horizon="future">
                 <span class="badge dream">规划</span>
                 <h3>双模式</h3>
                 <p>访客看她的家，管理员进她的工作间，她走本地 API。</p>
@@ -184,10 +184,20 @@
             <option value="flitfancy">FlitFancy · 流明</option>
           </select>
         </label>
-        <label>日期
+        <label data-role="anchor-badge-field" hidden>状态文字
+          <input type="text" maxlength="32" data-role="anchor-badge" placeholder="例如：进行中">
+        </label>
+        <label data-role="anchor-badge-kind-field" hidden>状态样式
+          <select data-role="anchor-badge-kind">
+            <option value="done">已完成</option>
+            <option value="doing">进行中</option>
+            <option value="dream">规划与展望</option>
+          </select>
+        </label>
+        <label data-role="anchor-date-field">日期
           <input type="date" data-role="anchor-date">
         </label>
-        <label>时间（留空 = 只记到日）
+        <label data-role="anchor-time-field">时间（留空 = 只记到日）
           <input type="time" step="1" data-role="anchor-time">
         </label>
       </div>
@@ -196,6 +206,7 @@
       </label>
       <div class="memory-compose-actions">
         <button class="btn" data-role="anchor-save">建立锚点</button>
+        <button class="btn btn-ghost" data-role="anchor-cancel-edit" hidden>取消编辑</button>
         <span class="hint" data-role="anchor-write-status" aria-live="polite"></span>
       </div>
     </div>
@@ -368,15 +379,15 @@
 
   <div class="js-error" data-role="js-error" hidden></div>
 
-  <script src="assets/firefly.js?v=1.24.1"></script>
-  <script src="assets/sitefx.js?v=1.24.1"></script>
-  <script src="assets/admin-core.js?v=1.24.1"></script>
-  <script src="assets/refresh-scheduler.js?v=1.24.1"></script>
-  <script src="assets/admin-panel-shell.js?v=1.24.1"></script>
-  <script src="assets/memory.js?v=1.24.1"></script>
-  <script src="assets/anchors.js?v=1.24.1"></script>
-  <script src="assets/about.js?v=1.24.1"></script>
-  <script src="assets/journal-admin.js?v=1.24.1"></script>
-  <script src="assets/observations-admin.js?v=1.24.1"></script>
+  <script src="assets/firefly.js?v=1.28.1"></script>
+  <script src="assets/sitefx.js?v=1.28.1"></script>
+  <script src="assets/admin-core.js?v=1.28.1"></script>
+  <script src="assets/refresh-scheduler.js?v=1.28.1"></script>
+  <script src="assets/admin-panel-shell.js?v=1.28.1"></script>
+  <script src="assets/memory.js?v=1.28.1"></script>
+  <script src="assets/anchors.js?v=1.28.1"></script>
+  <script src="assets/about.js?v=1.28.1"></script>
+  <script src="assets/journal-admin.js?v=1.28.1"></script>
+  <script src="assets/observations-admin.js?v=1.28.1"></script>
 </body>
 </html>
