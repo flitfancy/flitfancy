@@ -31,9 +31,7 @@
     let overview = null;
 
     function channels() {
-      return Object.keys(SENSOR_META).filter(function (channel) {
-        return channel !== "CH6" || (opts.isAdminReady && opts.isAdminReady());
-      });
+      return Object.keys(SENSOR_META);
     }
 
     function rowValues(channel, row) {
@@ -264,7 +262,6 @@
       notePressure: notePressure,
       overview: overview,
       clearPrivate: function () {
-        lastRows = lastRows.filter(function (row) { return row.channel !== "CH6"; });
         overview.clearPrivate();
         lastFingerprint = "";
         cardParts = {};

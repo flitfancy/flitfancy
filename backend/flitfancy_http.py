@@ -433,7 +433,7 @@ def create_handler(app):
                 rows = con.execute(
                     """SELECT s.* FROM sensors s
                        JOIN (SELECT board, channel, MAX(id) AS mid FROM sensors
-                             WHERE channel IS NOT NULL AND channel != 'CH6' GROUP BY board, channel) m
+                             WHERE channel IS NOT NULL GROUP BY board, channel) m
                          ON s.id = m.mid
                        ORDER BY s.board, s.channel"""
                 ).fetchall()

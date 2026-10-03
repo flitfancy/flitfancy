@@ -24,7 +24,7 @@ SENSOR_VALUE_FIELDS = (
 
 
 def public_environment_rows(rows):
-    """Logical CH6 contains personal heart-rate data and stays on the local service."""
+    """Only environment history is uploaded; latest snapshots also include CH6."""
     return [row for row in (rows or []) if str(row.get("channel", "")).upper() != "CH6"]
 
 

@@ -459,14 +459,13 @@ def sync_pending_observation_links(limit=40):
 
 def sync_public_sensors(rows):
     """把一批最新传感器快照同步到 Worker。网络失败不影响本地采集。"""
-    rows = public_environment_rows(rows)
     if not rows:
         return False
     ok, _ = worker_post("/admin/sensors", {"rows": rows}, 8, "公网传感器接口")
     return ok
 
 def queue_public_sensor_sync(rows):
-    _sensor_sync_queue.enqueue(public_environment_rows(rows))
+    _sensor_sync_queue.enqueue(rows)
 
 
 _sensor_sync_queue = LatestSensorSyncQueue(

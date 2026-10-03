@@ -37,7 +37,7 @@ def run():
                 self.result = (status, payload)
         handler = object.__new__(Handler)
         handler._api_get('/api/sensors/latest')
-        assert all(item['channel'] != 'CH6' for item in handler.result[1]['rows'])
+        assert any(item['channel'] == 'CH6' for item in handler.result[1]['rows'])
         handler._api_get('/api/sensors/history')
         assert all(item['channel'] != 'CH6' for item in handler.result[1]['rows'])
         handler._api_get('/api/sensors/history', 'channel=CH6&hours=24')
@@ -48,17 +48,17 @@ def run():
         assert handler.result[1]['buckets'][0]['heart_rate_bpm'] == 76
         with mock.patch.object(server, 'worker_post', return_value=(True, 'ok')) as sender:
             assert server.sync_public_sensors([row, environment])
-            assert sender.call_args.args[1]['rows'] == [environment]
+            assert sender.call_args.args[1]['rows'] == [row, environment]
             sender.reset_mock()
-            assert server.sync_public_sensors([row]) is False
-            sender.assert_not_called()
+            assert server.sync_public_sensors([row])
+            assert sender.call_args.args[1]['rows'] == [row]
             server.sync_public_history()
             assert all(item['channel'] != 'CH6' for item in sender.call_args.args[1]['rows'])
         with mock.patch.object(server._sensor_sync_queue, 'enqueue') as enqueue:
             server.queue_public_sensor_sync([row, environment])
-            assert enqueue.call_args.args[0] == [environment]
+            assert enqueue.call_args.args[0] == [row, environment]
         assert parse_sensor_csv_line('CSV,' + ','.join(fields[:36])) is not None
-        print('Heart-rate schema, local persistence/history, private routes and public-sync isolation passed')
+        print('Heart-rate schema, public latest/sync and authenticated local history passed')
 
 
 if __name__ == '__main__':

@@ -129,7 +129,6 @@
   const services = query('[data-role="ffs-start"]') ? createModule("服务状态", window.FlitFancyConsoleServices) : null;
   const sensors = query('[data-role="sensor-grid"]') ? createModule("环境数据", window.FlitFancyConsoleSensors, {
     query:query, request:request, publicBase:PUBLIC_BASE, overviewRefreshMs:CONFIG_REFRESH_MS, scheduler:scheduler,
-    isAdminReady:function () { return serverOnline && authenticated; },
   }, [window.FlitFancySensorState, window.FlitFancyConsoleOverview]) : null;
   const authOnly = !query('[data-role="admin-panel"]');
   const admin = createModule("管理面板", window.FlitFancyConsoleAdmin, {
@@ -232,11 +231,6 @@
     try {
       const latest = await request("/api/sensors/latest");
       if (epoch !== authRevision) return {skipped:true};
-      if (authenticated) {
-        const privateHeartRate = await request("/api/sensors/heart-rate");
-        if (epoch !== authRevision) return {skipped:true};
-        latest.rows = (latest.rows || []).concat(privateHeartRate.rows || []);
-      }
       (latest.rows || []).forEach(function (row) { call(sensors,"notePressure",row); });
       call(sensors,"render",latest.rows || []);
       return {ok:true};
