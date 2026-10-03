@@ -27,7 +27,12 @@ assert.match(trend(falling), /↓ -2\.0 hPa/);
 const flush = () => new Promise(resolve => setImmediate(resolve));
 const roles = new Map();
 class Element {
-  constructor() { this.children = []; this.handlers = new Map(); this.dataset = {}; this.style = {}; this.classList = {toggle() {}}; }
+  constructor() {
+    this.children = []; this.handlers = new Map(); this.dataset = {}; this.height = 320;
+    this.style = {setProperty(name,value){this[name]=value;},removeProperty(name){delete this[name];}};
+    this.classList = {toggle() {}};
+  }
+  getBoundingClientRect() { return {height:this.height}; }
   appendChild(child) { this.children.push(child); return child; }
   setAttribute(key, value) { if (key === 'data-role') roles.set(value, this); }
   addEventListener(type, handler) { this.handlers.set(type, handler); }
@@ -35,6 +40,9 @@ class Element {
   getContext() { return new Proxy({}, {get: (target, key) => target[key] || (() => {}), set: (target, key, value) => { target[key] = value; return true; }}); }
 }
 roles.set('sensor-grid', new Element());
+roles.get('sensor-grid').height = 348;
+let mobile = false;
+window.matchMedia = () => ({matches:mobile});
 window.setTimeout = () => 1; window.clearTimeout = () => {};
 vm.runInNewContext(source, {window, document: {createElement: () => new Element()}});
 vm.runInNewContext(fs.readFileSync(new URL('../docs/assets/refresh-scheduler.js', import.meta.url), 'utf8'), {window});
@@ -48,14 +56,17 @@ const overview = window.FlitFancyConsoleOverview.create({
 });
 scheduler.start(); await flush(); assert.equal(calls, 0);
 overview.open('CH0'); await flush(); assert.equal(calls, 1);
+assert.equal(roles.get('sensor-grid').style['--sensor-overview-height'], '348px', 'history keeps the expanded seven-card desktop height');
 const obsolete = scheduler.refresh('sensor-history'); overview.clearPrivate();
 finish({ok: false}); await obsolete;
 assert.equal(calls, 1, 'closing must not send the pending local request onward to the public fallback');
 assert.equal(restored, 1); assert.equal(overview.isOpen(), false);
+assert.equal(roles.get('sensor-grid').style['--sensor-overview-height'], undefined, 'returning to cards restores natural sizing');
 
 overview.open('CH0'); await flush();
 const firstRequest = scheduler.refresh('sensor-history');
 overview.open('CH1'); assert.equal(calls, 2, 'changing channel queues behind the pending request');
+assert.equal(roles.get('sensor-grid').style['--sensor-overview-height'], '348px', 'changing history channels keeps the captured card height');
 finish({ok: true, buckets: []}); await firstRequest; await flush(); assert.equal(calls, 3);
 finish({ok: true, buckets: []}); await flush();
 assert.match(roles.get('overview-status').textContent, /24 小时总览/);
@@ -65,7 +76,14 @@ scheduler.reconcile({hidden: false}); await flush();
 assert.equal(scheduler.snapshot()[0].failures, 1);
 assert.match(roles.get('overview-status').textContent, /暂时拿不到/);
 assert.doesNotMatch(roles.get('overview-status').textContent, /private server/);
+overview.close(); mobile = true;
+roles.get('sensor-grid').height = 848;
+overview.open('CH0');
+assert.equal(roles.get('sensor-grid').style['--sensor-overview-height'], undefined, 'mobile history does not inherit a tall single-column card list');
+overview.close(); mobile = false;
+overview.open('CH0');
 overview.dispose(); scheduler.dispose(); assert.equal(scheduler.snapshot().length, 0);
+assert.equal(roles.get('sensor-grid').style['--sensor-overview-height'], undefined, 'disposing clears the retained view height');
 assert.doesNotMatch(source, /setInterval\(|setTimeout\(/);
 
 console.log("console overview module test ok");

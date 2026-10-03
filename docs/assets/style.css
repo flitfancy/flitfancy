@@ -897,10 +897,10 @@ body.console-page .section {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
-  /* 数据感知区域：第一帧就锁定最终高度，六格与历史曲线共用同一盒子，
-     切换零跳动。含每格固定的评价行，因此整体比纯数值更高。 */
+  /* 六格保持原有最小高度；新增卡片或文字换行时由内容撑高，避免越过外框。
+     桌面历史视图在切换前记录卡片区实际高度，继续使用同一面板尺度。 */
   min-height: 320px;
-  height: 320px;   /* 与历史曲线严格等高；移动端由下方 ≤640 块改回 auto */
+  height: auto;
   align-content: start;
 }
 
@@ -925,7 +925,8 @@ body.console-page .section {
   grid-column: 1 / -1;
   width: 100%;
   min-width: 0;
-  height: 320px;
+  height: var(--sensor-overview-height, 320px);
+  min-height: 320px;
   display: flex;
   flex-direction: column;
 }
@@ -959,7 +960,8 @@ body.console-page .section {
 
 /* 传感器区移动端（≤640）：单列 + 紧凑内边距 + 高度随内容 */
 @media (max-width: 640px) {
-  .sensor-grid { grid-template-columns: 1fr; height: auto; }
+  .sensor-grid { grid-template-columns: 1fr; }
+  .sensor-overview { height: 320px; }
   .sensor-board { padding: 14px; }
   .sensor-board-head { margin-bottom: 11px; }
 }

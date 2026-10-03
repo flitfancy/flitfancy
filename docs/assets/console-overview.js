@@ -205,8 +205,14 @@
 
     function open(channel) {
       if (disposed) return;
-      channelOpen = channel;
       const grid = query('[data-role="sensor-grid"]');
+      if (!isOpen()) {
+        // Preserve the desktop card panel's natural height, including extra rows.
+        const mobile = global.matchMedia && global.matchMedia("(max-width: 640px)").matches;
+        if (mobile) grid.style.removeProperty("--sensor-overview-height");
+        else grid.style.setProperty("--sensor-overview-height", grid.getBoundingClientRect().height + "px");
+      }
+      channelOpen = channel;
       const meta = sensorMeta[channel];
       grid.textContent = "";
       const wrapper = document.createElement("div");
@@ -261,6 +267,7 @@
       revision++;
       const grid = query('[data-role="sensor-grid"]');
       grid.textContent = "";
+      grid.style.removeProperty("--sensor-overview-height");
       renderRows(getRows());
       if (opts.scheduler) opts.scheduler.reconcile();
     }
@@ -533,6 +540,7 @@
       clearPrivate: function () { if (isOpen()) close(); else revision++; },
       dispose: function () {
         disposed = true; revision++;
+        query('[data-role="sensor-grid"]').style.removeProperty("--sensor-overview-height");
         if (refreshJob) { refreshJob.unregister(); refreshJob = null; }
       },
     };
