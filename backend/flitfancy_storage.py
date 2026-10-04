@@ -10,6 +10,20 @@ from flitfancy_core import CST
 from flitfancy_sensors import SENSOR_VALUE_FIELDS
 
 
+def latest_sensor_rows(connection, channel=None):
+    """Select by sampled time so delayed mobile uploads never become the live snapshot."""
+    where = "channel IS NOT NULL" + (" AND channel=?" if channel else "")
+    return connection.execute(
+        """SELECT s.* FROM sensors s JOIN (
+          SELECT (SELECT id FROM sensors newest
+                  WHERE newest.board IS groups.board AND newest.channel=groups.channel
+                  ORDER BY julianday(newest.ts) DESC,newest.id DESC LIMIT 1) AS mid
+          FROM (SELECT DISTINCT board,channel FROM sensors WHERE """ + where + """ ) groups
+        ) selected ON s.id=selected.mid ORDER BY s.board,s.channel""",
+        (channel,) if channel else (),
+    ).fetchall()
+
+
 # 公网补传只允许这些固定表；调用方传入的名称永远不参与 SQL 拼接。
 _SYNC_PENDING_SQL = {
     "anchors": (
@@ -210,6 +224,10 @@ class SQLiteStore:
             "ON sensors(board, channel, id DESC)"
         )
         connection.execute("CREATE INDEX IF NOT EXISTS idx_sensors_ts ON sensors(ts)")
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_sensors_board_channel_time "
+            "ON sensors(board,channel,julianday(ts) DESC,id DESC)"
+        )
         connection.execute(
             "CREATE INDEX IF NOT EXISTS idx_sensors_channel_ts "
             "ON sensors(channel, ts)"

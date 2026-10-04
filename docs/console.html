@@ -7,11 +7,11 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='24' fill='%23f5b84b' opacity='0.22'/%3E%3Ccircle cx='32' cy='32' r='12' fill='%23f5b84b'/%3E%3Ccircle cx='32' cy='32' r='5' fill='%23ffe9c4'/%3E%3C/svg%3E">
   <title>控制台 — 云萤 · FlitFancy</title>
   <meta name="description" content="小流萤的控制台：服务管理与本机启动。">
-  <link rel="stylesheet" href="assets/style.css?v=1.28.3">
-  <link rel="stylesheet" href="assets/console-launcher.css?v=1.28.3">
-  <link rel="stylesheet" href="assets/console-bridge.css?v=1.28.3">
-  <link rel="stylesheet" href="assets/console-heartbeat.css?v=1.28.3">
-  <script src="assets/track.js?v=1.28.3" defer></script>
+  <link rel="stylesheet" href="assets/style.css?v=1.29.0">
+  <link rel="stylesheet" href="assets/console-launcher.css?v=1.29.0">
+  <link rel="stylesheet" href="assets/console-bridge.css?v=1.29.0">
+  <link rel="stylesheet" href="assets/console-heartbeat.css?v=1.29.0">
+  <script src="assets/track.js?v=1.29.0" defer></script>
 </head>
 <body class="console-page">
   <canvas id="sky" aria-hidden="true"></canvas>
@@ -108,6 +108,19 @@
             </div>
           </div>
           <p class="bridge-message" data-bridge="message" role="status" aria-live="polite"></p>
+        </div>
+      </section>
+
+      <section class="console-panel" data-role="collector-panel" aria-label="手机采集">
+        <h2>手机采集</h2>
+        <p class="hint" data-collector="locked">登录后配对手机，接收感知板数据并持续上报。</p>
+        <div data-collector="body" hidden>
+          <label class="bridge-path">手机来源名称<input data-collector="name" type="text" maxlength="40" value="小米采集手机" autocomplete="off"></label>
+          <p class="hint">这个名称会显示在公开的最新数据中，可使用设备别名。</p>
+          <div class="bridge-actions"><button type="button" class="btn" data-collector="pair">生成配对码</button><button type="button" class="btn btn-ghost" data-collector="refresh">刷新设备</button></div>
+          <p class="collector-code" data-collector="code" aria-live="polite"></p>
+          <div data-collector="devices"></div>
+          <p class="hint" data-collector="message" role="status"></p>
         </div>
       </section>
 
@@ -234,19 +247,20 @@
 
   <div class="js-error" data-role="js-error" hidden></div>
 
-  <script src="assets/firefly.js?v=1.28.3"></script>
-  <script src="assets/sitefx.js?v=1.28.3"></script>
-  <script src="assets/admin-core.js?v=1.28.3" data-console-module="FlitFancyAdmin"></script>
-  <script src="assets/refresh-scheduler.js?v=1.28.3" data-console-module="FlitFancyRefresh"></script>
-  <script src="assets/admin-panel-shell.js?v=1.28.3" data-console-module="FlitFancyPanelShell"></script>
-  <script src="assets/console-visits.js?v=1.28.3" data-console-module="FlitFancyVisits"></script>
-  <script src="assets/console-admin.js?v=1.28.3" data-console-module="FlitFancyConsoleAdmin"></script>
-  <script src="assets/console-services.js?v=1.28.3" data-console-module="FlitFancyConsoleServices"></script>
-  <script src="assets/console-launcher.js?v=1.28.3" data-console-module="FlitFancyConsoleLauncher"></script>
-  <script src="assets/bridge-files.js?v=1.28.3" data-console-module="FlitFancyBridgeFiles"></script>
-  <script src="assets/bridge-hash.js?v=1.28.3" data-console-module="FlitFancyBridgeHash"></script>
-  <script src="assets/console-bridge.js?v=1.28.3" data-console-module="FlitFancyConsoleBridge"></script>
-  <script src="assets/console-heartbeat.js?v=1.28.3" data-console-module="FlitFancyHeartbeats"></script>
-  <script src="assets/console.js?v=1.28.3"></script>
+  <script src="assets/firefly.js?v=1.29.0"></script>
+  <script src="assets/sitefx.js?v=1.29.0"></script>
+  <script src="assets/admin-core.js?v=1.29.0" data-console-module="FlitFancyAdmin"></script>
+  <script src="assets/refresh-scheduler.js?v=1.29.0" data-console-module="FlitFancyRefresh"></script>
+  <script src="assets/admin-panel-shell.js?v=1.29.0" data-console-module="FlitFancyPanelShell"></script>
+  <script src="assets/console-visits.js?v=1.29.0" data-console-module="FlitFancyVisits"></script>
+  <script src="assets/console-admin.js?v=1.29.0" data-console-module="FlitFancyConsoleAdmin"></script>
+  <script src="assets/console-services.js?v=1.29.0" data-console-module="FlitFancyConsoleServices"></script>
+  <script src="assets/console-launcher.js?v=1.29.0" data-console-module="FlitFancyConsoleLauncher"></script>
+  <script src="assets/bridge-files.js?v=1.29.0" data-console-module="FlitFancyBridgeFiles"></script>
+  <script src="assets/bridge-hash.js?v=1.29.0" data-console-module="FlitFancyBridgeHash"></script>
+  <script src="assets/console-bridge.js?v=1.29.0" data-console-module="FlitFancyConsoleBridge"></script>
+  <script src="assets/console-heartbeat.js?v=1.29.0" data-console-module="FlitFancyHeartbeats"></script>
+  <script src="assets/console-collectors.js?v=1.29.0" data-console-module="FlitFancyCollectors"></script>
+  <script src="assets/console.js?v=1.29.0"></script>
 </body>
 </html>

@@ -2753,3 +2753,9 @@ body.editor-open .anchor-edit:hover {
   }
 }
 }
+
+.collector-device { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-block: 10px; }
+.collector-device > span { flex: 1; min-width: 160px; overflow-wrap: anywhere; }
+.collector-code { color: var(--amber); font-size: var(--fs-head-2); letter-spacing: 2px; }
+.sensor-source { color: var(--muted); font-size: var(--fs-text-xxs); margin-top: 6px; overflow-wrap: anywhere; }
+.sensor-source:empty { display: none; }

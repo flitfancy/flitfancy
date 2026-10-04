@@ -40,6 +40,9 @@ assert.equal(
 );
 
 const releaseTag = (process.env.RELEASE_TAG || "").trim();
+const mobileVersion = JSON.parse(fs.readFileSync(path.join(docsDir, "mobile-version.json"), "utf8"));
+assert.equal(mobileVersion.website_version, packageJson.version, "手机网页更新标识必须与网站版本一致");
+assert.equal(mobileVersion.native_protocol, 1);
 if (releaseTag) {
   assert.match(releaseTag, /^v\d+\.\d+\.\d+$/, "发布标签必须使用 vMAJOR.MINOR.PATCH");
   assert.equal(releaseTag, "v" + packageJson.version, "发布标签必须与 package version 一致");

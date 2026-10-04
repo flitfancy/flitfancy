@@ -20,6 +20,7 @@ site/
 │   ├── assets/      全部 css/js（style.css 是主样式表）
 │   └── resources/   可公开下载的附件（固件/资料包，带版本号与 SHA-256）
 ├── backend/         Python 本地服务：server.py 入口 + flitfancy_*.py 领域模块
+├── android/         Kotlin/WebView 手机底座；构建与缓存忽略，配对后只持独立采集凭证
 ├── cloudflare/      Worker：worker.js 入口 + worker-*.js 模块
 │   └── package.json ← ★ 版本号单一来源（语义化版本）
 ├── scripts/         set-version.mjs（版本联动）/ run-backend-tests.mjs（跨平台测试）/
@@ -39,6 +40,8 @@ site/
    第一步），否则访客拿到的还是旧缓存。
 5. 固件类产物严禁携带真实 WiFi 凭证（历史上有一版因此下架）；
    新固件必须走"首次上电配网"，凭证不进编译。
+6. Android 签名私钥位于忽略的 backend/data/，密码与路径仅在 ai_local.json；
+   APK 与源码不嵌入真实凭证。保留原签名密钥，后续更新需同一签名。
 
 ## 标准发布流程（一条命令）
 

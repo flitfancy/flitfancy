@@ -1,0 +1,21 @@
+{
+  "app_version": "0.1.0",
+  "website_version": "1.29.0",
+  "native_protocol": 1,
+  "upload_protocol": 1,
+  "package": "com.flitfancy.mobile",
+  "min_android_api": 26,
+  "target_android_api": 36,
+  "apk": "flitfancy-android-0.1.0.apk",
+  "bytes": 2226659,
+  "sha256": "c7b59815ab4170573841999f95d9661147cb9db6914c6ca1bcc5368f7da3c395",
+  "validation": {
+    "signed_apk_verified": true,
+    "sample_parser": true,
+    "room_queue": true,
+    "android_lint": true,
+    "collector_api": true,
+    "mobile_web_pairing": true,
+    "xiaomi_15_pro_hyperos3": "pending_real_device_test"
+  }
+}

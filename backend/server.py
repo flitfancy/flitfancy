@@ -38,9 +38,11 @@ from flitfancy_core import (
     now_iso,
 )
 from flitfancy_http import HttpDependencies, create_handler
+from flitfancy_collectors import CollectorService
 from flitfancy_observations import ObservationService, decode_tags
 from flitfancy_resources import ResourceService
 from flitfancy_sensors import (
+    SENSOR_CSV_FIELDS,
     public_environment_rows,
     normalize_sensor_row,
     parse_sensor_csv_line,
@@ -61,7 +63,7 @@ def _env_int(name, default, minimum=0):
 BASE = os.path.dirname(os.path.abspath(__file__))
 SITE_ROOT = os.path.normpath(os.path.join(BASE, "..", "docs"))
 DB_PATH = os.environ.get("FLITFANCY_DB_PATH") or os.path.join(BASE, "data", "flitfancy.db")
-SENSOR_RAW_DATA_DIR = os.path.normpath(os.path.join(BASE, "..", "data", "sensors"))
+SENSOR_RAW_DATA_DIR = os.environ.get("FLITFANCY_SENSOR_RAW_DATA_DIR") or os.path.normpath(os.path.join(BASE, "..", "data", "sensors"))
 # 默认只监听回环：LAN 侧入口只有监听器（7777，供感知板推送），
 # 后端 2671 供 cloudflared 隧道与本地浏览器使用，无需暴露局域网。
 HOST = os.environ.get("FLITFANCY_HOST") or "127.0.0.1"
@@ -499,6 +501,29 @@ def ingest_json(row, board=None, con=None):
     own = con is None
     if own:
         con = db()
+    # The desktop listener and mobile relay can see the same board frame.
+    # Match the physical frame and a narrow sampling-time window, rather than
+    # treating each transport's receipt as a new measurement.
+    if normalized["uptime_ms"] is not None and normalized["cycle"] is not None:
+        frame_time = datetime.fromisoformat(normalized["ts"].replace("Z", "+00:00")).timestamp()
+        candidates = con.execute(
+            """SELECT * FROM sensors WHERE board=? AND channel=? AND uptime_ms=? AND cycle=?
+               AND julianday(ts) BETWEEN julianday(?,'unixepoch') AND julianday(?,'unixepoch')
+               ORDER BY id DESC LIMIT 4""",
+            (normalized["board"], normalized["channel"], normalized["uptime_ms"], normalized["cycle"], frame_time - 2, frame_time + 2),
+        ).fetchall()
+        public = sensor_row_public(normalized)
+        for candidate in candidates:
+            previous = sensor_row_public(dict(candidate))
+            if all(previous.get(field) == public.get(field) for field in SENSOR_CSV_FIELDS if field != "channel_index"):
+                if all(public.get(key) for key in ("collector_id", "collector_name", "collector_type")):
+                    extra = json.loads(candidate["extra"] or "{}")
+                    extra.update({key: public[key] for key in ("collector_id", "collector_name", "collector_type")})
+                    con.execute("UPDATE sensors SET extra=? WHERE id=?", (json.dumps(extra, ensure_ascii=False), candidate["id"]))
+                    previous.update({key: public[key] for key in ("collector_id", "collector_name", "collector_type")})
+                if own:
+                    con.commit(); con.close()
+                return previous
     con.execute(
         """INSERT INTO sensors(
             ts, board, uptime_ms, cycle, channel, sensor, ok,
@@ -543,6 +568,7 @@ _activity_service = ActivityService(
 )
 
 Handler = create_handler(HttpDependencies(
+    collector_service=CollectorService(db, ingest_json, os.path.join(SENSOR_RAW_DATA_DIR, "collectors")),
     sensor_device_service=SensorDeviceService(),
     audio_service=_audio_service,
     activity_service=_activity_service,

@@ -78,7 +78,7 @@ def fixture():
             return connection
         with closing(sqlite3.connect(database)) as connection:
             with connection:
-                connection.executescript('CREATE TABLE sensors(id INTEGER, board TEXT, channel TEXT);'
+                connection.executescript('CREATE TABLE sensors(id INTEGER, board TEXT, channel TEXT, ts TEXT);'
                                          'CREATE TABLE memories(id INTEGER, memory_time TEXT, content TEXT);')
                 connection.execute('INSERT INTO memories VALUES (1, ?, ?)', ('2026-09-27', SECRET))
         deps = {item.name: forbidden for item in fields(HttpDependencies)}

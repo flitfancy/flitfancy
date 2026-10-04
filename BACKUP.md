@@ -25,6 +25,10 @@ CSV、SQLite 在线一致性副本、本地网站配置、Wi-Fi 配置、隧道�
 配置凭证放在快照的 `private/` 下，不进入任何 Git 提交；备份目录访问权限限当前用户、
 管理员和 SYSTEM。快照使用文件权限保护，没有配置密码加密。
 
+Android 源码与已签名 APK 随网站仓库备份；签名私钥单独保存在 `private/android/android-signing.p12`，
+签名密码随私有 `ai_local.json` 备份。迁移后应调整 android_signing.keystore 路径并保留同一私钥。
+手机上传的长期 JSONL 在 data/sensors/collectors 下，也随工作区快照保存。
+
 不包含：`.pio`/Node 等依赖缓存、全盘系统镜像、语音模型与录音、ActivityWatch 的外部原始库、
 全部旧现场诊断目录和 Cloudflare D1 的独立云端备份。网站 SQLite 内已有的使用统计会随数据库备份。
 正式 OTA 镜像与源码可恢复；完整板内配置/闪存镜像仍属于各现场证据目录，不能当公开附件。

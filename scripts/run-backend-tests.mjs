@@ -41,7 +41,7 @@ if (process.platform === "win32") {
     if (result.status !== 0) process.exit(result.status ?? 1);
   }
 }
-for (const relativePath of ["backend/auth_policy_test.py", "backend/anchor_cards_test.py", "backend/resource_edit_test.py", "backend/resource_publish_test.py", "backend/sensor_device_test.py", "backend/heart_rate_test.py", "backend/refresh_test.py", "backend/refresh_http_test.py", "backend/activity_test.py", "backend/activity_http_test.py", "backend/connection_test.py", "backend/module_test.py", "backend/launcher_test.py", "backend/bridge_test.py", "backend/bridge_batch_test.py", "backend/smoke_test.py"]) {
+for (const relativePath of ["backend/auth_policy_test.py", "backend/collector_test.py", "backend/sensor_sync_order_test.py", "backend/anchor_cards_test.py", "backend/resource_edit_test.py", "backend/resource_publish_test.py", "backend/sensor_device_test.py", "backend/heart_rate_test.py", "backend/refresh_test.py", "backend/refresh_http_test.py", "backend/activity_test.py", "backend/activity_http_test.py", "backend/connection_test.py", "backend/module_test.py", "backend/launcher_test.py", "backend/bridge_test.py", "backend/bridge_batch_test.py", "backend/smoke_test.py"]) {
   const result = spawnSync(
     python.command,
     [...python.args, path.join(root, relativePath)],

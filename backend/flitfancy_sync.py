@@ -93,6 +93,7 @@ class LatestSensorSyncQueue:
         self.sender = sender
         self._lock = threading.Lock()
         self._pending = {}
+        self._newest = {}
         self._running = False
 
     def enqueue(self, rows):
@@ -102,6 +103,14 @@ class LatestSensorSyncQueue:
             for row in rows:
                 if row and row.get("channel"):
                     key = (row.get("board"), row.get("channel"))
+                    try:
+                        from datetime import datetime
+                        stamp = datetime.fromisoformat(str(row.get("ts", "")).replace("Z", "+00:00")).timestamp()
+                    except (ValueError, TypeError, OverflowError):
+                        stamp = 0
+                    if stamp < self._newest.get(key, 0):
+                        continue
+                    self._newest[key] = stamp
                     self._pending[key] = row
         self._start_if_pending()
 

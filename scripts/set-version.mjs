@@ -31,6 +31,7 @@ if (referenceCount === 0) {
 
 packageJson.version = nextVersion;
 fs.writeFileSync(packagePath, JSON.stringify(packageJson, null, 2) + "\n", "utf8");
+fs.writeFileSync(path.join(docsDir, "mobile-version.json"), JSON.stringify({ website_version: nextVersion, native_protocol: 1 }) + "\n", "utf8");
 for (const update of htmlUpdates) {
   if (update.content !== update.source) {
     fs.writeFileSync(update.filePath, update.content, "utf8");

@@ -162,6 +162,10 @@
         (Number(row.ok) === 1 ? "离线 · 快照已停止更新" : "暂无读数");
     }
 
+    function sourceLine(row) {
+      return row && row.collector_name ? "经「" + String(row.collector_name) + "」上报" : "";
+    }
+
     function render(rows) {
       const grid = query('[data-role="sensor-grid"]');
       const updated = query('[data-role="sensor-updated"]');
@@ -183,6 +187,7 @@
             parts.card.className = "sensor-card" + (state.isOnline(row, Date.now()) ? "" : " is-offline");
           }
           parts.derived.textContent = derivedLine(channel, row);
+          parts.source.textContent = sourceLine(row);
         });
         return;
       }
@@ -216,7 +221,9 @@
         card.appendChild(top);
         card.appendChild(values);
         card.appendChild(derived);
-        cardParts[channel] = { state: status, derived: derived, values: values, card: card };
+        const source = document.createElement("div"); source.className = "sensor-source"; source.textContent = sourceLine(row);
+        card.appendChild(source);
+        cardParts[channel] = { state: status, derived: derived, values: values, card: card, source: source };
         card.addEventListener("click", function () { overview.toggle(channel); });
         grid.appendChild(card);
       });

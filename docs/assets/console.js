@@ -182,9 +182,15 @@
     isServerOnline:function () { return serverOnline; },
   }) : null;
 
+  const collectors = query('[data-role="collector-panel"]') ? createModule("手机采集", window.FlitFancyCollectors, {
+    query:query, request:request, scheduler:scheduler,
+    isAdmin:function () { return !!call(admin,"token"); },
+    isServerOnline:function () { return serverOnline; },
+  }) : null;
+
   function clearPrivateViews() {
     call(chat,"updateState",null);
-    for (const module of [audio,sensorOta,activity,bridge,launcher,sensors,heartbeats]) call(module,"clearPrivate");
+    for (const module of [audio,sensorOta,activity,bridge,launcher,sensors,heartbeats,collectors]) call(module,"clearPrivate");
   }
   function syncContext(runNow) {
     const signedIn = !!call(admin,"token");
@@ -249,7 +255,7 @@
   call(sensors,"render",[]);
   call(services,"update",null);
   syncContext();
-  for (const module of [admin,chat,audio,sensorOta,launcher,bridge,activity,heartbeats]) call(module,"start");
+  for (const module of [admin,chat,audio,sensorOta,launcher,bridge,activity,heartbeats,collectors]) call(module,"start");
   if (!serverOnline) setStatus(false,sensors ? "公开感知" : "公开访问");
   scheduler.start();
   document.addEventListener("visibilitychange",function () { syncContext(); });
@@ -263,7 +269,7 @@
         return;
       }
       scheduler.dispose();
-      for (const module of [audio,sensorOta,activity,sensors,launcher,bridge,heartbeats]) call(module,"dispose");
+      for (const module of [audio,sensorOta,activity,sensors,launcher,bridge,heartbeats,collectors]) call(module,"dispose");
     });
     window.addEventListener('pageshow',function (event) { if (event.persisted) syncContext(true); });
   }

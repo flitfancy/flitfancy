@@ -9,6 +9,7 @@ data/sensors/*
 
 # AI 密钥配置（绝不推送）
 backend/ai_local.json
+backend/.android-signing-config.tmp
 
 # Python 缓存
 __pycache__/

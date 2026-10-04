@@ -17,6 +17,8 @@ from flitfancy_launcher import LauncherError
 from flitfancy_bridge import BridgeError
 from flitfancy_activity import ActivityError
 from flitfancy_refresh import RefreshRegistry
+from flitfancy_collectors import CollectorError
+from flitfancy_storage import latest_sensor_rows
 
 # Every API requires an administrator unless its exact method/path is listed
 # here. These exceptions apply only to verified loopback clients and Hosts;
@@ -70,12 +72,14 @@ class HttpDependencies:
     sync_pending_memories: object
     sync_public_config: object
     sensor_device_service: object = None
+    collector_service: object = None
 
 
 def create_handler(app):
     """创建只可访问已声明领域能力的请求处理器。"""
     audio_service = app.audio_service
     sensor_device_service = app.sensor_device_service
+    collector_service = app.collector_service
     activity_service = app.activity_service
     launcher_service = app.launcher_service
     bridge_service = app.bridge_service
@@ -123,9 +127,10 @@ def create_handler(app):
             super().send_response(code, message)
 
         def log_message(self, fmt, *args):
-            if urllib.parse.urlparse(self.path).path.startswith("/api/bridge/"):
+            if urllib.parse.urlparse(self.path).path.startswith(("/api/bridge/", "/api/collectors")):
                 # Private filenames and task query strings must not enter logs.
-                fmt, args = "bridge %s", (urllib.parse.urlparse(self.path).path,)
+                private_path = urllib.parse.urlparse(self.path).path
+                fmt, args = ("collector %s" if private_path.startswith('/api/collectors') else "bridge %s"), (private_path,)
             print("[%s] %s" % (now_iso(), fmt % args))
 
         def _send(self, code, body, content_type="application/json; charset=utf-8"):
@@ -227,7 +232,9 @@ def create_handler(app):
                     return
             if not self._api_guard('POST', parsed.path):
                 return
-            if parsed.path.startswith("/api/bridge/"):
+            if parsed.path.startswith("/api/collectors/"):
+                self._api_collectors_post(parsed.path)
+            elif parsed.path.startswith("/api/bridge/"):
                 self._api_bridge_post(parsed.path, parsed.query)
             elif parsed.path.startswith("/api/launcher/"):
                 self._api_launcher_post(parsed.path)
@@ -320,6 +327,18 @@ def create_handler(app):
             """唯一 API 鉴权入口：默认管理员；匿名例外按方法和路径精确匹配。"""
             if (method, path) == ('POST', '/api/admin/login'):
                 return True
+            if (method, path) in {('POST', '/api/collectors/claim'), ('POST', '/api/collectors/ingest')}:
+                if collector_service is None:
+                    self._send(503, {"error": "手机采集尚未配置"})
+                    return False
+                if path == '/api/collectors/claim':
+                    return True
+                try:
+                    self._collector = collector_service.authenticate(self.headers.get('Authorization') or '')
+                    return True
+                except CollectorError as error:
+                    self._send(error.status, {"error": str(error)})
+                    return False
             if (method, path) in LOCAL_ANONYMOUS_ROUTES and not self._is_remote():
                 return True
             return self._require_admin() is not None
@@ -361,7 +380,9 @@ def create_handler(app):
             self._send(200, body, MIME.get(ext, "application/octet-stream"))
 
         def _api_get(self, path, query=""):
-            if path == '/api/admin/session':
+            if path == '/api/collectors':
+                self._send(200, collector_service.list_devices())
+            elif path == '/api/admin/session':
                 self._send(200, {"ok": True})
             elif path == '/api/refresh/status':
                 self._send(200, refresh_registry.snapshot())
@@ -414,13 +435,10 @@ def create_handler(app):
                 self._send(200, sensor_device_service.status())
             elif path == "/api/sensors/heart-rate":
                 con = db()
-                rows = con.execute(
-                    """SELECT s.* FROM sensors s
-                       JOIN (SELECT board, MAX(id) AS mid FROM sensors
-                             WHERE channel = 'CH6' GROUP BY board) m ON s.id = m.mid
-                       ORDER BY s.board"""
-                ).fetchall()
-                con.close()
+                try:
+                    rows = latest_sensor_rows(con, "CH6")
+                finally:
+                    con.close()
                 self._send(200, {"rows": [sensor_row_public(dict(r)) for r in rows]})
             elif path == "/api/sensors/heart-rate/history":
                 params = urllib.parse.parse_qs(query)
@@ -430,14 +448,10 @@ def create_handler(app):
                                  "buckets": compute_history_buckets(min(72, max(1, hours)), "CH6")})
             elif path == "/api/sensors/latest":
                 con = db()
-                rows = con.execute(
-                    """SELECT s.* FROM sensors s
-                       JOIN (SELECT board, channel, MAX(id) AS mid FROM sensors
-                             WHERE channel IS NOT NULL GROUP BY board, channel) m
-                         ON s.id = m.mid
-                       ORDER BY s.board, s.channel"""
-                ).fetchall()
-                con.close()
+                try:
+                    rows = latest_sensor_rows(con)
+                finally:
+                    con.close()
                 self._send(200, {"rows": [sensor_row_public(dict(r)) for r in rows]})
             elif path == "/api/sensors/history":
                 params = urllib.parse.parse_qs(query)
@@ -538,6 +552,37 @@ def create_handler(app):
                 self._api_visits()
             else:
                 self._send(404, {"error": "unknown api"})
+
+        def _api_collectors_post(self, path):
+            body = self._json_body()
+            if body is None:
+                return
+            try:
+                if path == '/api/collectors/pairing':
+                    self._send(200, collector_service.create_pairing(body))
+                elif path == '/api/collectors/revoke':
+                    self._send(200, collector_service.revoke(body))
+                elif path == '/api/collectors/claim':
+                    self._send(200, collector_service.claim(body, self._login_client_ip()))
+                elif path == '/api/collectors/ingest':
+                    response, rows = collector_service.ingest_batch(self._collector, body)
+                    maybe_prune_sensor_history()
+                    if rows or response['duplicates']:
+                        # Sync the authoritative live view, never the old batch
+                        # that just arrived from an offline phone.
+                        con = db()
+                        try:
+                            snapshots = [sensor_row_public(dict(row)) for row in latest_sensor_rows(con)]
+                        finally:
+                            con.close()
+                        queue_public_sensor_sync(snapshots)
+                    self._send(200, response)
+                else:
+                    self._send(404, {"error": "unknown collector action"})
+            except CollectorError as error:
+                self._send(error.status, {"error": str(error)})
+            except (OSError, sqlite3.Error):
+                self._send(503, {"error": "样本尚未完整存储，请保留缓存并重试"})
 
         def _api_ingest(self):
             body = self._read_body()

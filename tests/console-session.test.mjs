@@ -15,6 +15,7 @@ async function run(status, fault = "", page = "presence", publicHost = false, si
   const chat = { start: () => { chatStarts++; }, setEnabled: noop, refreshPublicConfig: noop,
     updateState: value => chatStates.push(value) };
   const window = {
+    FlitFancyCollectors: {create: () => ({start:noop,clearPrivate:noop,dispose:noop})},
     setTimeout, clearTimeout,
     addEventListener: (name, callback) => { lifecycle[name] = callback; },
     FlitFancyHeartbeats: { create: options => { heartbeatCreates++; heartbeatOptions = options; return {start:noop,refresh:noop,clearPrivate:noop,dispose:noop}; } },
