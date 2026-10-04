@@ -6,6 +6,13 @@ Kotlin、系统 WebView、外设连接前台服务、Room 队列。Android 8.0 �
 
 ## 小米 15 Pro / HyperOS 3 使用
 
+首次接入需主机后端加载网站 1.29.0 的采集接口。Windows 两次自动提权请求未完成时，
+在主机管理员 PowerShell 运行下面的现有受控重载脚本，再生成手机配对码：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File "S:\FlitFancy\site\scripts\reload_backend.ps1"
+```
+
 1. 下载并安装 `https://flitfancy.com/resources/flitfancy-android-0.1.0.apk`。
 2. 手机连接感知板所在 Wi-Fi。App → 采集，保存感知板地址，默认 `http://192.168.1.33`。
 3. 点击“打开网站管理页生成配对码”，在 `console.flitfancy.com` 再次点击导航中的“控制台”登录。
