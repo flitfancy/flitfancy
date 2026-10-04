@@ -22,6 +22,7 @@ class CollectorService : Service() {
     private lateinit var settings: AppSettings
     private lateinit var dao: QueueDao
     private lateinit var wakeLock: PowerManager.WakeLock
+    private var source: BoardSource? = null
     private var wakeRenewedAt = 0L
     override fun onCreate() {
         super.onCreate()
@@ -58,36 +59,41 @@ class CollectorService : Service() {
     }
 
     private suspend fun collect() {
+        source = if (settings.transport == "ble") BleBoardSource(applicationContext, settings.bleAddress) else HttpBoardSource(settings)
+        var nextBoardAttempt = 0L
+        var boardFailures = 0
+        var lastBoardMessage = "正在连接感知板"
         while (currentCoroutineContext().isActive && settings.enabled) {
             if (!wakeLock.isHeld || SystemClock.elapsedRealtime() - wakeRenewedAt > 9 * 60000) {
                 wakeLock.acquire(10 * 60000L); wakeRenewedAt = SystemClock.elapsedRealtime()
             }
-            var boardMessage = ""
+            var boardMessage = lastBoardMessage
             try {
                 if (dao.count() >= 100000) boardMessage = "缓存已满，采集暂停；正在尝试补传"
-                else {
-                    val base = SampleCodec.boardBase(settings.board)
-                    val data = JSONArray(HttpTransport.json(base + "/data"))
-                    val device = JSONObject(HttpTransport.json(base + "/device"))
-                    require(device.optString("model") == "FIREFLY-SENSE N16R8") { "地址不是已支持的感知板" }
-                    val uptime = device.optLong("uptime_ms", -1)
-                    require(uptime in 0..0xffffffffL) { "感知板未提供有效运行时间" }
+                else if (SystemClock.elapsedRealtime() >= nextBoardAttempt) {
+                    val data = source!!.read()
                     val now = System.currentTimeMillis()
-                    val boot = settings.bootId(uptime, now)
                     var added = 0
                     currentCoroutineContext().ensureActive()
-                    for (index in 0 until data.length()) {
+                    for (line in data.rows) {
                         currentCoroutineContext().ensureActive()
                         if (!settings.enabled) break
                         if (dao.count() >= 100000) break
-                        val frame = SampleCodec.parse(data.optString(index), uptime, now, boot, "FIREFLY-SENSE") ?: continue
+                        val frame = SampleCodec.parse(line, data.uptime, data.receivedAt, data.bootId, "FIREFLY-SENSE") ?: continue
                         if (dao.enqueue(PendingSample(frame.eventId, settings.deviceId, frame.payload, frame.emittedAt), now)) added++
                     }
                     dao.pruneSeen(now - 7 * 86400000L)
-                    boardMessage = "感知板已连接，本轮新增 $added 条"
+                    settings.lastBoardRead = data.receivedAt
+                    boardFailures = 0; nextBoardAttempt = 0
+                    boardMessage = "${if (settings.transport == "ble") "蓝牙" else "Wi-Fi"}感知板已连接，本轮新增 $added 条"
                 }
             } catch (cancel: CancellationException) { throw cancel }
-              catch (_: Exception) { boardMessage = "感知板暂不可用，已有缓存继续补传" }
+              catch (error: Exception) {
+                boardFailures = minOf(boardFailures + 1, 6)
+                nextBoardAttempt = SystemClock.elapsedRealtime() + boardFailures * 5000L
+                boardMessage = (error as? BleProblem)?.message ?: "感知板暂不可用，已有缓存继续补传"
+            }
+            lastBoardMessage = boardMessage
             currentCoroutineContext().ensureActive()
             try {
                 val batch = dao.batch(settings.deviceId)
@@ -119,6 +125,7 @@ class CollectorService : Service() {
     }
     override fun onDestroy() {
         scope.cancel()
+        source?.close(); source = null
         if (wakeLock.isHeld) wakeLock.release()
         stopForeground(STOP_FOREGROUND_REMOVE); super.onDestroy()
     }

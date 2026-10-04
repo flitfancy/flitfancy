@@ -1,0 +1,26 @@
+{
+  "app_version": "0.2.0",
+  "version_code": 2,
+  "website_version": "1.29.1",
+  "native_protocol": 1,
+  "upload_protocol": 1,
+  "ble_protocol": 1,
+  "package": "com.flitfancy.mobile",
+  "min_android_api": 26,
+  "target_android_api": 36,
+  "apk": "flitfancy-android-0.2.0.apk",
+  "bytes": 2253307,
+  "sha256": "5a36be5a0dffd9629e811ba4fa2876c33028172611a1f540cf74c709c6779390",
+  "validation": {
+    "signed_apk_verified": true,
+    "same_signing_identity_as_0_1_0": true,
+    "android_unit_tests": 13,
+    "android_lint_errors": 0,
+    "ble_framing_and_snapshot": true,
+    "upgrade_preferences": true,
+    "room_queue": true,
+    "private_credential_scan": true,
+    "board_firmware_ble_service": "pending_implementation",
+    "xiaomi_15_pro_hyperos3_ble": "pending_real_device_test"
+  }
+}

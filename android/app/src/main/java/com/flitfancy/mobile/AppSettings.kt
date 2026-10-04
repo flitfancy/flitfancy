@@ -19,7 +19,31 @@ class AppSettings(context: Context) {
         set(value) { preferences.edit().putBoolean("enabled", value).commit() }
     var board: String
         get() = preferences.getString("board", "http://192.168.1.33")!!
-        set(value) { preferences.edit().putString("board", SampleCodec.boardBase(value)).commit() }
+        set(value) {
+            check(!enabled)
+            val normalized = SampleCodec.boardBase(value)
+            val change = preferences.edit().putString("board", normalized)
+            if (normalized != board) change.putLong("last_board_read_wifi", 0).remove("board_boot_id").remove("board_boot_epoch")
+                .putString("status", "已保存 Wi-Fi 地址，采集尚未开始；缓存保留")
+            change.commit()
+        }
+    var transport: String
+        get() = preferences.getString("transport", "wifi")!!
+        set(value) {
+            check(!enabled); require(value in setOf("wifi", "ble"))
+            val change = preferences.edit().putString("transport", value)
+            if (value != transport) change.putString("status", "已选择${if (value == "ble") "蓝牙" else "Wi-Fi"}，采集尚未开始；缓存保留")
+            change.commit()
+        }
+    val bleAddress: String get() = preferences.getString("ble_address", "")!!
+    val bleName: String get() = preferences.getString("ble_name", "尚未选择蓝牙感知板")!!
+    fun selectBle(candidate: BleCandidate) {
+        check(!enabled)
+        require(candidate.address.matches(Regex("[0-9A-F]{2}(:[0-9A-F]{2}){5}")))
+        val change = preferences.edit().putString("ble_address", candidate.address).putString("ble_name", candidate.name.take(40))
+        if (candidate.address != bleAddress) change.putLong("last_board_read_ble", 0).putString("status", "已选择蓝牙感知板，采集尚未开始；缓存保留")
+        change.commit()
+    }
     val deviceId: String get() = preferences.getString("device_id", "")!!
     val name: String get() = preferences.getString("name", "尚未配对")!!
     var status: String
@@ -28,6 +52,9 @@ class AppSettings(context: Context) {
     var lastUpload: Long
         get() = preferences.getLong("last_upload", 0)
         set(value) { preferences.edit().putLong("last_upload", value).apply() }
+    var lastBoardRead: Long
+        get() = preferences.getLong("last_board_read_$transport", 0)
+        set(value) { preferences.edit().putLong("last_board_read_$transport", value).apply() }
 
     private fun key(): SecretKey {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }

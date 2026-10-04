@@ -1,8 +1,10 @@
 package com.flitfancy.mobile
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.AlertDialog
+import android.bluetooth.BluetoothAdapter
 import android.content.Intent
 import android.graphics.Color
 import android.net.Uri
@@ -16,6 +18,7 @@ import android.widget.*
 import androidx.core.content.ContextCompat
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.webkit.*
@@ -28,6 +31,27 @@ class MainActivity : ComponentActivity() {
     private lateinit var collectorStatus: TextView
     private lateinit var collectorPanel: LinearLayout
     private lateinit var boardInput: EditText
+    private lateinit var transportGroup: RadioGroup
+    private lateinit var wifiPanel: LinearLayout
+    private lateinit var blePanel: LinearLayout
+    private lateinit var blePeer: TextView
+    private lateinit var scanButton: Button
+    private lateinit var saveBoardButton: Button
+    private val wifiModeId = View.generateViewId()
+    private val bleModeId = View.generateViewId()
+    private var scanJob: Job? = null
+    private var pendingBluetoothAction: (() -> Unit)? = null
+    private var pendingBluetoothScan = false
+    private var pendingEnableAction: (() -> Unit)? = null
+    private val nearbyPermission = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        val action = pendingBluetoothAction; pendingBluetoothAction = null
+        if (BluetoothAccess.granted(this, pendingBluetoothScan)) action?.invoke()
+        else message("未获得蓝牙权限；可以在系统设置允许附近设备，或继续使用 Wi-Fi")
+    }
+    private val enableBluetooth = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val action = pendingEnableAction; pendingEnableAction = null
+        if (result.resultCode == RESULT_OK) action?.invoke() else message("手机蓝牙仍未开启，已有缓存保留")
+    }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var fileCallback: ValueCallback<Array<Uri>>? = null
     private var panelVisible = false
@@ -82,15 +106,41 @@ class MainActivity : ComponentActivity() {
     private fun configureCollector() {
         collectorPanel.addView(text("手机采集 · ${BuildConfig.VERSION_NAME}"))
         collectorStatus = text(""); collectorPanel.addView(collectorStatus)
-        collectorPanel.addView(text("感知板地址（手机须与感知板在同一局域网）"))
+        collectorPanel.addView(text("连接感知板的方式"))
+        transportGroup = RadioGroup(this).apply { orientation = RadioGroup.HORIZONTAL }
+        transportGroup.addView(RadioButton(this).apply { id = bleModeId; text = "蓝牙"; setTextColor(gold) })
+        transportGroup.addView(RadioButton(this).apply { id = wifiModeId; text = "Wi-Fi"; setTextColor(gold) })
+        collectorPanel.addView(transportGroup)
+        transportGroup.check(if (settings.transport == "ble") bleModeId else wifiModeId)
+        transportGroup.setOnCheckedChangeListener { _, id ->
+            val transport = if (id == bleModeId) "ble" else "wifi"
+            if (settings.transport != transport) {
+                if (settings.enabled) { message("请先暂停采集再切换连接方式，缓存会保留"); updateConnectionControls() }
+                else { settings.transport = transport; updateConnectionControls() }
+            }
+        }
+        blePanel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        blePanel.addView(text("手机通过蓝牙读板子，使用自己的 Wi-Fi 或流量上传。"))
+        blePeer = text(""); blePanel.addView(blePeer)
+        scanButton = button("扫描并选择感知板") { withBluetooth(true) { scanBoards() } }
+        blePanel.addView(scanButton)
+        blePanel.addView(text("需要支持手机数据服务的板子固件；1.3.5 尚不支持。第一次连接时请确认系统蓝牙配对。"))
+        collectorPanel.addView(blePanel)
+        wifiPanel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        wifiPanel.addView(text("感知板地址（手机须与感知板在同一局域网）"))
         boardInput = EditText(this).apply { setText(settings.board); setTextColor(Color.WHITE); inputType = 17; isSingleLine = true }
-        collectorPanel.addView(boardInput)
-        collectorPanel.addView(button("保存感知板地址") {
+        wifiPanel.addView(boardInput)
+        saveBoardButton = button("保存感知板地址") {
+            if (settings.enabled) { message("请先暂停采集再修改地址，缓存会保留"); return@button }
             runCatching { settings.board = boardInput.text.toString(); Toast.makeText(this, "地址已保存", Toast.LENGTH_SHORT).show() }
                 .onFailure { message("请输入有效的局域网 IPv4 地址，例如 192.168.1.33") }
-        })
-        collectorPanel.addView(button("打开网站管理页生成配对码") { showWebsite(); web.loadUrl(freshUrl("${BuildConfig.UPLOAD_BASE}/console.html")) })
-        collectorPanel.addView(button("输入配对码") { pair() })
+        }
+        wifiPanel.addView(saveBoardButton)
+        collectorPanel.addView(wifiPanel)
+        updateConnectionControls()
+        collectorPanel.addView(text("手机上报配对用于连接网站；蓝牙设备选择用于连接感知板。"))
+        collectorPanel.addView(button("打开管理页生成手机上报码") { showWebsite(); web.loadUrl(freshUrl("${BuildConfig.UPLOAD_BASE}/console.html")) })
+        collectorPanel.addView(button("输入手机上报配对码") { pair() })
         collectorPanel.addView(button("开始采集") { startCollector() })
         collectorPanel.addView(button("暂停采集") {
             settings.enabled = false; settings.status = "采集已暂停，缓存保留"; stopService(Intent(this, CollectorService::class.java)); updateStatus()
@@ -113,10 +163,68 @@ class MainActivity : ComponentActivity() {
         collectorPanel.addView(text("持续采集会增加耗电，可随时暂停。小米系统的自启动和省电设置仍需检查。"))
     }
 
+    private fun updateConnectionControls() {
+        if (!::blePanel.isInitialized) return
+        val bluetooth = settings.transport == "ble"
+        blePanel.visibility = if (bluetooth) View.VISIBLE else View.GONE
+        wifiPanel.visibility = if (bluetooth) View.GONE else View.VISIBLE
+        blePeer.text = "感知板：${settings.bleName}"
+        transportGroup.check(if (bluetooth) bleModeId else wifiModeId)
+        for (index in 0 until transportGroup.childCount) transportGroup.getChildAt(index).isEnabled = !settings.enabled && scanJob?.isActive != true
+        boardInput.isEnabled = !settings.enabled
+        saveBoardButton.isEnabled = !settings.enabled
+        scanButton.isEnabled = !settings.enabled && scanJob?.isActive != true
+    }
+
+    @SuppressLint("MissingPermission") // Permissions are requested before using BluetoothAdapter.
+    private fun withBluetooth(scan: Boolean, action: () -> Unit) {
+        if (settings.enabled) { message("请先暂停采集，再选择或重新连接蓝牙感知板"); return }
+        if (!BluetoothAccess.granted(this, scan)) {
+            pendingBluetoothScan = scan
+            pendingBluetoothAction = { withBluetooth(scan, action) }
+            nearbyPermission.launch(BluetoothAccess.permissions(scan)); return
+        }
+        try {
+            val adapter = BluetoothAccess.adapter(this, scan)
+            if (!adapter.isEnabled) {
+                pendingEnableAction = { withBluetooth(scan, action) }
+                enableBluetooth.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
+            } else action()
+        } catch (_: SecurityException) { message("蓝牙权限已取消，请重新允许附近设备") }
+          catch (error: BleProblem) { message(error.message ?: "蓝牙暂不可用") }
+    }
+
+    private fun scanBoards() {
+        if (settings.enabled || scanJob?.isActive == true) return
+        val dialog = AlertDialog.Builder(this).setTitle("扫描感知板")
+            .setMessage("正在查找附近的兼容感知板，约 12 秒。请让板子靠近手机。")
+            .setNegativeButton("取消") { _, _ -> scanJob?.cancel() }.create()
+        dialog.setOnCancelListener { scanJob?.cancel() }
+        dialog.show()
+        scanJob = scope.launch {
+            try {
+                val candidates = BleDiscovery.scan(this@MainActivity)
+                if (isFinishing || isDestroyed || settings.enabled) return@launch
+                dialog.dismiss()
+                if (candidates.isEmpty()) message("没有找到兼容感知板。请确认板子已升级手机蓝牙数据固件、已经上电并靠近手机；固件 1.3.5 仍需使用 Wi-Fi。")
+                else AlertDialog.Builder(this@MainActivity).setTitle("选择感知板")
+                    .setItems(candidates.map { "${it.name} · ${it.address.takeLast(5)}" }.toTypedArray()) { _, index ->
+                        if (!settings.enabled) {
+                            settings.selectBle(candidates[index]); settings.transport = "ble"; updateConnectionControls()
+                            message("已选择感知板。手机配对完成后点击“开始采集”；首次蓝牙连接时请确认系统配对。")
+                        }
+                    }.setNegativeButton("取消", null).show()
+            } catch (cancel: CancellationException) { throw cancel }
+              catch (error: Exception) { message((error as? BleProblem)?.message ?: "暂时无法扫描，请检查蓝牙权限后重试") }
+            finally { dialog.dismiss(); scanJob = null; updateConnectionControls() }
+        }
+        updateConnectionControls()
+    }
+
     private fun pair() {
         if (settings.enabled) { message("请先暂停采集再更换配对，缓存会保留"); return }
         val input = EditText(this).apply { hint = "例如 ABCD-EF12-3456"; isSingleLine = true; inputType = 4097 }
-        AlertDialog.Builder(this).setTitle("配对手机采集").setView(input).setNegativeButton("取消", null)
+        AlertDialog.Builder(this).setTitle("手机与网站配对").setView(input).setNegativeButton("取消", null)
             .setPositiveButton("配对") { _, _ -> scope.launch {
                 try {
                     val response = withContext(Dispatchers.IO) { JSONObject(HttpTransport.json(BuildConfig.UPLOAD_BASE + "/api/collectors/claim",
@@ -132,23 +240,35 @@ class MainActivity : ComponentActivity() {
 
     private fun startCollector() {
         if (settings.deviceId.isEmpty() || settings.token().isEmpty()) { message("请先配对手机"); return }
+        // enabled is persisted intent, not proof the service survived an APK update or OS kill.
+        if (settings.enabled) { launchCollector(); return }
+        if (scanJob?.isActive == true) { message("请先完成扫描并选择感知板"); return }
+        if (settings.transport == "ble") {
+            if (settings.bleAddress.isEmpty()) { showCollector(); message("请先扫描并选择蓝牙感知板"); return }
+            withBluetooth(false) { launchCollector() }
+        } else launchCollector()
+    }
+
+    private fun launchCollector() {
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 44)
         }
         runCatching {
-            settings.board = boardInput.text.toString()
+            if (settings.transport == "wifi" && !settings.enabled) settings.board = boardInput.text.toString()
             settings.enabled = true
             ContextCompat.startForegroundService(this, Intent(this, CollectorService::class.java))
             showCollector()
-        }.onFailure { settings.enabled = false; message("暂时无法开始，请检查地址与后台运行权限") }
+        }.onFailure { settings.enabled = false; updateConnectionControls(); message("暂时无法开始，请检查连接设置与后台运行权限") }
     }
 
     private fun updateStatus() {
         if (!::collectorStatus.isInitialized) return
+        updateConnectionControls()
         scope.launch {
             val count = withContext(Dispatchers.IO) { QueueStore.get(this@MainActivity).queue().count() }
             val uploaded = settings.lastUpload.takeIf { it > 0 }?.let { java.text.DateFormat.getDateTimeInstance().format(java.util.Date(it)) } ?: "尚未成功上传"
-            collectorStatus.text = "来源：${settings.name}\n${settings.status}\n待上传：$count 条\n最近成功：$uploaded"
+            val received = settings.lastBoardRead.takeIf { it > 0 }?.let { java.text.DateFormat.getDateTimeInstance().format(java.util.Date(it)) } ?: "尚未收到感知板数据"
+            collectorStatus.text = "来源：${settings.name}\n连接：${if (settings.transport == "ble") "蓝牙" else "Wi-Fi"}\n${settings.status}\n待上传：$count 条\n最近读板：$received\n最近上传：$uploaded"
         }
     }
 
@@ -217,7 +337,7 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-    override fun onPause() { if (::web.isInitialized) web.onPause(); super.onPause() }
+    override fun onPause() { scanJob?.cancel(); if (::web.isInitialized) web.onPause(); super.onPause() }
     override fun onSaveInstanceState(out: Bundle) { web.saveState(out); super.onSaveInstanceState(out) }
     @Deprecated("Compatibility with older Android") override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
@@ -231,5 +351,5 @@ class MainActivity : ComponentActivity() {
             } }.onSuccess { message("缓存已导出，上传队列继续保留") }.onFailure { message("暂时无法导出，缓存仍保留") }
         }
     }
-    override fun onDestroy() { scope.cancel(); fileCallback?.onReceiveValue(null); web.destroy(); super.onDestroy() }
+    override fun onDestroy() { pendingBluetoothAction = null; pendingEnableAction = null; scope.cancel(); fileCallback?.onReceiveValue(null); web.destroy(); super.onDestroy() }
 }
