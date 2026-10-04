@@ -47,6 +47,12 @@ const opts={query:()=>root,isAdmin:()=>signedIn,isServerOnline:()=>true,async re
 const module=window.FlitFancyConsoleBridge.create(opts);module.start();await module.refresh();
 assert.equal(requests.length,0);assert.equal(get('body').hidden,true);
 signedIn=true;await module.refresh();assert.equal(get('body').hidden,false);assert.equal(get('send').disabled,true);
+// Old completed transfers remain in backend history, but are not a current job.
+tasks=[{id:'old-success',kind:'transfer',state:'succeeded',path:'old/manifest.json',size:1741,received_bytes:1741,sent_bytes:1741,created_at:Date.now()/1000-86400,updated_at:Date.now()/1000-86400}];
+await module.refresh();await module.refresh();
+assert.equal(get('job').hidden,true,'opening or refreshing the bridge must not restore an old completed transfer');
+assert.equal(get('message').textContent,'','old completed transfers must not restore a success message');
+tasks=[];
 const file=new Blob([randomBytes(600000)]);Object.defineProperty(file,'name',{value:'<unsafe>.bin'});
 get('file').files=[file];await get('file').fire('change');
 assert.equal(get('selected').textContent,'<unsafe>.bin · 585.9 KB');
@@ -57,6 +63,13 @@ assert.equal(get('send').textContent,'继续上传');
 await get('send').fire('click');assert.equal(tasks[0].state,'sending');
 assert.equal(tasks[0].received_bytes,file.size);assert.equal(get('send').disabled,true);
 tasks[0].state='succeeded';tasks[0].sent_bytes=file.size;await module.refresh();assert.match(get('message').textContent,/校验通过/);
+assert.equal(get('job').hidden,false,'the current upload still shows its completion result');
+// A newer history entry must not replace the upload currently shown in this tab.
+tasks.unshift({id:'other-success',kind:'connection',state:'succeeded',size:0});
+await module.refresh();assert.equal(get('job-name').textContent,'sample.bin');
+module.clearPrivate();await module.refresh();
+assert.equal(get('job').hidden,true,'logging in again must not resurrect completed jobs');
+assert.equal(get('message').textContent,'');
 get('file').files=[file];await get('file').fire('change');await module.refresh();assert.equal(get('job').hidden,true,'choosing a new file must not show an old success');
 await get('test').fire('click');await module.refresh();assert.equal(get('path').value,file.name,'connection status must not erase selected filename');
 tasks=[];module.clearPrivate();signedIn=true;await module.refresh();

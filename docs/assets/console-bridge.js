@@ -112,7 +112,12 @@
         field("destination").textContent = config.configured ? "NAS · "+config.root : "尚未配置 NAS 通道";
         if (batch) {
           if (task) task=(state.tasks || []).find(item=>item.id===task.id) || task;
-        } else task=(state.tasks || []).find(active) || (file && !task ? null : (state.tasks || [])[0] || null);
+        } else {
+          const tasks=state.tasks || [];
+          // Recover unfinished work, or update a job already shown in this session.
+          // Backend history is not a current transfer when opening the page again.
+          task=tasks.find(active) || (task ? tasks.find(item=>item.id===task.id) : null) || null;
+        }
         if (!batch && active(task) && ["transfer","batch"].includes(task.kind)) field("path").value=task.path;
         renderTask(); controls();
         if (!config.configured) note("请先完成电脑端 NAS 连接配置。");
