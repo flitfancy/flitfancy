@@ -1,0 +1,3 @@
+{"v":1,"type":"begin","request_id":7,"uptime_ms":6000,"boot_id":"boot-A","rows":1}
+{"v":1,"type":"row","request_id":7,"csv":"CSV,1000,1,6,CH6 \"BLE\" \\ 心率,1,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,1.3.6,5,independent-v1,NA,NA,76,1,NA,streaming"}
+{"v":1,"type":"end","request_id":7,"rows":1}
