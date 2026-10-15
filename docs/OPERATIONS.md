@@ -113,6 +113,8 @@ protocol_name 字段注入控制台，按钮自动使用当前协议名（重装
 
 权限回归：`py -3.14 backend/auth_policy_test.py`。真实 HTTP 与数据库流程由隔离的 `backend/smoke_test.py` 验证，两者均纳入后端全量检查。
 
+短文的公开列表、管理列表、展示快照、保存与设为展示统一由 `backend/flitfancy_essays.py` 中的 `EssayService` 处理。HTTP 层保留原有鉴权、JSON 读取和响应，`server.py` 负责注入存储、配置与同步能力。新增入口应复用同一服务，沿用草稿/公开/归档、展示快照和版本同步规则。`py -3.14 backend/essay_test.py` 可在临时数据库上验证这些规则与 HTTP 委托关系，已纳入后端全量检查。
+
 ## ActivityWatch 电脑使用
 
 存在页的“电脑使用”卡片仅在登录后显示。网站后端每 10 秒读取本机 ActivityWatch（默认 `127.0.0.1:5600`），按北京时间归档每天及每个应用的活跃时长，网页关闭后仍由后端继续采集。历史汇总保存在网站 SQLite 数据库中，长期保留；数据缺失和真实零活跃分别显示。

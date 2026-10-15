@@ -13,6 +13,7 @@ from unittest import mock
 
 from flitfancy_core import CST
 from flitfancy_http import HttpDependencies, create_handler
+from flitfancy_essays import EssayService
 from flitfancy_observations import ObservationService
 from flitfancy_storage import SQLiteStore
 from flitfancy_sync import WorkerClient
@@ -129,6 +130,10 @@ class ContentSyncTest(unittest.TestCase):
         offline = lambda: (0, "fixture offline")
         self.observations = ObservationService(self.store.connect, lambda: STAMP, offline, offline)
         self.config = {}
+        self.essays = EssayService(
+            self.store.connect, lambda: STAMP, lambda: self.config, self.config.update,
+            offline, lambda updates: (False, "fixture offline"),
+        )
 
         def unexpected(*_args, **_kwargs):
             raise AssertionError("Unexpected dependency: no live services are allowed")
@@ -137,7 +142,7 @@ class ContentSyncTest(unittest.TestCase):
         dependencies.update(db=self.store.connect, now_iso=lambda: STAMP, cst=CST,
                             site_root=SITE_ROOT, read_local_config=lambda: self.config,
                             sync_pending_memories=offline, sync_pending_anchors=offline,
-                            sync_pending_essays=offline, observation_service=self.observations)
+                            essay_service=self.essays, observation_service=self.observations)
         self.handler_class = create_handler(HttpDependencies(**dependencies))
 
     def row(self, table, uid):

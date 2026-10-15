@@ -31,7 +31,7 @@ def run():
         validations.append((token, ip))
         return token == 'fixture-valid' and ip == '127.0.0.1'
     deps = {f.name: reached for f in fields(HttpDependencies)}
-    for key in ('audio_service', 'sensor_device_service', 'activity_service', 'bridge_service', 'launcher_service', 'observation_service',
+    for key in ('audio_service', 'sensor_device_service', 'activity_service', 'bridge_service', 'launcher_service', 'observation_service', 'essay_service',
                 'resource_service', 'worker_client', 'ai_opener'):
         deps[key] = Domain()
     deps.update(admin_token_valid=valid, now_iso=lambda: '2026-09-20T00:00:00+08:00',

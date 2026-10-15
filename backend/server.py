@@ -40,6 +40,7 @@ from flitfancy_core import (
 from flitfancy_http import HttpDependencies, create_handler
 from flitfancy_collectors import CollectorService
 from flitfancy_observations import ObservationService, decode_tags
+from flitfancy_essays import EssayService
 from flitfancy_resources import ResourceService
 from flitfancy_sensors import (
     SENSOR_CSV_FIELDS,
@@ -568,6 +569,10 @@ def ingest_csv_line(line, board=None, con=None):
     return ingest_json(row, board=board, con=con)
 
 
+_essay_service = EssayService(
+    db, now_iso, _read_local_cfg, ai_config_save, sync_pending_essays, sync_public_config,
+)
+
 _observation_service = ObservationService(
     db, now_iso, sync_pending_observations, sync_pending_observation_links,
 )
@@ -611,6 +616,7 @@ Handler = create_handler(HttpDependencies(
     maybe_prune_sensor_history=maybe_prune_sensor_history,
     normalize_reflections=normalize_reflections,
     observation_service=_observation_service,
+    essay_service=_essay_service,
     now_iso=now_iso,
     protocol_name=protocol_name,
     queue_public_sensor_sync=queue_public_sensor_sync,
@@ -618,7 +624,6 @@ Handler = create_handler(HttpDependencies(
     sensor_row_public=sensor_row_public,
     service_status=service_status,
     sync_pending_anchors=sync_pending_anchors,
-    sync_pending_essays=sync_pending_essays,
     sync_pending_memories=sync_pending_memories,
     sync_public_config=sync_public_config,
 ))

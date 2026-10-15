@@ -61,6 +61,7 @@ class HttpDependencies:
     maybe_prune_sensor_history: object
     normalize_reflections: object
     observation_service: object
+    essay_service: object
     now_iso: object
     protocol_name: object
     queue_public_sensor_sync: object
@@ -68,7 +69,6 @@ class HttpDependencies:
     sensor_row_public: object
     service_status: object
     sync_pending_anchors: object
-    sync_pending_essays: object
     sync_pending_memories: object
     sync_public_config: object
     sensor_device_service: object = None
@@ -106,6 +106,7 @@ def create_handler(app):
     maybe_prune_sensor_history = app.maybe_prune_sensor_history
     normalize_reflections = app.normalize_reflections
     observation_service = app.observation_service
+    essay_service = app.essay_service
     now_iso = app.now_iso
     protocol_name = app.protocol_name
     queue_public_sensor_sync = app.queue_public_sensor_sync
@@ -113,7 +114,6 @@ def create_handler(app):
     sensor_row_public = app.sensor_row_public
     service_status = app.service_status
     sync_pending_anchors = app.sync_pending_anchors
-    sync_pending_essays = app.sync_pending_essays
     sync_pending_memories = app.sync_pending_memories
     sync_public_config = app.sync_public_config
     refresh_registry = RefreshRegistry()
@@ -509,42 +509,11 @@ def create_handler(app):
                 con.close()
                 self._send(200, {"ok": True, "rows": [dict(r) for r in rows]})
             elif path == "/api/essays/featured":
-                essay = _read_local_cfg().get("featured_essay")
-                if essay:
-                    con = db()
-                    try:
-                        visible = con.execute(
-                            "SELECT 1 FROM essays WHERE uid=? AND status='public'",
-                            (essay.get("uid"),),
-                        ).fetchone()
-                    finally:
-                        con.close()
-                    if not visible:
-                        essay = None
-                self._send(200, {"ok": True, "essay": essay})
+                self._send(200, essay_service.featured_snapshot())
             elif path == "/api/essays":
-                con = db()
-                rows = con.execute(
-                    """SELECT uid, created_at, updated_at, title, content, display_order
-                       FROM essays WHERE status = 'public'
-                       ORDER BY display_order ASC, updated_at DESC, id DESC LIMIT 100"""
-                ).fetchall()
-                con.close()
-                self._send(200, {"ok": True, "rows": [dict(r) for r in rows]})
+                self._send(200, essay_service.public_catalog())
             elif path == "/api/admin/essays":
-                con = db()
-                rows = con.execute(
-                    """SELECT uid, created_at, updated_at, title, content,
-                              status, display_order, synced
-                       FROM essays
-                       ORDER BY CASE status WHEN 'public' THEN 0 WHEN 'draft' THEN 1 ELSE 2 END,
-                                display_order ASC, updated_at DESC, id DESC LIMIT 200"""
-                ).fetchall()
-                con.close()
-                self._send(200, {
-                    "ok": True, "rows": [dict(r) for r in rows],
-                    "featured_essay": _read_local_cfg().get("featured_essay"),
-                })
+                self._send(200, essay_service.admin_catalog())
             elif path == "/api/observations":
                 self._send(200, observation_service.public_catalog())
             elif path == "/api/admin/observations":
@@ -964,111 +933,15 @@ def create_handler(app):
             data = self._json_body()
             if data is None:
                 return
-            con = db()
-            row = con.execute(
-                "SELECT uid, title, content, updated_at, status FROM essays WHERE uid=?",
-                (str(data.get("uid") or ""),),
-            ).fetchone()
-            con.close()
-            if row is None:
-                self._send(404, {"ok": False, "error": "请先保存这张卡牌"})
-                return
-            if row["status"] != "public":
-                self._send(400, {"ok": False, "error": "请先将卡牌设为公开"})
-                return
-            # 保存选中时的正文快照；后续编辑不会未经确认改变访客正在看的文章。
-            essay = {key: row[key] for key in ("uid", "title", "content", "updated_at")}
-            ai_config_save({"featured_essay": essay})
-            ok, note = sync_public_config({"featured_essay": essay})
-            self._send(200, {"ok": True, "essay": essay,
-                             "public_sync": ok, "public_sync_note": note})
+            status, payload = essay_service.feature_essay(data)
+            self._send(status, payload)
 
         def _api_essay_create(self):
             data = self._json_body()
             if data is None:
                 return
-            title = str(data.get("title") or "").strip()
-            content = str(data.get("content") or "").strip()
-            status = str(data.get("status") or "draft").strip()
-            try:
-                display_order = int(data.get("display_order", 100))
-            except (TypeError, ValueError):
-                self._send(400, {"error": "展示顺序必须是整数"})
-                return
-            display_order = max(0, min(display_order, 9999))
-            if not title or not content:
-                self._send(400, {"error": "标题和正文都要填写"})
-                return
-            if len(title) > 120 or len(content) > 12000:
-                self._send(400, {"error": "标题或正文过长"})
-                return
-            if status not in ("draft", "public", "archived"):
-                self._send(400, {"error": "短文状态不正确"})
-                return
-            edit_uid = str(data.get("uid") or "").strip()
-            if edit_uid and not re.match(r"^[a-zA-Z0-9_-]{16,80}$", edit_uid):
-                self._send(400, {"ok": False, "error": "invalid uid"})
-                return
-            featured_uid = (_read_local_cfg().get("featured_essay") or {}).get(
-                "uid", "builtin-prologue-0001"
-            )
-            if edit_uid == featured_uid and (status == "archived" or (
-                    _read_local_cfg().get("featured_essay") and status != "public")):
-                self._send(409, {"ok": False, "error": "请先展示另一张卡牌，再归档当前文章"})
-                return
-            updated_at = now_iso()
-            con = db()
-            # 原序章来自页面，第一次保存时通过管理 API 正式存入卡牌库。
-            if edit_uid == "builtin-prologue-0001":
-                con.execute(
-                    """INSERT OR IGNORE INTO essays(
-                           uid, created_at, updated_at, title, content, status, display_order, synced
-                       ) VALUES(?,?,?,?,?,?,?,0)""",
-                    (edit_uid, updated_at, updated_at, title, content, status, display_order),
-                )
-            if edit_uid:
-                cur = con.execute(
-                    """UPDATE essays SET updated_at=?, title=?, content=?, status=?,
-                           display_order=?, synced=0, sync_revision=sync_revision+1 WHERE uid=?""",
-                    (updated_at, title, content, status, display_order, edit_uid),
-                )
-                con.commit()
-                con.close()
-                if cur.rowcount == 0:
-                    self._send(404, {"ok": False, "error": "要编辑的短文不存在"})
-                    return
-                uid_value = edit_uid
-                updated = True
-            else:
-                uid_value = secrets.token_hex(16)
-                con.execute(
-                    """INSERT INTO essays(
-                           uid, created_at, updated_at, title, content,
-                           status, display_order, synced
-                       ) VALUES(?,?,?,?,?,?,?,0)""",
-                    (uid_value, updated_at, updated_at, title, content,
-                     status, display_order),
-                )
-                con.commit()
-                con.close()
-                updated = False
-            _, sync_note = sync_pending_essays()
-            con = db()
-            saved = con.execute(
-                """SELECT uid, created_at, updated_at, title, content,
-                          status, display_order, synced
-                   FROM essays WHERE uid = ?""",
-                (uid_value,),
-            ).fetchone()
-            con.close()
-            saved = dict(saved)
-            self._send(200 if updated else 201, {
-                "ok": True,
-                "updated": updated,
-                "essay": saved,
-                "public_sync": bool(saved["synced"]),
-                "public_sync_note": sync_note,
-            })
+            status, payload = essay_service.save_essay(data)
+            self._send(status, payload)
 
         def _api_activity_get(self, path, query):
             try:
