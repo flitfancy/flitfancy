@@ -1,8 +1,13 @@
 // 建表/迁移记忆化：每个 isolate 每种 DDL 或迁移只执行一次，消除每请求写放大。
-const ddlCache = new Map();
+const ddlCaches = new WeakMap();
 
 function runOnce(env, key, work) {
   if (!env.DB) return Promise.resolve(false);
+  let ddlCache = ddlCaches.get(env.DB);
+  if (!ddlCache) {
+    ddlCache = new Map();
+    ddlCaches.set(env.DB, ddlCache);
+  }
   if (!ddlCache.has(key)) {
     ddlCache.set(key, Promise.resolve().then(work).then(() => true).catch((error) => {
       ddlCache.delete(key);
@@ -14,6 +19,49 @@ function runOnce(env, key, work) {
 
 export function runDdlOnce(env, sql) {
   return runOnce(env, sql, () => env.DB.prepare(sql).run());
+}
+
+// 独立保留已接受版本：公开正文 DELETE 后也不能让旧发布请求重新创建它。
+const TABLE_CONTENT_SYNC_VERSIONS = `CREATE TABLE IF NOT EXISTS content_sync_versions(
+      resource TEXT NOT NULL,
+      uid TEXT NOT NULL,
+      sync_revision INTEGER NOT NULL,
+      mutation_token TEXT NOT NULL,
+      PRIMARY KEY(resource, uid)
+    )`;
+
+/**
+ * D1 batch 是事务。版本认领、正文写入/撤下及回执读数必须在同一 batch，
+ * 不能先 SELECT 再在另一次请求中写正文（两个 Worker isolate 会交错）。
+ * mutation_token 只授权本次成功认领的请求；相同版本重试不再改写正文。
+ * 旧客户端用版本 0，只有尚未接受正版本的记录允许继续接收旧协议。
+ */
+export async function applyContentSync(env, resource, uid, revision, mutations, condition = null) {
+  await runDdlOnce(env, TABLE_CONTENT_SYNC_VERSIONS);
+  const token = crypto.randomUUID();
+  const gate = `EXISTS (SELECT 1 FROM content_sync_versions
+    WHERE resource = ? AND uid = ? AND mutation_token = ?)`;
+  const gateValues = [resource, uid, token];
+  const statements = [env.DB.prepare(
+    `INSERT INTO content_sync_versions(resource, uid, sync_revision, mutation_token)
+     SELECT ?,?,?,? WHERE ${condition ? condition.sql : "1"}
+     ON CONFLICT(resource, uid) DO UPDATE SET
+       sync_revision = excluded.sync_revision,
+       mutation_token = excluded.mutation_token
+     WHERE excluded.sync_revision > content_sync_versions.sync_revision
+        OR (excluded.sync_revision = 0 AND content_sync_versions.sync_revision = 0)`
+  ).bind(resource, uid, revision, token, ...(condition ? condition.values : [])),
+  ...mutations(gate, gateValues),
+  env.DB.prepare(
+    "SELECT sync_revision, mutation_token FROM content_sync_versions WHERE resource = ? AND uid = ?"
+  ).bind(resource, uid)];
+  const results = await env.DB.batch(statements);
+  const current = results[results.length - 1].results?.[0];
+  const currentRevision = current?.sync_revision ?? 0;
+  return {
+    sync_revision: currentRevision,
+    accepted: currentRevision === revision && (revision > 0 || current?.mutation_token === token),
+  };
 }
 
 export const TABLE_VISITS = `CREATE TABLE IF NOT EXISTS visits(

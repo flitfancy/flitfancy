@@ -242,7 +242,7 @@ def test_storage():
         connection.close()
         pending = store.pending_rows("anchors", 10)
         assert [row["uid"] for row in pending] == ["pending-anchor-0001"]
-        store.mark_synced("anchors", "pending-anchor-0001")
+        assert store.mark_synced("anchors", "pending-anchor-0001", pending[0]["sync_revision"])
         assert store.pending_rows("anchors", 10) == []
         try:
             store.pending_rows("not_allowed", 10)
@@ -285,7 +285,8 @@ def test_storage():
         store.initialize()
         connection = store.connect()
         legacy_link = dict(connection.execute("SELECT * FROM observation_links WHERE uid='legacy-link'").fetchone())
-        assert legacy_link["strength"] == "medium" and legacy_link["relation"] == "延伸" and legacy_link["synced"] == 1
+        assert legacy_link["strength"] == "medium" and legacy_link["relation"] == "延伸"
+        assert legacy_link["synced"] == 0 and legacy_link["sync_revision"] == 1
         migrated = dict(connection.execute(
             "SELECT horizon, project FROM anchors WHERE uid = ?",
             ("legacy-anchor-0001",),

@@ -6,11 +6,11 @@
   <link rel="canonical" href="https://flitfancy.com/resources.html">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='24' fill='%23f5b84b' opacity='0.22'/%3E%3Ccircle cx='32' cy='32' r='12' fill='%23f5b84b'/%3E%3Ccircle cx='32' cy='32' r='5' fill='%23ffe9c4'/%3E%3C/svg%3E">
   <title>资源 — 云萤 · FlitFancy</title>
-  <meta name="description" content="FireFly 天心、NatureCraft 天工与 FlitFancy 云萤的资料库：固件、PCB 与物料清单下载。">
-  <link rel="stylesheet" href="assets/style.css?v=1.29.1">
-  <script src="assets/track.js?v=1.29.1" defer></script>
+  <meta name="description" content="云萤的项目与成果：FireFly 天心、FIREFLY-SENSE 感知板、FIREFLY VOICE 语音板、个人网站与安卓采集端，以及固件、安装包和 PCB 制造文件。">
+  <link rel="stylesheet" href="assets/style.css?v=1.29.2">
+  <script src="assets/track.js?v=1.29.2" defer></script>
 </head>
-<body>
+<body class="resources-page">
   <canvas id="sky" aria-hidden="true"></canvas>
 
   <header class="nav">
@@ -26,55 +26,121 @@
   </header>
 
   <main>
-    <section class="section">
+    <section class="section resource-intro">
       <h1 class="grad-title grad-clip grad-flame">资源<span class="title-en">RESOURCES</span></h1>
+      <p class="sub">把想法做出来，也把一路的成果留在这里。</p>
+      <p class="resource-caption">整理于 <time datetime="2026-10-08">2026.10.08</time> · 从对话，到感知，再到一个可以随时回来的家。</p>
     </section>
 
     <div class="resource-columns">
-    <section class="section">
-      <h2>FireFly · 天心</h2>
+    <section class="section resource-column" aria-labelledby="firefly-title">
+      <p class="kicker">01 · 对话与记忆</p>
+      <h2 id="firefly-title">FireFly · 天心</h2>
+      <p class="resource-column-desc">让她能回应，也让相处留下痕迹。</p>
+
+      <article class="mini-card resource-project">
+        <div class="resource-project-head"><span class="badge done">已接入</span></div>
+        <h3>有求必应 · 网页对话</h3>
+        <p>把本机 AstrBot 接进网站，在网页里继续聊天，查看历史与回复状态。</p>
+        <ul class="resource-features">
+          <li>网页对话与语音识别结果联动</li>
+          <li>历史记录与当前回复状态</li>
+          <li>登录后使用私有对话</li>
+        </ul>
+        <div class="resource-links"><a class="back-link" href="presence.html#chat-panel">前往存在</a></div>
+      </article>
+
       <div class="dyn-resources" data-column="firefly"></div>
     </section>
 
-    <section class="section">
-      <h2>NatureCraft · 天工</h2>
+    <section class="section resource-column" aria-labelledby="naturecraft-title">
+      <p class="kicker">02 · 感受世界</p>
+      <h2 id="naturecraft-title">NatureCraft · 天工</h2>
+      <p class="resource-column-desc">做一些板子，把周围的世界接进来。</p>
 
-      <details class="resource-group">
-        <summary>FFS 固件</summary>
-        <div class="tri-grid">
-          <article class="mini-card">
-            <h3>固件 1.3.0 · 暂缓发布</h3>
-            <p>1.3.0 二进制与源码包发现内置了家庭网络凭证，已临时下架。</p>
-            <p class="mini-meta">正在改造为"首次上电配网"流程，凭证不再编译进固件。</p>
-          </article>
-
-        </div>
-
-        <h3>1.3.0 更新内容</h3>
-        <ul>
-          <li><b>断链自愈</b>：心跳 PONG 超时 15 秒后主动断开重连，链路中断最迟约 15–20 秒恢复（此前可能断档数小时）。</li>
-          <li><b>闪烁检测</b>：AS7341 FLICKER 开启，每约 30 秒检测一次光源频闪（0=无闪烁，1=有闪烁但频率未知，100/120=Hz），随 CSV 上报。</li>
-          <li><b>RSSI 进流</b>：每行数据附带 WiFi 信号强度（rssi_dbm），便于断联诊断。</li>
-          <li>CSV schema 3 → 4（表尾追加 flicker_hz / rssi_dbm 两列，不位移既有字段）。</li>
+      <article class="mini-card resource-project">
+        <div class="resource-project-head"><span class="badge done">已运行</span><span class="mini-meta">FIREFLY-SENSE</span></div>
+        <h3>感知板 · 现实感知</h3>
+        <p>六路环境传感器，记录温湿度、气压、光谱、光照与紫外线、空气质量和二氧化碳；接入手表心率，一起看它们随时间变化。</p>
+        <ul class="resource-features">
+          <li>SHT41 / BMP580 / AS7341</li>
+          <li>LTR390 / SGP41 / SCD40</li>
+          <li>实时读数、历史曲线与网页固件升级</li>
         </ul>
+        <div class="resource-links"><a class="back-link" href="presence.html#sensor-panel">查看现实感知</a></div>
+        <details class="resource-group resource-downloads">
+          <summary>固件下载与适用范围</summary>
+          <div class="resource-release">
+            <h4>1.3.5 · 已完成现场验收</h4>
+            <p>用于 FIREFLY-SENSE N16R8，schema 5；保留为已验证版本的回退镜像。</p>
+            <div class="resource-links"><a class="back-link" href="resources/firefly-sense-1.3.5-ota.bin" download>下载 OTA 固件 · 1.01 MiB</a><a class="back-link" href="resources/firefly-sense-1.3.5-ota.json">校验信息</a></div>
+            <p class="resource-checksum">SHA-256 <code>a3c4437719b4add59ca809b09630d437a73f3f29d89934c10e38247267f91119</code></p>
+          </div>
+          <div class="resource-release">
+            <h4>1.3.6 · 手机 BLE 联调版</h4>
+            <p>已完成构建与 USB 写入校验；运行、手机收数及手机与手表同时连接仍待实机验收，配合 Android 0.2.0 联调。</p>
+            <div class="resource-links"><a class="back-link" href="resources/firefly-sense-1.3.6-ota.bin" download>下载 OTA 固件 · 1.02 MiB</a><a class="back-link" href="resources/firefly-sense-1.3.6-ota.json">10.04 构建记录</a></div>
+            <p class="resource-checksum">SHA-256 <code>cdc3d6af45a8babb6e7c53c663ff25213d05c8929d8ff7e5d19e4a20fb47f01f</code></p>
+          </div>
+          <p class="resource-download-note">以上是应用 OTA 镜像，适用于对应整板的升级与回退；首次烧录需完整工程与分区配置。镜像不内置真实 Wi-Fi 凭证。</p>
+        </details>
+      </article>
 
-        <h3>烧录方法</h3>
-        <ol>
-          <li>安装 <a class="back-link" href="https://platformio.org/" target="_blank" rel="noopener">PlatformIO</a>（VS Code 扩展或命令行）。</li>
-          <li>板子 USB 接电脑（整板版为原生 USB，COM 口以设备管理器为准）。</li>
-          <li>直接烧录二进制（无需源码）：<br>
-            <code>esptool.py --chip esp32s3 --port COM7 write_flash 0x10000 firefly-fw-1.3.0.bin</code></li>
-          <li>或解压源码包后用 PlatformIO 编译烧录：<br>
-            <code>pio run -e esp32s3_n16r8_usb -t upload --upload-port COM7</code></li>
-          <li>烧录后板子自动复位并恢复采集（无需手动发命令）；数据经 TCP 7777 推送到监听器。</li>
-        </ol>
-      </details>
+      <article class="mini-card resource-project">
+        <div class="resource-project-head"><span class="badge done">已接入</span><span class="mini-meta">FIREFLY VOICE</span></div>
+        <h3>语音板 · 侧耳倾听</h3>
+        <p>听见周围的声音，也放一些喜欢的音乐。双麦克风与播放控制已经接到存在页。</p>
+        <ul class="resource-features">
+          <li>双麦实时电平与历史曲线</li>
+          <li>增益调节、录音与语音识别</li>
+          <li>音乐播放、歌词与固件升级入口</li>
+        </ul>
+        <div class="resource-links"><a class="back-link" href="presence.html#audio-panel">前往侧耳倾听</a></div>
+        <p class="resource-note">设备操作与音频记录登录后使用；公开下载资料后续补齐。</p>
+      </article>
 
-      <div class="dyn-resources" data-column="naturecraft"></div>
+      <div class="resource-archive">
+        <h3>PCB 制造文件</h3>
+        <p class="resource-caption">感知板 1.0：Gerber、钻孔及下单资料。</p>
+        <div class="dyn-resources" data-column="naturecraft"></div>
+      </div>
     </section>
 
-    <section class="section">
-      <h2>FlitFancy · 云萤</h2>
+    <section class="section resource-column" aria-labelledby="flitfancy-title">
+      <p class="kicker">03 · 连接与陪伴</p>
+      <h2 id="flitfancy-title">FlitFancy · 云萤</h2>
+      <p class="resource-column-desc">从一个网页，慢慢长成日常的入口。</p>
+
+      <article class="mini-card resource-project">
+        <div class="resource-project-head"><span class="badge done">已上线</span></div>
+        <h3>云萤 · 个人网站</h3>
+        <p>写日记、记见闻、留短文；也连接自己做的板子、电脑和文件，让文字与生活放在一起。</p>
+        <ul class="resource-features">
+          <li>旅途日记与锚点、见闻星球与弦、短文卡牌</li>
+          <li>环境与声音接入、网页对话</li>
+          <li>登录后的本机应用启动与 NAS 文件中转</li>
+        </ul>
+        <div class="resource-links"><a class="back-link" href="journal.html">看看旅途</a><a class="back-link" href="https://github.com/flitfancy/flitfancy" target="_blank" rel="noopener">项目源码</a></div>
+      </article>
+
+      <article class="mini-card resource-project">
+        <div class="resource-project-head"><span class="badge doing">待真机验收</span><span class="mini-meta">Android 0.2.0</span></div>
+        <h3>云萤 · 手机采集端</h3>
+        <p>在手机里打开云萤，也把感知板的数据带回来。已实现 Wi-Fi / BLE 接收、本地缓存和断网后的补传。</p>
+        <ul class="resource-features">
+          <li>网站浏览与网页更新提示</li>
+          <li>设备配对、后台采集与离线队列</li>
+          <li>升级保留配对设置与待上传数据</li>
+        </ul>
+        <div class="resource-links"><a class="back-link" href="resources/flitfancy-android-0.2.0.apk" download>下载安装包 · 2.15 MiB</a><a class="back-link" href="https://github.com/flitfancy/flitfancy/tree/main/android" target="_blank" rel="noopener">使用说明</a></div>
+        <p class="resource-note">Android 8.0 及以上。BLE 配合感知板 1.3.6 联调；锁屏、重连及手机与手表并发待实测。覆盖安装旧版可保留缓存。</p>
+        <details class="resource-group resource-downloads">
+          <summary>安装包校验信息</summary>
+          <p class="resource-checksum">SHA-256 <code>5a36be5a0dffd9629e811ba4fa2876c33028172611a1f540cf74c709c6779390</code></p>
+          <div class="resource-links"><a class="back-link" href="resources/flitfancy-android-0.2.0.json">查看构建记录</a></div>
+        </details>
+      </article>
+
       <div class="dyn-resources" data-column="flitfancy"></div>
     </section>
     </div>
@@ -188,8 +254,8 @@
 
   <div class="js-error" data-role="js-error" hidden></div>
 
-  <script src="assets/admin-core.js?v=1.29.1"></script>
-  <script src="assets/admin-panel-shell.js?v=1.29.1"></script>
-  <script src="assets/resources-admin.js?v=1.29.1"></script>
+  <script src="assets/admin-core.js?v=1.29.2"></script>
+  <script src="assets/admin-panel-shell.js?v=1.29.2"></script>
+  <script src="assets/resources-admin.js?v=1.29.2"></script>
 </body>
 </html>

@@ -28,23 +28,28 @@ def latest_sensor_rows(connection, channel=None):
 _SYNC_PENDING_SQL = {
     "anchors": (
         "SELECT * FROM anchors WHERE synced = 0 ORDER BY id LIMIT ?",
-        "UPDATE anchors SET synced = 1 WHERE uid = ?",
+        "UPDATE anchors SET synced = 1 WHERE uid = ? AND sync_revision = ?",
     ),
     "memories": (
         "SELECT * FROM memories WHERE synced = 0 ORDER BY id LIMIT ?",
-        "UPDATE memories SET synced = 1 WHERE uid = ?",
+        "UPDATE memories SET synced = 1 WHERE uid = ? AND sync_revision = ?",
     ),
     "essays": (
         "SELECT * FROM essays WHERE synced = 0 ORDER BY id LIMIT ?",
-        "UPDATE essays SET synced = 1 WHERE uid = ?",
+        "UPDATE essays SET synced = 1 WHERE uid = ? AND sync_revision = ?",
     ),
     "observations": (
         "SELECT * FROM observations WHERE synced = 0 ORDER BY id LIMIT ?",
-        "UPDATE observations SET synced = 1 WHERE uid = ?",
+        "UPDATE observations SET synced = 1 WHERE uid = ? AND sync_revision = ?",
     ),
     "observation_links": (
-        "SELECT * FROM observation_links WHERE synced = 0 ORDER BY id LIMIT ?",
-        "UPDATE observation_links SET synced = 1 WHERE uid = ?",
+        """SELECT link.*, CASE WHEN source.status = 'public' AND target.status = 'public'
+                 THEN 1 ELSE 0 END AS sync_published
+           FROM observation_links link
+           LEFT JOIN observations source ON source.uid = link.source_uid
+           LEFT JOIN observations target ON target.uid = link.target_uid
+           WHERE link.synced = 0 ORDER BY link.id LIMIT ?""",
+        "UPDATE observation_links SET synced = 1 WHERE uid = ? AND sync_revision = ?",
     ),
 }
 
@@ -69,6 +74,8 @@ class SQLiteStore:
         connection = self.connect()
         connection.execute("PRAGMA journal_mode=WAL")
         connection.execute("PRAGMA wal_autocheckpoint=1000")
+        # Schema changes and their one-time requeue must commit together.
+        connection.execute("BEGIN IMMEDIATE")
         connection.execute(
             """CREATE TABLE IF NOT EXISTS sensors(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -130,6 +137,10 @@ class SQLiteStore:
             "WHERE title IS NOT NULL AND title != '' LIMIT 1)"
         ).fetchone()[0]
         if needs_title_merge:
+            sync_update = (
+                ", synced = 0, sync_revision = sync_revision + 1"
+                if "sync_revision" in memory_columns else ""
+            )
             connection.execute(
                 """UPDATE memories
                    SET content = CASE
@@ -138,7 +149,7 @@ class SQLiteStore:
                            WHEN trim(content) != '' THEN '\n' || content ELSE '' END
                          ELSE content
                        END,
-                       title = ''
+                       title = ''""" + sync_update + """
                    WHERE title IS NOT NULL AND title != ''"""
             )
         connection.execute(
@@ -214,6 +225,15 @@ class SQLiteStore:
         link_columns = {row[1] for row in connection.execute("PRAGMA table_info(observation_links)")}
         if "strength" not in link_columns:
             connection.execute("ALTER TABLE observation_links ADD COLUMN strength TEXT NOT NULL DEFAULT 'medium'")
+        for table in _SYNC_PENDING_SQL:
+            columns = {row[1] for row in connection.execute("PRAGMA table_info(" + table + ")")}
+            if "sync_revision" not in columns:
+                connection.execute(
+                    "ALTER TABLE " + table + " ADD COLUMN sync_revision INTEGER NOT NULL DEFAULT 1"
+                )
+                # Seed cloud version records and reconcile withdrawals left by the
+                # old protocol once. Reopening an upgraded database does not requeue it.
+                connection.execute("UPDATE " + table + " SET synced = 0")
         connection.execute(
             """CREATE TABLE IF NOT EXISTS commands(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -314,13 +334,14 @@ class SQLiteStore:
         finally:
             connection.close()
 
-    def mark_synced(self, table, uid):
-        """把一条已成功推送的固定表记录标为已同步。"""
+    def mark_synced(self, table, uid, expected_revision):
+        """仅确认实际发出的版本，旧回执不能清除并发编辑产生的待同步状态。"""
         _, mark_sql = self._sync_pending_statements(table)
         connection = self.connect()
         try:
-            connection.execute(mark_sql, (uid,))
+            cursor = connection.execute(mark_sql, (uid, expected_revision))
             connection.commit()
+            return cursor.rowcount == 1
         finally:
             connection.close()
 

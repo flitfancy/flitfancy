@@ -1,6 +1,7 @@
-import { adminContentBody } from "./worker-content.js";
+import { adminContentBody, contentSyncResponse } from "./worker-content.js";
 import { json } from "./worker-core.js";
 import {
+  applyContentSync,
   ensureObservationsTable,
   ensureObservationLinksTable,
 } from "./worker-storage.js";
@@ -93,11 +94,16 @@ export async function handleObservationCreate(request, env) {
   const { body, uid } = pre;
   await ensureTables(env);
   if (body.published !== true) {
-    await env.DB.prepare(
-      "DELETE FROM observation_links WHERE source_uid = ? OR target_uid = ?"
-    ).bind(uid, uid).run();
-    await env.DB.prepare("DELETE FROM observations WHERE uid = ?").bind(uid).run();
-    return json({ ok: true, uid, published: false });
+    const result = await applyContentSync(env, "observations", uid, pre.syncRevision, (gate, gateValues) => [
+      // 正版本由各星弦自己的撤下版本负责清理；否则会误删另一个资源已接受的新版本。
+      ...(pre.syncRevision === 0 ? [env.DB.prepare(
+        `DELETE FROM observation_links WHERE (source_uid = ? OR target_uid = ?) AND ${gate}
+         AND NOT EXISTS (SELECT 1 FROM content_sync_versions
+           WHERE resource = 'observation_links' AND uid = observation_links.uid AND sync_revision > 0)`
+      ).bind(uid, uid, ...gateValues)] : []),
+      env.DB.prepare(`DELETE FROM observations WHERE uid = ? AND ${gate}`).bind(uid, ...gateValues),
+    ]);
+    return contentSyncResponse(result, { uid, published: false });
   }
   const title = String(body.title || "").trim();
   const category = String(body.category || "").trim();
@@ -121,11 +127,11 @@ export async function handleObservationCreate(request, env) {
   if (sourceName.length > 160 || sourceUrl.length > 1000 || !validSourceUrl(sourceUrl)) {
     return json({ ok: false, error: "invalid observation source" }, 400);
   }
-  await env.DB.prepare(
+  const result = await applyContentSync(env, "observations", uid, pre.syncRevision, (gate, gateValues) => [env.DB.prepare(
     `INSERT INTO observations(
        uid, created_ts, updated_ts, title, category, tags_json, summary,
        content, discovered_at, source_name, source_url, published
-     ) VALUES(?,?,?,?,?,?,?,?,?,?,?,1)
+     ) SELECT ?,?,?,?,?,?,?,?,?,?,?,1 WHERE ${gate}
      ON CONFLICT(uid) DO UPDATE SET
        updated_ts = excluded.updated_ts,
        title = excluded.title,
@@ -139,9 +145,9 @@ export async function handleObservationCreate(request, env) {
        published = 1`
   ).bind(
     uid, unixTime(body.created_at), unixTime(body.updated_at), title, category,
-    JSON.stringify(tags), summary, content, discoveredAt, sourceName, sourceUrl
-  ).run();
-  return json({ ok: true, uid, published: true });
+    JSON.stringify(tags), summary, content, discoveredAt, sourceName, sourceUrl, ...gateValues
+  )]);
+  return contentSyncResponse(result, { uid, published: true });
 }
 
 export async function handleObservationLinkCreate(request, env) {
@@ -150,8 +156,10 @@ export async function handleObservationLinkCreate(request, env) {
   const { body, uid } = pre;
   await ensureTables(env);
   if (body.published !== true) {
-    await env.DB.prepare("DELETE FROM observation_links WHERE uid = ?").bind(uid).run();
-    return json({ ok: true, uid, published: false });
+    const result = await applyContentSync(env, "observation_links", uid, pre.syncRevision, (gate, gateValues) => [
+      env.DB.prepare(`DELETE FROM observation_links WHERE uid = ? AND ${gate}`).bind(uid, ...gateValues),
+    ]);
+    return contentSyncResponse(result, { uid, published: false });
   }
   const sourceUid = String(body.source_uid || "").trim();
   const targetUid = String(body.target_uid || "").trim();
@@ -166,10 +174,10 @@ export async function handleObservationLinkCreate(request, env) {
   if (!["weak", "medium", "strong"].includes(strength)) {
     return json({ ok: false, error: "invalid observation link strength" }, 400);
   }
-  await env.DB.prepare(
+  const result = await applyContentSync(env, "observation_links", uid, pre.syncRevision, (gate, gateValues) => [env.DB.prepare(
     `INSERT INTO observation_links(
        uid, created_ts, updated_ts, source_uid, target_uid, relation, strength
-     ) VALUES(?,?,?,?,?,?,?)
+     ) SELECT ?,?,?,?,?,?,? WHERE ${gate}
      ON CONFLICT(uid) DO UPDATE SET
        updated_ts = excluded.updated_ts,
        source_uid = excluded.source_uid,
@@ -178,8 +186,12 @@ export async function handleObservationLinkCreate(request, env) {
        strength = COALESCE(?, observation_links.strength)`
   ).bind(
     uid, unixTime(body.created_at), unixTime(body.updated_at),
-    sourceUid, targetUid, relation, strength, body.strength === undefined ? null : strength
-  ).run();
-  return json({ ok: true, uid, published: true,
+    sourceUid, targetUid, relation, strength, ...gateValues, body.strength === undefined ? null : strength
+  )], {
+    sql: `EXISTS (SELECT 1 FROM observations WHERE uid = ? AND published = 1)
+      AND EXISTS (SELECT 1 FROM observations WHERE uid = ? AND published = 1)`,
+    values: [sourceUid, targetUid],
+  });
+  return contentSyncResponse(result, { uid, published: true,
     ...(body.strength === undefined ? {} : { strength }) });
 }

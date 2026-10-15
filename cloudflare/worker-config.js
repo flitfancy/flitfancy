@@ -3,6 +3,7 @@ import {
   json,
   readJsonBody,
 } from "./worker-core.js";
+import { runDdlOnce, TABLE_ESSAYS } from "./worker-storage.js";
 
 const CONFIG_CACHE_SECONDS = 30;
 let chatEnabledCache = { t: 0, value: true };
@@ -96,7 +97,17 @@ export async function handleFeaturedEssay(env) {
   const raw = await env.CONFIG.get("featured_essay");
   let essay = null;
   try { essay = raw ? JSON.parse(raw) : null; } catch (error) { /* 缺失或损坏时显示原序章。 */ }
-  return json({ ok: true, essay: validFeaturedEssay(essay) ? essay : null }, 200, {
+  if (!validFeaturedEssay(essay) || !env.DB) {
+    essay = null;
+  } else {
+    await runDdlOnce(env, TABLE_ESSAYS);
+    // KV 选卡请求可能晚到；以 D1 公开副本确认可见性，撤下后不再返回旧快照正文。
+    // 仍公开时保留选中时的快照，后续编辑不会自动替换访客正在看的文章。
+    const rows = await env.DB.prepare("SELECT uid FROM essays WHERE uid = ? LIMIT 1")
+      .bind(essay.uid).all();
+    if (!(rows.results || []).length) essay = null;
+  }
+  return json({ ok: true, essay }, 200, {
     "Cache-Control": "no-store",
   });
 }

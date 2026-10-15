@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { DatabaseSync } from "node:sqlite";
+import { SqliteD1 } from "./worker-sqlite-d1.mjs";
 
 const worker = (await import(new URL("../cloudflare/worker.js", import.meta.url))).default;
 const ESSAYS_CONTRACT = JSON.parse(
@@ -8,79 +9,16 @@ const ESSAYS_CONTRACT = JSON.parse(
 );
 const ADMIN_TOKEN = "taxonomy-admin-token-0123456789abcdef012345";
 
-class FakeStatement {
-  constructor(db, sql) {
-    this.db = db;
-    this.sql = String(sql);
-    this.values = [];
-  }
-
-  bind(...values) {
-    this.values = values;
-    return this;
-  }
-
-  async run() {
-    const sql = this.sql;
-    if (sql.includes("ADD COLUMN horizon")) this.db.anchorColumns.push("horizon");
-    if (sql.includes("ADD COLUMN project")) this.db.anchorColumns.push("project");
-    for (const column of ["badge", "badge_kind"]) {
-      if (sql.includes("ADD COLUMN " + column + " ")) this.db.anchorColumns.push(column);
-    }
-    if (sql.includes("INSERT INTO anchors")) {
-      const [uid, createdTs, time, precision, horizon, project, title, content, badge, badgeKind] = this.values;
-      this.db.anchors.set(uid, {
-        uid, created_ts: createdTs, time, precision, horizon, project, title, content,
-        badge, badge_kind: badgeKind,
-      });
-    }
-    if (sql.includes("INSERT INTO essays")) {
-      const [uid, createdTs, updatedTs, displayOrder, title, content] = this.values;
-      this.db.essays.set(uid, {
-        uid, created_ts: createdTs, updated_ts: updatedTs,
-        display_order: displayOrder, title, content,
-      });
-    }
-    if (sql.includes("DELETE FROM essays")) this.db.essays.delete(this.values[0]);
-    return { success: true };
-  }
-
-  async all() {
-    if (this.sql.includes("PRAGMA table_info(anchors)")) {
-      return { results: this.db.anchorColumns.map((name) => ({ name })) };
-    }
-    if (this.sql.includes("FROM anchors")) {
-      return { results: [...this.db.anchors.values()] };
-    }
-    if (this.sql.includes("FROM essays ORDER BY")) {
-      return {
-        results: [...this.db.essays.values()].sort((a, b) =>
-          a.display_order - b.display_order || b.updated_ts - a.updated_ts),
-      };
-    }
-    return { results: [] };
-  }
-}
-
-class FakeDB {
-  constructor() {
-    this.anchorColumns = [
-      "id", "uid", "created_ts", "anchor_time", "time_precision", "title", "content",
-    ];
-    this.anchors = new Map();
-    this.essays = new Map();
-  }
-
-  prepare(sql) {
-    return new FakeStatement(this, sql);
-  }
-}
-
 const config = {
   async get() { return null; },
   async put() {},
 };
-const db = new FakeDB();
+const db = new SqliteD1();
+db.sqlite.exec(`CREATE TABLE anchors (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, uid TEXT UNIQUE NOT NULL, created_ts INTEGER NOT NULL,
+  anchor_time TEXT NOT NULL, time_precision TEXT NOT NULL DEFAULT 'second', title TEXT NOT NULL,
+  content TEXT NOT NULL)`);
+const anchorColumns = () => db.sqlite.prepare("PRAGMA table_info(anchors)").all().map(row => row.name);
 const env = { ADMIN_TOKEN, CONFIG: config, DB: db };
 const adminHeaders = {
   "Authorization": "Bearer " + ADMIN_TOKEN,
@@ -105,7 +43,7 @@ const anchorResponse = await worker.fetch(new Request(
   }
 ), env);
 assert.equal(anchorResponse.status, 200);
-assert.ok(db.anchorColumns.includes("horizon") && db.anchorColumns.includes("project"),
+assert.ok(anchorColumns().includes("horizon") && anchorColumns().includes("project"),
   "旧 D1 anchors 表必须原地补齐分类列");
 const anchors = await (await worker.fetch(
   new Request("https://api.flitfancy.com/anchors"), env
@@ -127,26 +65,20 @@ const cardConfirmation = await changedCardResponse.json();
 assert.equal(cardConfirmation.precision, "none");
 assert.equal(cardConfirmation.badge, "进行中");
 assert.equal(cardConfirmation.badge_kind, "doing");
-const savedCard = db.anchors.get(cardBody.uid);
+const savedCard = db.sqlite.prepare("SELECT *, anchor_time AS time, time_precision AS precision FROM anchors WHERE uid=?").get(cardBody.uid);
 assert.equal(savedCard.time, "");
 assert.equal(savedCard.precision, "none");
 assert.equal(savedCard.title, "修改后的卡片");
 assert.equal(savedCard.badge, "进行中");
 assert.equal(savedCard.badge_kind, "doing");
-assert.equal([...db.anchors.values()].filter(row => row.uid === cardBody.uid).length, 1);
-assert.ok(db.anchorColumns.includes("badge") && db.anchorColumns.includes("badge_kind"));
+assert.equal(db.sqlite.prepare("SELECT COUNT(*) AS n FROM anchors WHERE uid=?").get(cardBody.uid).n, 1);
+assert.ok(anchorColumns().includes("badge") && anchorColumns().includes("badge_kind"));
 assert.equal((await saveCard({...cardBody, badge_kind:"unsafe"})).status, 400);
 
 // 真实 SQLite 执行公开查询：九张原卡片独立保留，普通时间线仍只取最新 200 条。
 const sqlite = new DatabaseSync(":memory:");
 try {
-  const sqlEnv = { ...env, DB: { prepare(sql) {
-    const statement = sqlite.prepare(sql);
-    let params = [];
-    return { bind(...values) { params = values; return this; },
-      async run() { statement.run(...params); return { success: true }; },
-      async all() { return { results: statement.all(...params) }; } };
-  } } };
+  const sqlEnv = { ...env, DB: new SqliteD1(sqlite) };
   const { ensureAnchorsTable } = await import("../cloudflare/worker-storage.js?anchor-pagination-test");
   await ensureAnchorsTable(sqlEnv);
   const originalUids = [...fs.readFileSync(new URL("../docs/journal.html", import.meta.url), "utf8")

@@ -138,18 +138,18 @@ def main():
     assert ok is True
     assert memory_sync["endpoint"] == "/admin/memories"
     assert set(memory_sync["payload"]) == {
-        "uid", "created_at", "time", "precision", "perspective", "source", "content",
+        "uid", "created_at", "time", "precision", "perspective", "source", "content", "sync_revision",
     }
     assert anchor_sync["endpoint"] == "/admin/anchors"
     assert anchor_sync["payload"]["horizon"] == "future"
     assert anchor_sync["payload"]["project"] == "skywork"
     assert draft_sync == {
         "endpoint": "/admin/essays",
-        "payload": {"uid": "contract-essay-0001", "published": False},
+        "payload": {"uid": "contract-essay-0001", "published": False, "sync_revision": 1},
     }
     assert draft_observation_sync == {
         "endpoint": "/admin/observations",
-        "payload": {"uid": "contract-observation-0001", "published": False},
+        "payload": {"uid": "contract-observation-0001", "published": False, "sync_revision": 1},
     }
     print("SYNC CONTRACT: taxonomy preserved; draft essay/observation content stays local")
 

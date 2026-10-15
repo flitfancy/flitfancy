@@ -193,7 +193,7 @@ class ObservationService:
             cur = con.execute(
                 """UPDATE observations SET updated_at=?, title=?, category=?, tags_json=?,
                           summary=?, content=?, discovered_at=?, source_name=?, source_url=?,
-                          status=?, synced=0 WHERE uid=?""",
+                          status=?, synced=0, sync_revision=sync_revision+1 WHERE uid=?""",
                 (
                     updated_at, normalized["title"], normalized["category"], tags_json,
                     normalized["summary"], normalized["content"], normalized["discovered_at"],
@@ -223,7 +223,8 @@ class ObservationService:
             )
             updated = False
         con.execute(
-            "UPDATE observation_links SET synced=0 WHERE source_uid=? OR target_uid=?",
+            "UPDATE observation_links SET synced=0, sync_revision=sync_revision+1 "
+            "WHERE source_uid=? OR target_uid=?",
             (uid_value, uid_value),
         )
         con.commit()
@@ -266,7 +267,8 @@ class ObservationService:
         if edit_uid:
             cur = con.execute(
                 """UPDATE observation_links SET updated_at=?, source_uid=?, target_uid=?,
-                          relation=?, strength=COALESCE(?, strength), synced=0 WHERE uid=?""",
+                          relation=?, strength=COALESCE(?, strength), synced=0,
+                          sync_revision=sync_revision+1 WHERE uid=?""",
                 (
                     updated_at, normalized["source_uid"], normalized["target_uid"],
                     normalized["relation"], normalized["strength"] if "strength" in data else None, edit_uid,

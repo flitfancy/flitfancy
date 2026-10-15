@@ -2197,6 +2197,112 @@ body.console-page .section {
   .resource-columns { grid-template-columns: 1fr; }
 }
 
+/* 成果与下载沿用三栏目，布局只作用于资源页。 */
+.resources-page .resource-intro {
+  max-width: 1600px;
+  padding-bottom: 28px;
+}
+.resource-caption {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: var(--fs-meta);
+}
+.resources-page .resource-columns {
+  width: 100%;
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 0 clamp(22px, 7vw, 96px) 48px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 28px;
+}
+.resources-page .resource-column {
+  min-width: 0;
+  padding: 0;
+}
+.resource-column .kicker { margin: 0 0 8px; }
+.resource-column h2 { margin-bottom: 8px; }
+.resource-column-desc {
+  margin: 0 0 22px;
+  color: var(--muted);
+  font-size: var(--fs-text-xs);
+}
+.resource-project + .resource-project { margin-top: 16px; }
+.resource-project-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.resource-features {
+  margin: 14px 0;
+  padding-left: 20px;
+  color: var(--text);
+  font-size: var(--fs-text-xs);
+}
+.resource-features li + li { margin-top: 5px; }
+.resource-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-top: 14px;
+  font-size: var(--fs-ui);
+}
+.resource-project .resource-note {
+  margin-top: 14px;
+  font-size: var(--fs-meta);
+}
+.resource-project .resource-downloads { margin-top: 18px; }
+.resource-release { margin: 16px 0; }
+.resource-release + .resource-release {
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.resource-release h4 {
+  margin: 0 0 8px;
+  color: var(--amber-soft);
+  font-size: var(--fs-ui);
+  font-weight: 500;
+}
+.resource-project .resource-checksum {
+  margin-top: 12px;
+  font-size: var(--fs-fine);
+  overflow-wrap: anywhere;
+}
+.resource-checksum code { display: block; }
+.resource-project .resource-download-note {
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  font-size: var(--fs-meta);
+}
+.resource-archive { margin-top: 26px; }
+.resource-archive > h3 {
+  margin: 0;
+  font-size: var(--fs-text-sm);
+  font-weight: 500;
+  color: var(--amber-soft);
+}
+.resource-archive .resource-caption { margin-bottom: 14px; }
+.resource-column .dyn-resources .mini-card { margin-top: 16px; }
+#sensor-panel,
+#audio-panel,
+#chat-panel { scroll-margin-top: 110px; }
+@media (max-width: 1200px) {
+  .resources-page .resource-columns {
+    padding-right: 32px;
+    padding-left: 32px;
+    gap: 18px;
+  }
+}
+@media (max-width: 1000px) {
+  .resources-page .resource-columns { grid-template-columns: 1fr; }
+  .resource-column + .resource-column { margin-top: 16px; }
+}
+@media (max-width: 640px) {
+  .resources-page .resource-intro { padding-bottom: 26px; }
+  .resources-page .resource-columns { padding: 0 18px 34px; }
+}
+
 /* 四页（旅途/控制台/关于/资源）主标题统一：同一字号（渐变由
    grad-clip + grad-flame 工具类提供，见文件头部定义）。
    注意：必须收缩到文字宽度——否则渐变铺满整行，短标题只会

@@ -49,6 +49,11 @@ class WorkerClient:
             with self.opener.open(request, timeout=timeout) as response:
                 result = json.loads(response.read().decode("utf-8"))
                 if response.status == 200 and result.get("ok"):
+                    if "sync_revision" in payload and (
+                        type(result.get("sync_revision")) is not int
+                        or result["sync_revision"] != payload["sync_revision"]
+                    ):
+                        return False, "%s未确认当前同步版本，已保留待同步，请检查公网接口版本" % error_label
                     if expected_response and any(
                         result.get(key) != value for key, value in expected_response.items()
                     ):

@@ -509,7 +509,19 @@ def create_handler(app):
                 con.close()
                 self._send(200, {"ok": True, "rows": [dict(r) for r in rows]})
             elif path == "/api/essays/featured":
-                self._send(200, {"ok": True, "essay": _read_local_cfg().get("featured_essay")})
+                essay = _read_local_cfg().get("featured_essay")
+                if essay:
+                    con = db()
+                    try:
+                        visible = con.execute(
+                            "SELECT 1 FROM essays WHERE uid=? AND status='public'",
+                            (essay.get("uid"),),
+                        ).fetchone()
+                    finally:
+                        con.close()
+                    if not visible:
+                        essay = None
+                self._send(200, {"ok": True, "essay": essay})
             elif path == "/api/essays":
                 con = db()
                 rows = con.execute(
@@ -750,7 +762,8 @@ def create_handler(app):
             if edit_uid:
                 cur = con.execute(
                     """UPDATE memories SET memory_time=?, time_precision=?, memory_date=?,
-                           perspective=?, source=?, content=?, synced=0 WHERE uid=?""",
+                           perspective=?, source=?, content=?, synced=0,
+                           sync_revision=sync_revision+1 WHERE uid=?""",
                     (
                         memory_time, time_precision, memory_time[:10],
                         perspective, source, content, edit_uid,
@@ -879,7 +892,8 @@ def create_handler(app):
                        ON CONFLICT(uid) DO UPDATE SET anchor_time=excluded.anchor_time,
                            time_precision=excluded.time_precision, horizon=excluded.horizon,
                            project=excluded.project, title=excluded.title, content=excluded.content,
-                           badge=excluded.badge, badge_kind=excluded.badge_kind, synced=0""",
+                            badge=excluded.badge, badge_kind=excluded.badge_kind, synced=0,
+                            sync_revision=anchors.sync_revision+1""",
                     (edit_uid, now_iso(), anchor_time, time_precision, horizon, project,
                      title, content, badge, badge_kind),
                 )
@@ -890,7 +904,7 @@ def create_handler(app):
             elif edit_uid:
                 cur = con.execute(
                     """UPDATE anchors SET anchor_time=?, time_precision=?, horizon=?, project=?,
-                           title=?, content=?, synced=0 WHERE uid=?""",
+                           title=?, content=?, synced=0, sync_revision=sync_revision+1 WHERE uid=?""",
                     (anchor_time, time_precision, horizon, project,
                      title, content, edit_uid),
                 )
@@ -1015,7 +1029,7 @@ def create_handler(app):
             if edit_uid:
                 cur = con.execute(
                     """UPDATE essays SET updated_at=?, title=?, content=?, status=?,
-                           display_order=?, synced=0 WHERE uid=?""",
+                           display_order=?, synced=0, sync_revision=sync_revision+1 WHERE uid=?""",
                     (updated_at, title, content, status, display_order, edit_uid),
                 )
                 con.commit()

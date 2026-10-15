@@ -4,6 +4,7 @@ import {
   readJsonBody,
 } from "./worker-core.js";
 import {
+  applyContentSync,
   ensureAnchorsTable,
   ensureMemoriesTable,
   runDdlOnce,
@@ -75,7 +76,19 @@ export async function adminContentBody(request, env, resourceLabel) {
   if (!/^[a-zA-Z0-9_-]{16,80}$/.test(uid)) {
     return { error: json({ ok: false, error: "invalid uid" }, 400) };
   }
-  return { body, uid };
+  const hasRevision = Object.prototype.hasOwnProperty.call(body, "sync_revision");
+  const syncRevision = hasRevision ? body.sync_revision : 0;
+  if (hasRevision && (!Number.isSafeInteger(syncRevision) || syncRevision < 1)) {
+    return { error: json({ ok: false, error: "invalid sync_revision" }, 400) };
+  }
+  return { body, uid, syncRevision };
+}
+
+export function contentSyncResponse(result, fields) {
+  return json(result.accepted
+    ? { ok: true, ...fields, sync_revision: result.sync_revision }
+    : { ok: false, uid: fields.uid, error: "sync revision conflict or unavailable endpoints",
+      sync_revision: result.sync_revision }, result.accepted ? 200 : 409);
 }
 
 export async function handleAnchorCreate(request, env) {
@@ -115,10 +128,10 @@ export async function handleAnchorCreate(request, env) {
     ? Math.floor(Date.now() / 1000)
     : Math.floor(createdDate.getTime() / 1000);
   await ensureAnchorsTable(env);
-  await env.DB.prepare(
+  const result = await applyContentSync(env, "anchors", uid, pre.syncRevision, (gate, gateValues) => [env.DB.prepare(
     `INSERT INTO anchors(
        uid, created_ts, anchor_time, time_precision, horizon, project, title, content, badge, badge_kind
-     ) VALUES(?,?,?,?,?,?,?,?,?,?)
+     ) SELECT ?,?,?,?,?,?,?,?,?,? WHERE ${gate}
      ON CONFLICT(uid) DO UPDATE SET
        anchor_time = excluded.anchor_time,
        time_precision = excluded.time_precision,
@@ -129,9 +142,8 @@ export async function handleAnchorCreate(request, env) {
        badge = excluded.badge,
        badge_kind = excluded.badge_kind`
   )
-    .bind(uid, createdTs, anchorTime, timePrecision, horizon, project, title, content, badge, badgeKind)
-    .run();
-  return json({ ok: true, uid, ...(card ? { precision: timePrecision, badge, badge_kind: badgeKind } : {}) });
+    .bind(uid, createdTs, anchorTime, timePrecision, horizon, project, title, content, badge, badgeKind, ...gateValues)]);
+  return contentSyncResponse(result, { uid, ...(card ? { precision: timePrecision, badge, badge_kind: badgeKind } : {}) });
 }
 
 function toDisplayOrder(value) {
@@ -150,8 +162,10 @@ export async function handleEssayCreate(request, env) {
   const uid = pre.uid;
   await runDdlOnce(env, TABLE_ESSAYS);
   if (body.published !== true) {
-    await env.DB.prepare("DELETE FROM essays WHERE uid = ?").bind(uid).run();
-    return json({ ok: true, uid, published: false });
+    const result = await applyContentSync(env, "essays", uid, pre.syncRevision, (gate, gateValues) => [
+      env.DB.prepare(`DELETE FROM essays WHERE uid = ? AND ${gate}`).bind(uid, ...gateValues),
+    ]);
+    return contentSyncResponse(result, { uid, published: false });
   }
   const title = String(body.title || "").trim();
   const content = String(body.content || "").trim();
@@ -173,17 +187,17 @@ export async function handleEssayCreate(request, env) {
   const updatedTs = Number.isNaN(updatedDate.getTime())
     ? Math.floor(Date.now() / 1000)
     : Math.floor(updatedDate.getTime() / 1000);
-  await env.DB.prepare(
+  const result = await applyContentSync(env, "essays", uid, pre.syncRevision, (gate, gateValues) => [env.DB.prepare(
     `INSERT INTO essays(
        uid, created_ts, updated_ts, display_order, title, content
-     ) VALUES(?,?,?,?,?,?)
+     ) SELECT ?,?,?,?,?,? WHERE ${gate}
      ON CONFLICT(uid) DO UPDATE SET
        updated_ts = excluded.updated_ts,
        display_order = excluded.display_order,
        title = excluded.title,
        content = excluded.content`
-  ).bind(uid, createdTs, updatedTs, displayOrder, title, content).run();
-  return json({ ok: true, uid, published: true });
+  ).bind(uid, createdTs, updatedTs, displayOrder, title, content, ...gateValues)]);
+  return contentSyncResponse(result, { uid, published: true });
 }
 
 export async function handleMemoryCreate(request, env) {
@@ -222,11 +236,11 @@ export async function handleMemoryCreate(request, env) {
     ? Math.floor(Date.now() / 1000)
     : Math.floor(createdDate.getTime() / 1000);
   await ensureMemoriesTable(env);
-  await env.DB.prepare(
+  const result = await applyContentSync(env, "memories", uid, pre.syncRevision, (gate, gateValues) => [env.DB.prepare(
     `INSERT INTO memories(
        uid, created_ts, memory_time, time_precision, memory_date,
        perspective, source, title, content
-     ) VALUES(?,?,?,?,?,?,?,?,?)
+     ) SELECT ?,?,?,?,?,?,?,?,? WHERE ${gate}
      ON CONFLICT(uid) DO UPDATE SET
        created_ts = excluded.created_ts,
        memory_time = excluded.memory_time,
@@ -237,8 +251,7 @@ export async function handleMemoryCreate(request, env) {
   )
     .bind(
       uid, createdTs, memoryTime, timePrecision, memoryTime.slice(0, 10),
-      perspective, source, "", content
-    )
-    .run();
-  return json({ ok: true, uid });
+      perspective, source, "", content, ...gateValues
+    )]);
+  return contentSyncResponse(result, { uid });
 }

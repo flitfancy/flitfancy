@@ -1,7 +1,7 @@
 # FlitFancy 安卓底座 0.2.0
 
 用途：承载线上网站，通过 Wi-Fi 或 BLE 读取 FIREFLY-SENSE 感知板的环境/心率 CSV，缓存后上传到本机主机。
-0.2.0 已实现 App 的 BLE 中心端；感知板固件 1.3.5 尚无手机数据服务，需后续固件按照 [BLE 协议](BLE_PROTOCOL.md) 配合。当前板子可以继续使用 Wi-Fi 模式。
+0.2.0 已实现 App 的 BLE 中心端；感知板固件 1.3.6 已实现对应的[手机数据服务](BLE_PROTOCOL.md)，并于 2026-10-05 完成 USB 写入校验。运行、手机收数及手机与手表同时连接仍待实机验收；最后完成现场验收的固件为 1.3.5，可继续使用 Wi-Fi 模式。
 网站发布后，冷启动与手动刷新重新获取网页；回到前台检测网站版本，有未保存内容时由用户选择刷新。
 Kotlin、系统 WebView、外设连接前台服务、Room 队列。Android 8.0 起可安装，目标 Android 16；安装包使用本地私钥签名。
 
@@ -15,7 +15,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "S:\FlitFancy\site\scripts\r
 ```
 
 1. 下载并安装 `https://flitfancy.com/resources/flitfancy-android-0.2.0.apk`，可直接覆盖 0.1.0；不要卸载旧版以免删除待上传缓存。
-2. App → 采集，选择连接方式。Wi-Fi：手机连接感知板所在局域网并保存板子地址，默认 `http://192.168.1.33`。蓝牙：板子具备新数据服务后，点击“扫描并选择感知板”，允许附近设备权限；手机可通过自己的 Wi-Fi 或流量上传。
+2. App → 采集，选择连接方式。Wi-Fi：手机连接感知板所在局域网并保存板子地址，默认 `http://192.168.1.33`。蓝牙：使用具备手机数据服务的 1.3.6 联调固件后，点击“扫描并选择感知板”，允许附近设备权限；手机可通过自己的 Wi-Fi 或流量上传。
 3. 点击“打开网站管理页生成配对码”，在 `console.flitfancy.com` 再次点击导航中的“控制台”登录。
 4. 管理页“手机采集”填写来源别名，生成配对码。回到 App 的采集页，输入 12 位配对码；10 分钟有效，仅用一次。
 5. 点击“开始采集”，允许通知。通过“允许锁屏持续采集”处理系统电池优化；在本 App 系统设置检查 HyperOS 自启动、通知和后台省电。
@@ -23,7 +23,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "S:\FlitFancy\site\scripts\r
 
 升级后原配对信息、Wi-Fi 地址及 Room 缓存保留，默认仍使用 Wi-Fi。先暂停，再切换方式或选择另一块板子。蓝牙首次连接会请求系统配对；只有确认型号与协议、完成绑定并收到完整快照后才会缓存数据。
 扫描只在前台手动启动，最多 12 秒，离开 App 或取消会停止。后台使用已保存的绑定地址重连，不持续扫描附近设备。Android 12 及以上不申请定位；Android 8–11 扫描需要旧系统的定位权限和定位开关，App 不读取位置。
-未找到板子不表示手机后端配对失败；检查板子数据固件、供电和距离。当前固件 1.3.5 没有本协议服务，App 会明确提示。
+未找到板子不表示手机后端配对失败；检查板子数据固件、供电和距离。固件 1.3.5 没有本协议服务，BLE 需要 1.3.6 联调固件；实际连接与收数仍须验证。
 
 Wi-Fi 模式通过感知板现有 `/data` 和 `/device` 接口采集；`/data` 已包含 CH6 心率 CSV。
 蓝牙模式使用协议 1 请求环形快照并校验分片、请求编号与完整行数，无需与板子处于同一 Wi-Fi。两种方式共用解析与上传链路。
@@ -63,4 +63,4 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build_android.ps1 -C
 首版还没有手表直接 BLE 接入、来源筛选、手机常驻作为完整后端、网页一键迁移主机；这些仍属于后续阶段。
 首次配对使用手动配对码，尚未加入扫码。网页 Blob 导出与文件夹选择受 WebView 支持限制，手机缓存使用 App 自带导出入口。
 
-App 版本独立于网站版本；本次网站仍为 1.29.1、App 为 0.2.0。BLE 协议与 Android 发布记录见本目录 BLE_PROTOCOL.md / CHANGELOG.md。[Android 权限说明](https://developer.android.com/develop/connectivity/bluetooth/bt-permissions)、[后台蓝牙说明](https://developer.android.com/develop/connectivity/bluetooth/ble/background)。
+App 版本独立于网站版本；0.2.0 安装包构建时的网站版本为 1.29.1，网站可继续独立更新。BLE 协议与 Android 发布记录见本目录 BLE_PROTOCOL.md / CHANGELOG.md。[Android 权限说明](https://developer.android.com/develop/connectivity/bluetooth/bt-permissions)、[后台蓝牙说明](https://developer.android.com/develop/connectivity/bluetooth/ble/background)。

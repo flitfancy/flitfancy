@@ -322,6 +322,7 @@ def sync_public_memory(memory):
     """把一条本地日记幂等同步到 Worker。返回 (是否成功, 提示)。"""
     payload = {
         "uid": memory["uid"],
+        "sync_revision": memory.get("sync_revision", 1),
         "created_at": memory["created_at"],
         "time": memory["memory_time"],
         "precision": memory["time_precision"],
@@ -336,6 +337,7 @@ def sync_public_anchor(anchor):
     """把一条本地锚点幂等同步到 Worker。返回 (是否成功, 提示)。"""
     payload = {
         "uid": anchor["uid"],
+        "sync_revision": anchor.get("sync_revision", 1),
         "created_at": anchor["created_at"],
         "time": anchor["anchor_time"],
         "precision": anchor["time_precision"],
@@ -360,6 +362,7 @@ def sync_public_essay(essay):
     published = essay["status"] == "public"
     payload = {
         "uid": essay["uid"],
+        "sync_revision": essay.get("sync_revision", 1),
         "published": published,
     }
     if published:
@@ -376,7 +379,8 @@ def sync_public_essay(essay):
 def sync_public_observation(observation):
     """只把公开星球同步到 Worker；草稿和归档发送撤下指令。"""
     published = observation["status"] == "public"
-    payload = {"uid": observation["uid"], "published": published}
+    payload = {"uid": observation["uid"], "published": published,
+               "sync_revision": observation.get("sync_revision", 1)}
     if published:
         payload.update({
             "created_at": observation["created_at"],
@@ -395,14 +399,21 @@ def sync_public_observation(observation):
 
 def sync_public_observation_link(link):
     """只有弦的两端均公开时才在 Worker 保留公开副本。"""
-    con = db()
-    statuses = con.execute(
-        "SELECT uid, status FROM observations WHERE uid IN (?, ?)",
-        (link["source_uid"], link["target_uid"]),
-    ).fetchall()
-    con.close()
-    published = len(statuses) == 2 and all(row["status"] == "public" for row in statuses)
-    payload = {"uid": link["uid"], "published": published}
+    if "sync_published" in link:
+        # Pending rows capture endpoint visibility and link revision in one DB read.
+        published = bool(link["sync_published"])
+    else:
+        con = db()
+        try:
+            statuses = con.execute(
+                "SELECT uid, status FROM observations WHERE uid IN (?, ?)",
+                (link["source_uid"], link["target_uid"]),
+            ).fetchall()
+        finally:
+            con.close()
+        published = len(statuses) == 2 and all(row["status"] == "public" for row in statuses)
+    payload = {"uid": link["uid"], "published": published,
+               "sync_revision": link.get("sync_revision", 1)}
     if published:
         payload.update({
             "created_at": link["created_at"],
@@ -421,7 +432,7 @@ def sync_public_observation_link(link):
 
 def _sync_pending_rows(table, pusher, limit):
     """重试补传 synced=0 的滞留记录（锚点/日记/短文/见闻共用）：
-    逐条推送，失败即停（不重试风暴），成功后落 synced=1。"""
+    逐条推送，失败即停（不重试风暴），成功后仅确认发出的版本。"""
     rows = _store.pending_rows(table, limit)
     synced = 0
     note = ""
@@ -429,8 +440,10 @@ def _sync_pending_rows(table, pusher, limit):
         ok, note = pusher(row)
         if not ok:
             break
-        _store.mark_synced(table, row["uid"])
-        synced += 1
+        if _store.mark_synced(table, row["uid"], row["sync_revision"]):
+            synced += 1
+        else:
+            note = "内容已更新，本次旧版本回执已忽略"
     return synced, note
 
 

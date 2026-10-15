@@ -2,13 +2,21 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import worker from "../cloudflare/worker.js";
+import { runDdlOnce, TABLE_ESSAYS } from "../cloudflare/worker-storage.js";
+import { SqliteD1 } from "./worker-sqlite-d1.mjs";
 
 const stored = new Map();
 const env = {
   ADMIN_TOKEN: "test-only-featured-essay-token-123456789",
+  DB: new SqliteD1(),
   CONFIG: { get: async (key) => stored.get(key) || null, put: async (key, value) => stored.set(key, value) },
 };
 const chosen = { uid: "chosen-essay-0001", title: "第一篇", content: "第一段\n\n第二段", updated_at: "2026-09-09" };
+await runDdlOnce(env, TABLE_ESSAYS);
+const insertPublic = essay => env.DB.sqlite.prepare(
+  "INSERT INTO essays(uid,created_ts,updated_ts,title,content) VALUES(?,1,1,?,?)"
+).run(essay.uid, essay.title, essay.content);
+insertPublic(chosen);
 const getFeatured = () => worker.fetch(new Request("https://api.flitfancy.com/essays/featured"), env);
 async function publish(value, authorized = true) {
   return worker.fetch(new Request("https://api.flitfancy.com/admin/toggle", {
@@ -32,6 +40,44 @@ const cors = await worker.fetch(new Request("https://api.flitfancy.com/essays/fe
   headers: { Origin: "https://flitfancy.com" },
 }), env);
 assert.equal(cors.headers.get("Access-Control-Allow-Origin"), "*");
+
+// Public edits do not replace the explicitly selected snapshot.
+env.DB.sqlite.prepare("UPDATE essays SET content=? WHERE uid=?").run("尚未重新选定的新正文", chosen.uid);
+assert.deepEqual((await (await getFeatured()).json()).essay, chosen);
+
+// A late KV selection can point back to A after B was selected and A withdrawn.
+const next = { ...chosen, uid: "chosen-essay-0002", title: "第二篇", content: "第二篇正文" };
+insertPublic(next);
+await publish(next);
+await publish(chosen); // delayed older selection wins at KV
+const withdrawn = await worker.fetch(new Request("https://api.flitfancy.com/admin/essays", {
+  method: "POST", headers: { Authorization: "Bearer " + env.ADMIN_TOKEN },
+  body: JSON.stringify({ uid: chosen.uid, published: false, sync_revision: 2 }),
+}), env);
+assert.equal(withdrawn.status, 200);
+let response = await getFeatured();
+assert.equal(response.headers.get("Cache-Control"), "no-store");
+assert.equal((await response.json()).essay, null,
+  "撤下后，滞后的展示快照不得继续返回旧正文");
+await publish(next);
+assert.deepEqual((await (await getFeatured()).json()).essay, next);
+
+// A stored builtin snapshot is real authored content and follows the same visibility rule.
+const builtin = { ...chosen, uid: "builtin-prologue-0001" };
+await publish(builtin);
+assert.equal((await (await getFeatured()).json()).essay, null);
+insertPublic(builtin);
+assert.deepEqual((await (await getFeatured()).json()).essay, builtin);
+env.DB.sqlite.prepare("DELETE FROM essays WHERE uid=?").run(builtin.uid);
+assert.equal((await (await getFeatured()).json()).essay, null);
+
+await publish(next);
+response = await worker.fetch(new Request("https://api.flitfancy.com/essays/featured"), { ...env, DB: undefined });
+assert.equal((await response.json()).essay, null, "缺少 D1 时不能只信任 KV 正文快照");
+stored.delete("featured_essay");
+response = await worker.fetch(new Request("https://api.flitfancy.com/essays/featured"), { ...env, DB: undefined });
+assert.equal((await response.json()).essay, null, "没有选定快照时保留静态序章回退");
+env.DB.sqlite.close();
 
 // Minimal DOM for user actions; scroll positions model cards of equal width.
 function element(tag = "div") {
