@@ -1,0 +1,10 @@
+Existime 项目实物照片
+
+照片来自项目作者 FlitFancy 的 Existime 仓库，仅用于个人网站项目展示，按原始字节复制。
+
+ffs-front.jpg：projects/FFS/08-实物照片/ffs-front.jpg
+ffa-assembled.jpg：projects/FFA/08-实物照片/ffa-assembled.jpg
+map-charge-lit.jpg：projects/map/08-实物照片/map-charge-lit.jpg（charge 充电版，不代表 battery 或其他丝印版本）
+
+来源：https://github.com/flitfancy/Existime
+作者保留照片权利；照片不随硬件开源协议或 MIT 许可证新增授权。

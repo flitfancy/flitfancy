@@ -6,9 +6,9 @@
   <link rel="canonical" href="https://flitfancy.com/resources.html">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='24' fill='%23f5b84b' opacity='0.22'/%3E%3Ccircle cx='32' cy='32' r='12' fill='%23f5b84b'/%3E%3Ccircle cx='32' cy='32' r='5' fill='%23ffe9c4'/%3E%3C/svg%3E">
   <title>资源 — 云萤 · FlitFancy</title>
-  <meta name="description" content="云萤的项目与成果：FireFly 天心、FIREFLY-SENSE 感知板、FIREFLY VOICE 语音板、个人网站与安卓采集端，以及固件、安装包和 PCB 制造文件。">
-  <link rel="stylesheet" href="assets/style.css?v=1.29.3">
-  <script src="assets/track.js?v=1.29.3" defer></script>
+  <meta name="description" content="NatureCraft 天工的四个开源硬件项目：FFS 环境感知板、FFA 双麦语音交互板、map 地图灯和 Flitime 电子沙漏主板。实物展示、发布状态与 Existime 工程资料下载。">
+  <link rel="stylesheet" href="assets/style.css?v=1.29.6">
+  <script src="assets/track.js?v=1.29.6" defer></script>
 </head>
 <body class="resources-page">
   <canvas id="sky" aria-hidden="true"></canvas>
@@ -29,7 +29,7 @@
     <section class="section resource-intro">
       <h1 class="grad-title grad-clip grad-flame">资源<span class="title-en">RESOURCES</span></h1>
       <p class="sub">把想法做出来，也把一路的成果留在这里。</p>
-      <p class="resource-caption">整理于 <time datetime="2026-10-08">2026.10.08</time> · 从对话，到感知，再到一个可以随时回来的家。</p>
+      <p class="resource-caption">整理于 <time datetime="2026-10-23">2026.10.23</time> · 从对话，到感知，再到一个可以随时回来的家。</p>
     </section>
 
     <div class="resource-columns">
@@ -58,50 +58,89 @@
       <h2 id="naturecraft-title">NatureCraft · 天工</h2>
       <p class="resource-column-desc">做一些板子，把周围的世界接进来。</p>
 
-      <article class="mini-card resource-project">
-        <div class="resource-project-head"><span class="badge done">已运行</span><span class="mini-meta">FIREFLY-SENSE</span></div>
-        <h3>感知板 · 现实感知</h3>
-        <p>六路环境传感器，记录温湿度、气压、光谱、光照与紫外线、空气质量和二氧化碳；接入手表心率，一起看它们随时间变化。</p>
+      <article class="mini-card resource-project" id="project-ffs">
+        <div class="resource-project-head"><span class="badge done">正式发布</span><span class="mini-meta">v0.1.0</span></div>
+        <h3>FFS · 环境感知板</h3>
+        <p>温湿度、气压、光谱、光照与紫外线、空气质量和 CO₂。用六路传感器，把身边的变化慢慢记下来。</p>
         <ul class="resource-features">
-          <li>SHT41 / BMP580 / AS7341</li>
-          <li>LTR390 / SGP41 / SCD40</li>
-          <li>实时读数、历史曲线与网页固件升级</li>
+          <li>六路环境感知</li>
+          <li>Wi-Fi / BLE</li>
+          <li>Windows / Android</li>
         </ul>
-        <div class="resource-links"><a class="back-link" href="presence.html#sensor-panel">查看现实感知</a></div>
+        <div class="resource-links"><a class="back-link" href="https://github.com/flitfancy/Existime/releases/tag/v0.1.0" target="_blank" rel="noopener">资料与下载</a><a class="back-link" href="https://github.com/flitfancy/Existime/tree/main/projects/FFS" target="_blank" rel="noopener">项目说明</a></div>
         <details class="resource-group resource-downloads">
-          <summary>固件下载与适用范围</summary>
-          <div class="resource-release">
-            <h4>1.3.5 · 已完成现场验收</h4>
-            <p>用于 FIREFLY-SENSE N16R8，schema 5；保留为已验证版本的回退镜像。</p>
-            <div class="resource-links"><a class="back-link" href="resources/firefly-sense-1.3.5-ota.bin" download>下载 OTA 固件 · 1.01 MiB</a><a class="back-link" href="resources/firefly-sense-1.3.5-ota.json">校验信息</a></div>
-            <p class="resource-checksum">SHA-256 <code>a3c4437719b4add59ca809b09630d437a73f3f29d89934c10e38247267f91119</code></p>
-          </div>
-          <div class="resource-release">
-            <h4>1.3.6 · 手机 BLE 联调版</h4>
-            <p>已完成构建与 USB 写入校验；运行、手机收数及手机与手表同时连接仍待实机验收，配合 Android 0.2.0 联调。</p>
-            <div class="resource-links"><a class="back-link" href="resources/firefly-sense-1.3.6-ota.bin" download>下载 OTA 固件 · 1.02 MiB</a><a class="back-link" href="resources/firefly-sense-1.3.6-ota.json">10.04 构建记录</a></div>
-            <p class="resource-checksum">SHA-256 <code>cdc3d6af45a8babb6e7c53c663ff25213d05c8929d8ff7e5d19e4a20fb47f01f</code></p>
-          </div>
-          <p class="resource-download-note">以上是应用 OTA 镜像，适用于对应整板的升级与回退；首次烧录需完整工程与分区配置。镜像不内置真实 Wi-Fi 凭证。</p>
+          <summary>实物与资料</summary>
+          <figure class="resource-project-figure">
+            <img src="assets/images/existime/ffs-front.jpg?v=1.29.6" alt="FFS 六通道环境感知板实物，白色 PCB，正面排列六路传感器与接口。" width="1280" height="960" loading="lazy" decoding="async">
+            <figcaption class="resource-caption">FFS 感知板 · 实物正面</figcaption>
+          </figure>
+          <p class="resource-note">配合外部主控使用。已公开硬件资料、1.3.15 固件源码和电脑、手机采集端；预编译固件尚未提供。</p>
+          <div class="resource-links"><a class="back-link" href="https://github.com/flitfancy/Existime/releases/download/v0.1.0/SHA256SUMS.txt" target="_blank" rel="noopener">SHA-256 校验文件</a></div>
         </details>
       </article>
 
-      <article class="mini-card resource-project">
-        <div class="resource-project-head"><span class="badge done">已接入</span><span class="mini-meta">FIREFLY VOICE</span></div>
-        <h3>语音板 · 侧耳倾听</h3>
-        <p>听见周围的声音，也放一些喜欢的音乐。双麦克风与播放控制已经接到存在页。</p>
+      <article class="mini-card resource-project" id="project-ffa">
+        <div class="resource-project-head"><span class="badge done">正式发布</span><span class="mini-meta">v0.1.0</span></div>
+        <h3>FFA · 双麦语音交互板</h3>
+        <p>听见周围的声音，也播放喜欢的音乐和语音回复。双麦采集与扬声器播放，把声音接进日常。</p>
         <ul class="resource-features">
-          <li>双麦实时电平与历史曲线</li>
-          <li>增益调节、录音与语音识别</li>
-          <li>音乐播放、歌词与固件升级入口</li>
+          <li>ESP32-S3</li>
+          <li>双麦采音与播放</li>
+          <li>FFV-transfer</li>
         </ul>
-        <div class="resource-links"><a class="back-link" href="presence.html#audio-panel">前往侧耳倾听</a></div>
-        <p class="resource-note">设备操作与音频记录登录后使用；公开下载资料后续补齐。</p>
+        <div class="resource-links"><a class="back-link" href="https://github.com/flitfancy/Existime/releases/tag/v0.1.0" target="_blank" rel="noopener">资料与下载</a><a class="back-link" href="https://github.com/flitfancy/Existime/tree/main/projects/FFA" target="_blank" rel="noopener">项目说明</a></div>
+        <details class="resource-group resource-downloads">
+          <summary>实物与资料</summary>
+          <figure class="resource-project-figure">
+            <img src="assets/images/existime/ffa-assembled.jpg?v=1.29.6" alt="FFA 双麦语音板实装，绿色 ESP32-S3 主板安装在浅蓝色外壳上，正面为扬声器。" width="1280" height="960" loading="lazy" decoding="async">
+            <figcaption class="resource-caption">FFA 语音板 · 外壳与扬声器实装</figcaption>
+          </figure>
+          <p class="resource-note">0.4.1 固件与 FFV-transfer 均已开源，暂未提供预编译固件。唤醒与识别依赖电脑端，需配置自己的网络、配对与模型。</p>
+          <div class="resource-links"><a class="back-link" href="https://github.com/flitfancy/Existime/releases/download/v0.1.0/SHA256SUMS.txt" target="_blank" rel="noopener">SHA-256 校验文件</a></div>
+        </details>
+      </article>
+
+      <article class="mini-card resource-project" id="project-map">
+        <div class="resource-project-head"><span class="badge done">正式发布</span><span class="mini-meta">v0.2.1</span></div>
+        <h3>map · 省份记录与指南针地图灯</h3>
+        <p>点亮走过的省份，也看看此刻的方向。34 颗省份灯、八方向指南针和电量显示，把旅途留在一张地图上。</p>
+        <ul class="resource-features">
+          <li>charge / battery</li>
+          <li>完整 / 无背面丝印</li>
+          <li>正常 / 全亮固件</li>
+        </ul>
+        <div class="resource-links"><a class="back-link" href="https://github.com/flitfancy/Existime/releases/tag/v0.2.1" target="_blank" rel="noopener">资料与下载</a><a class="back-link" href="https://github.com/flitfancy/Existime/tree/main/projects/map" target="_blank" rel="noopener">项目说明</a></div>
+        <details class="resource-group resource-downloads">
+          <summary>实物与资料</summary>
+          <figure class="resource-project-figure">
+            <img src="assets/images/existime/map-charge-lit.jpg?v=1.29.6" alt="map 地图灯 charge 充电版实物，白色地图 PCB 上的部分省份灯与中心灯点亮。" width="1280" height="960" loading="lazy" decoding="async">
+            <figcaption class="resource-caption">map · charge 充电版实物，亮灯状态</figcaption>
+          </figure>
+          <p class="resource-note">两种供电版本、四套硬件资料，各附匹配的正常与全亮测试固件。下载时按供电版本与丝印选择，照片为 charge 充电版。</p>
+          <div class="resource-links"><a class="back-link" href="https://github.com/flitfancy/Existime/releases/download/v0.2.1/SHA256SUMS.txt" target="_blank" rel="noopener">SHA-256 校验文件</a></div>
+        </details>
+      </article>
+
+      <article class="mini-card resource-project" id="project-flitime">
+        <div class="resource-project-head"><span class="badge doing">硬件预发布</span><span class="mini-meta">v0.3.0</span></div>
+        <h3>Flitime · 电子沙漏主板</h3>
+        <p>一块为彩屏沙粒显示与计时而设计的 ESP32-S3 主板，预留运动与环境感知。想把流逝的时间，做成看得见的沙。</p>
+        <ul class="resource-features">
+          <li>ESP32-S3</li>
+          <li>43 × 77 mm</li>
+          <li>双层 PCB</li>
+        </ul>
+        <p class="resource-note">工程、BOM、Gerber 和装配资料已公开。固件、配套软件与实物照片暂空，整机实测待完成。</p>
+        <div class="resource-links"><a class="back-link" href="https://github.com/flitfancy/Existime/releases/tag/v0.3.0" target="_blank" rel="noopener">资料与下载</a><a class="back-link" href="https://github.com/flitfancy/Existime/tree/main/projects/Flitime" target="_blank" rel="noopener">项目说明</a></div>
+        <details class="resource-group resource-downloads">
+          <summary>发布说明</summary>
+          <div class="resource-links"><a class="back-link" href="https://github.com/flitfancy/Existime/releases/download/v0.3.0/SHA256SUMS.txt" target="_blank" rel="noopener">SHA-256 校验文件</a></div>
+        </details>
       </article>
 
       <div class="resource-archive">
         <h3>PCB 制造文件</h3>
-        <p class="resource-caption">感知板 1.0：Gerber、钻孔及下单资料。</p>
+        <p class="resource-caption">感知板 1.0 历史制造资料，当前工程见上方 FFS 项目。</p>
         <div class="dyn-resources" data-column="naturecraft"></div>
       </div>
     </section>
@@ -254,8 +293,8 @@
 
   <div class="js-error" data-role="js-error" hidden></div>
 
-  <script src="assets/admin-core.js?v=1.29.3"></script>
-  <script src="assets/admin-panel-shell.js?v=1.29.3"></script>
-  <script src="assets/resources-admin.js?v=1.29.3"></script>
+  <script src="assets/admin-core.js?v=1.29.6"></script>
+  <script src="assets/admin-panel-shell.js?v=1.29.6"></script>
+  <script src="assets/resources-admin.js?v=1.29.6"></script>
 </body>
 </html>

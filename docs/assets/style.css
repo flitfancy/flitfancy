@@ -2303,6 +2303,14 @@ body.console-page .section {
   .resources-page .resource-columns { padding: 0 18px 34px; }
 }
 
+.resource-project-figure { margin: 14px 0; }
+.resource-project-figure img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+
 /* 四页（旅途/控制台/关于/资源）主标题统一：同一字号（渐变由
    grad-clip + grad-flame 工具类提供，见文件头部定义）。
    注意：必须收缩到文字宽度——否则渐变铺满整行，短标题只会

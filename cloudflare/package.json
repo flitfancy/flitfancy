@@ -1,6 +1,6 @@
 {
   "name": "flitfancy-worker",
-  "version": "1.29.3",
+  "version": "1.29.6",
   "private": true,
   "type": "module",
   "scripts": {
