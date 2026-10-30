@@ -39,15 +39,17 @@
     }).join("|");
   }
 
-  /* ---------- 衍生量（全部由原始值实时推导，不落库、可随时标定） ----------
-     LTR390 估算系数：数据表典型灵敏度（18bit、100ms、1x）为
-     ALS 0.6 counts/lux、UV 2300 counts/UVI；固件增益为 3x。
-     标定方法：板子与参考照度计并排，在多个光照档位记录 als_raw 与
-     参考 lux 做线性拟合得到真实斜率；UV 对照气象 App 的实时 UVI。
-     标定结果只需改这里两个系数（从 console.js 迁入，单一出处）。 */
+  /* ---------- 衍生量（由原始值推导，不落库） ----------
+     LTR-390UV-01 数据表 v1.2，§4.5/§7：
+     https://download.kamami.pl/p587054-1_LTR-390UV_Final_DS_V1_2.pdf
+     现有 FFS/FFT 固件固定 3x、18bit（100ms）；窗口补偿暂按 1。
+     Lux = 0.6 * ALS / (GAIN * (integration_ms / 100))。
+     UV 的 1400 counts/UVI 是 18x、20bit/400ms 的典型值，须按增益与
+     积分时间缩放；旧版 v1.1 为 2300，不能直接乘当前增益。
+     这些是数据表估算，仍需与同位置、同时段的参考仪器实测标定。 */
   const calibration = {
-    ltrAlsPerLux: 0.6 * 3,
-    ltrUvPerUvi: 2300 * 3,
+    ltrAlsPerLux: 3 / 0.6,
+    ltrUvPerUvi: 1400 * (3 / 18) * (100 / 400),
   };
 
   function dewPointC(tempC, rhPct) {

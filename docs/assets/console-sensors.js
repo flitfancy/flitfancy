@@ -10,6 +10,7 @@
     CH4: { name: "空气质量", sensor: "SGP41" },
     CH5: { name: "二氧化碳", sensor: "SCD40" },
     CH6: { name: "手表心率", sensor: "BLE" },
+    CH7: { name: "按压力", sensor: "HSFPAR004A" },
   };
 
   function formatValue(value, digits) {
@@ -38,6 +39,10 @@
       if (!row || Number(row.ok) !== 1) return [];
       if (channel === "CH6") {
         return state.isOnline(row, Date.now()) ? [formatValue(row.heart_rate_bpm, 0) + " bpm"] : [];
+      }
+      if (channel === "CH7") {
+        return [formatValue(row.force_raw, 0) + " 原始码",
+          formatValue(row.force_mv, 4) + " mV"];
       }
       if (channel === "CH0") {
         return [formatValue(row.temp_c, 1) + " °C", formatValue(row.rh_pct, 0) + " %RH"];
@@ -104,6 +109,8 @@
     function derivedLine(channel, row) {
       if (!row || Number(row.ok) !== 1) return "";
       if (channel === "CH6") return "Xiaomi C4A9 · 心率广播";
+      if (channel === "CH7") return Number(row.force_saturated) === 1 ?
+        "ADC 接近满量程 · 尚未标定力值" : "桥式差分输入 · 尚未标定力值";
       if (channel === "CH0") {
         const temperature = Number(row.temp_c);
         const humidity = Number(row.rh_pct);
@@ -132,11 +139,13 @@
         return tone + " · " + flicker;
       }
       if (channel === "CH3") {
+        if (row.als_raw == null || row.uv_raw == null) return "";
         const ambient = Number(row.als_raw);
         const ultraviolet = Number(row.uv_raw);
-        if (isNaN(ambient) || isNaN(ultraviolet)) return "";
-        return "≈" + Math.round(state.luxEstimate(ambient)) + " lux · UV 指数 ≈" +
-          state.uviEstimate(ultraviolet).toFixed(1);
+        if (!Number.isFinite(ambient) || !Number.isFinite(ultraviolet)) return "";
+        const uvi = state.uviEstimate(ultraviolet);
+        return "≈" + Math.round(state.luxEstimate(ambient)) + " lux · UV 指数 " +
+          (uvi > 0 && uvi < 0.1 ? "<0.1" : "≈" + uvi.toFixed(1));
       }
       if (channel === "CH4") {
         return "VOC " + state.vocLevel(row.voc_index) + " · NOx " +
@@ -166,11 +175,29 @@
       return row && row.collector_name ? "经「" + String(row.collector_name) + "」上报" : "";
     }
 
+    function updateSummary(rows) {
+      const updated = query('[data-role="sensor-updated"]');
+      const timed = rows.filter(function (row) { return Number.isFinite(Date.parse(row.ts)); })
+        .sort(function (a, b) { return Date.parse(b.ts) - Date.parse(a.ts); });
+      if (!timed.length) { updated.textContent = "等待第一组数据"; return; }
+      const version = timed.find(function (row) { return row.firmware_version; });
+      const signal = timed.find(function (row) {
+        const rssi = Number(row.rssi_dbm);
+        return row.rssi_dbm != null && row.rssi_dbm !== "" &&
+          Number.isFinite(rssi) && rssi < 0 && rssi >= -127;
+      });
+      updated.textContent = "快照更新于 " +
+        new Date(timed[0].ts).toLocaleTimeString("zh-CN", { hour12: false }) +
+        (version ? " · FFS " + version.firmware_version : "") +
+        (signal ? " · " + (state.snapshotAgeMs(signal, Date.now()) <= 30000 ? "Wi-Fi " : "上次 Wi-Fi ") +
+          Math.round(Number(signal.rssi_dbm)) + " dBm" : "");
+    }
+
     function render(rows) {
       const grid = query('[data-role="sensor-grid"]');
-      const updated = query('[data-role="sensor-updated"]');
       rows = (rows || []).filter(function (row) { return channels().includes(row.channel); });
       lastRows = rows;
+      updateSummary(rows);
       if (overview.isOpen()) return;
       const fingerprint = state.fingerprint(rows);
       if (fingerprint === lastFingerprint && Object.keys(cardParts).length) {
@@ -227,18 +254,6 @@
         card.addEventListener("click", function () { overview.toggle(channel); });
         grid.appendChild(card);
       });
-      const times = (rows || []).map(function (row) {
-        return new Date(row.ts || "").getTime();
-      }).filter(function (value) { return !isNaN(value); });
-      if (times.length) {
-        const latest = new Date(Math.max.apply(Math, times));
-        const versionRow = (rows || []).find(function (row) { return row.firmware_version; });
-        updated.textContent = "快照更新于 " +
-          latest.toLocaleTimeString("zh-CN", { hour12: false }) +
-          (versionRow ? " · FFS " + versionRow.firmware_version : "");
-      } else {
-        updated.textContent = "等待第一组数据";
-      }
     }
 
     overview = global.FlitFancyConsoleOverview.create({

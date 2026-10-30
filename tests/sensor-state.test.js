@@ -58,10 +58,12 @@ assert.ok(Math.abs(sensorState.dewPointC(28.5, 41.2) - 14.0) < 0.5,
   "28.5°C/41.2% 的露点应约为 14°C（Magnus 公式）");
 assert.ok(Math.abs(sensorState.heatIndexC(30, 60) - 33.5) < 1.0,
   "30°C/60% 的体感应约为 33.5°C（NWS Rothfusz）");
-assert.ok(Math.abs(sensorState.luxEstimate(1800) - 1000) < 1e-9,
-  "1800 counts / 1.8 counts-per-lux = 1000 lux");
-assert.ok(Math.abs(sensorState.uviEstimate(6900) - 1) < 1e-9,
-  "6900 counts / 6900 counts-per-UVI = 1");
+assert.ok(Math.abs(sensorState.luxEstimate(5000) - 1000) < 1e-9,
+  "LTR390 3x/18bit: Lux = 0.6 * ALS / 3，5000 counts = 1000 lux");
+assert.ok(Math.abs(sensorState.uviEstimate(175) - 3) < 1e-9,
+  "数据表 v1.2 的 1400 counts/UVI 对应 18x/400ms，3x/100ms 应为 58.333 counts/UVI");
+assert.ok(Math.abs(sensorState.uviEstimate(12) - 0.2057142857142857) < 1e-9,
+  "截图中的 UV 12 应估算为约 0.206 UVI，而非 0.0017");
 assert.strictEqual(sensorState.co2Level(500), "优 · 通风好");
 assert.strictEqual(sensorState.co2Level(900), "良");
 assert.strictEqual(sensorState.co2Level(1200), "一般 · 偏闷");

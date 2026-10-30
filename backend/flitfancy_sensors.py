@@ -15,6 +15,7 @@ SENSOR_CSV_FIELDS = (
     "as7341_gainx", "sample_age_ms", "sample_seq", "error_streak",
     "firmware_version", "schema_version", "scheduler", "flicker_hz",
     "rssi_dbm", "heart_rate_bpm", "hr_connected", "hr_contact", "hr_state",
+    "force_raw", "force_mv", "force_saturated",
 )
 SENSOR_TEXT_FIELDS = {"firmware_version", "scheduler", "hr_state"}
 SENSOR_VALUE_FIELDS = (
