@@ -38,6 +38,8 @@
     const badge = query('[data-role="dialogue-state"]');
     const note = query('[data-role="dialogue-note"]');
     const reply = query('[data-role="audio-reply"]');
+    const sessionSelect = query('[data-role="firefly-history"]');
+    const sessionNew = query('[data-role="firefly-new"]');
     let state = null;
     let enabled = true;
     let sending = false;
@@ -46,12 +48,46 @@
     let started = false;
     let sendError = "";
     let privacyRevision = 0;
+    let controlPending = null;
+    let catalogRevision = "";
+
+    function activeControl(history) {
+      return ((history && history.controls) || []).find(function (item) {
+        return item.phase === "queued" || item.phase === "running" || item.phase === "uncertain";
+      });
+    }
 
     function gate() {
       const history = state && state.conversation;
+      const sessions = history && history.session_history;
       const offline = !state || !state.available || !history || !history.connected || !state.dialogue || state.dialogue.protocol !== 2;
-      input.disabled = !enabled || sending || Boolean(pending) || offline || Boolean(opts.isAdmin && !opts.isAdmin());
+      const locked = Boolean(controlPending || activeControl(sessions));
+      input.disabled = !enabled || sending || Boolean(pending) || offline || locked || Boolean(opts.isAdmin && !opts.isAdmin());
       sendButton.disabled = input.disabled;
+      const controlsDisabled = !enabled || offline || sending || Boolean(pending) || locked || !sessions || !sessions.connected;
+      sessionSelect.disabled = controlsDisabled;
+      sessionNew.disabled = controlsDisabled;
+    }
+
+    function renderSessions(sessions) {
+      const rows = (sessions && sessions.conversations) || [];
+      const current = (sessions && sessions.current_id) || "";
+      const fingerprint = JSON.stringify([current, rows]);
+      if (fingerprint === catalogRevision) return;
+      catalogRevision = fingerprint;
+      sessionSelect.replaceChildren();
+      if (!rows.length) {
+        const option = document.createElement("option");
+        option.value = ""; option.textContent = sessions && sessions.connected ? "暂无旧对话" : "等待会话服务";
+        sessionSelect.appendChild(option);
+      }
+      rows.forEach(function (row) {
+        const option = document.createElement("option");
+        option.value = row.id;
+        option.textContent = row.title || "未命名对话";
+        sessionSelect.appendChild(option);
+      });
+      sessionSelect.value = current;
     }
 
     function message(role, text) {
@@ -76,10 +112,23 @@
         if (reply) reply.textContent = "等待回复";
         log.replaceChildren(); revision = null;
         pending = null; sendError = ''; input.value = '';
+        controlPending = null; catalogRevision = ""; renderSessions(null);
         status.textContent = opts.isAdmin && !opts.isAdmin() ? "请先登录，再使用有求必应。" : "请连接本机服务。";
         gate(); return;
       }
       const history = state.conversation || {};
+      const sessions = history.session_history;
+      renderSessions(sessions);
+      if (controlPending) {
+        const result = ((sessions && sessions.controls) || []).find(function (row) { return row.request_id === controlPending.id; });
+        if (result && (result.phase === "complete" || result.phase === "error")) {
+          sendError = result.error || ""; controlPending = null;
+        } else if (result && result.phase === "uncertain") {
+          sendError = result.error || "操作结果不确定，请核对当前会话";
+        } else if (!result && Date.now() - controlPending.started > 70000) {
+          sendError = "操作结果不确定，请核对当前会话；没有自动重试"; controlPending = null;
+        }
+      }
       if (history.ready && revision !== history.revision) {
         const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 80;
         log.replaceChildren();
@@ -100,7 +149,7 @@
           sendError = "本轮等待超时，未自动重发。"; pending = null;
         }
       }
-      status.textContent = !enabled ? "AI 对话已由管理员关闭" : sendError || (pending ? "已发送：" + pending.text :
+      status.textContent = !enabled ? "AI 对话已由管理员关闭" : sendError || (controlPending || activeControl(sessions) ? "正在切换共享会话…" : pending ? "已发送：" + pending.text :
         history.ready ? "网页、QQ 与板子共用对话 · 展示最近 40 条" : "正在同步本机对话…");
       gate();
     }
@@ -127,6 +176,27 @@
       } finally { if (current === privacyRevision) { sending = false; gate(); } }
     }
 
+    async function changeSession(action, target) {
+      if (sessionNew.disabled || controlPending) return;
+      if (action === "select" && target === ((state.conversation.session_history || {}).current_id || "")) return;
+      const id = global.crypto.randomUUID();
+      const current = privacyRevision;
+      controlPending = { id: id, started: Date.now() };
+      sendError = ""; gate(); status.textContent = "正在切换共享会话…";
+      try {
+        await opts.sendRequest("/api/dialogue/conversations", { action: action, request_id: id, conversation_id: target || "" });
+      } catch (error) {
+        if (current !== privacyRevision) return;
+        if (error.status >= 400 && error.status < 500) {
+          controlPending = null; sendError = error.message || "会话切换失败";
+          catalogRevision = ""; renderSessions(state && state.conversation && state.conversation.session_history);
+        } else {
+          sendError = "正在核对操作结果，请勿重复操作；没有自动重试";
+        }
+        status.textContent = sendError;
+      } finally { if (current === privacyRevision) gate(); }
+    }
+
     function start() {
       if (started) return;
       started = true;
@@ -136,6 +206,8 @@
       input.placeholder = "接着刚才的话聊…";
       input.maxLength = 2000;
       sendButton.addEventListener("click", send);
+      sessionNew.addEventListener("click", function () { return changeSession("new", ""); });
+      sessionSelect.addEventListener("change", function () { return changeSession("select", sessionSelect.value); });
       input.addEventListener("keydown", function (event) {
         if (event.key === "Enter" && !event.shiftKey && !event.isComposing) { event.preventDefault(); send(); }
       });

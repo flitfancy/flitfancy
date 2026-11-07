@@ -24,6 +24,7 @@ ERRORS = {
     "profile_changed": "模型配置已改变，请开启新对话。",
     "daily_limit": "访客今日对话次数已用完。",
     "invalid_messages": "对话内容为空或过长。",
+    "invalid_purpose": "模型请求用途无效。",
     "upstream_error": "模型服务暂时无法完成请求。",
     "invalid_api_key": "模型服务拒绝了 API 密钥，请检查密钥是否有效。",
     "insufficient_balance": "模型服务账户余额不足，请检查所选服务的额度。",
@@ -116,7 +117,7 @@ def gateway_request(config, endpoint, body=None, *, opener=None, timeout=95):
 def public_status(config=None, environ=None, provider=None, *, opener=None):
     result = gateway_request(config, "/admin/model/status", {"provider": provider} if provider else None, opener=opener, timeout=12)
     fields = ("configured", "provider", "provider_label", "selected_provider", "model", "base_url",
-              "profile_id", "access", "public_daily_limit", "manager_ready", "storage")
+              "profile_id", "access", "public_daily_limit", "manager_ready", "storage", "interface_version", "capabilities")
     return {name: result[name] for name in fields if name in result}
 
 
@@ -129,7 +130,8 @@ def save_gateway_config(config, data, *, opener=None):
     payload = {key: data[key] for key in allowed if key in data}
     result = gateway_request(config, "/admin/model/config", payload, opener=opener, timeout=35)
     return {name: result[name] for name in ("configured", "provider", "provider_label", "selected_provider", "model",
-            "base_url", "profile_id", "access", "public_daily_limit", "manager_ready", "storage", "pending") if name in result}
+            "base_url", "profile_id", "access", "public_daily_limit", "manager_ready", "storage", "pending",
+            "interface_version", "capabilities") if name in result}
 
 
 def bootstrap_secret_manager(value, *, opener=None):

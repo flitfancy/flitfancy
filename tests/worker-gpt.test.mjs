@@ -94,6 +94,7 @@ try {
   assert.equal(status.enabled, true);
   assert.equal(status.model, "gpt-fixture");
   const msg = { messages: [{ role: "user", content: "合成测试" }], profile_id: status.profile_id };
+  assert.equal((await worker.fetch(req("/admin/model/chat", { ...msg, purpose: "unexpected" }, true), env)).status, 400);
   response = await worker.fetch(req("/gpt/chat", msg), env);
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { ok: true, reply: "云端回复" });

@@ -1,0 +1,62 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import vm from "node:vm";
+import { createRequire } from "node:module";
+import { randomUUID } from "node:crypto";
+
+const require = createRequire(new URL("../cloudflare/package.json", import.meta.url));
+const { IDBFactory } = require("fake-indexeddb");
+const source = fs.readFileSync(new URL("../docs/assets/console-model-history.js", import.meta.url), "utf8");
+const indexedDB = new IDBFactory();
+const remembered = new Map();
+const window = {indexedDB, crypto: {randomUUID}, sessionStorage: {
+  getItem: key => remembered.get(key) || null, setItem: (key, value) => remembered.set(key, value), removeItem: key => remembered.delete(key),
+}};
+vm.runInNewContext(source, {window, Date, Promise, Error, Object, String, Number, Array, JSON, RegExp});
+const sent = [];
+let failNext = false, deferred = null;
+const options = {publicMode: true, publicBase: "https://api.example", request: async (url, opts) => {
+  assert.equal(url, "https://api.example/gpt/chat");
+  assert.equal(opts.authMode, "none");
+  const body = JSON.parse(opts.body); sent.push(body);
+  if (deferred) return await new Promise(resolve => { deferred.resolve = resolve; });
+  if (failNext) { failNext = false; throw Object.assign(new Error("模拟网络故障"), {status: 0}); }
+  return {reply: "答复 " + body.messages.at(-1).content};
+}};
+const store = window.FlitFancyModelHistory.create(options);
+const profile = "1111111111111111", secondProfile = "2222222222222222";
+const first = await store.create(randomUUID());
+const second = await store.create(randomUUID());
+await store.send(first.id, {request_id: randomUUID(), text: "旧会话问题", profile_id: profile, provider_label: "fixture", model: "fixture-model"});
+await store.send(second.id, {request_id: randomUUID(), text: "新会话问题", profile_id: profile, provider_label: "fixture", model: "fixture-model"});
+assert.deepEqual(sent.at(-1).messages, [{role: "user", content: "新会话问题"}], "a new conversation starts independently");
+const reloaded = window.FlitFancyModelHistory.create(options);
+assert.equal((await reloaded.list()).conversations.length, 2, "guest history survives a new page instance");
+assert.equal((await reloaded.load(first.id)).turns[0].reply, "答复 旧会话问题");
+await reloaded.send(first.id, {request_id: randomUUID(), text: "继续旧会话", profile_id: profile});
+assert.deepEqual(sent.at(-1).messages.map(item => item.content), ["旧会话问题", "答复 旧会话问题", "继续旧会话"]);
+await assert.rejects(() => reloaded.send(first.id, {request_id: randomUUID(), text: "换模型", profile_id: secondProfile}), error => error.status === 409);
+failNext = true;
+await assert.rejects(() => reloaded.send(first.id, {request_id: randomUUID(), text: "失败的问题", profile_id: profile}));
+assert.equal((await reloaded.load(first.id)).turns.at(-1).status, "failed");
+await reloaded.send(first.id, {request_id: randomUUID(), text: "接着问", profile_id: profile});
+assert(!sent.at(-1).messages.some(item => item.content === "失败的问题"), "failed questions are not silently replayed");
+deferred = {};
+const requestId = randomUUID();
+const pending = reloaded.send(first.id, {request_id: requestId, text: "只发一次", profile_id: profile});
+await new Promise(resolve => setImmediate(resolve));
+const repeated = await reloaded.send(first.id, {request_id: requestId, text: "只发一次", profile_id: profile});
+assert.equal(repeated.state, "pending");
+deferred.resolve({reply: "完成"});
+await pending;
+assert.equal((await reloaded.send(first.id, {request_id: requestId, text: "只发一次", profile_id: profile})).state, "complete");
+assert.equal(sent.filter(body => body.messages.at(-1).content === "只发一次").length, 1);
+store.remember(first.id); assert.equal(store.recalled(), first.id);
+store.remember(""); assert.equal(store.recalled(), "");
+const unavailableWindow = {crypto: {randomUUID}, sessionStorage: window.sessionStorage};
+vm.runInNewContext(source, {window: unavailableWindow, Date, Promise, Error, Object, String, Number, Array, JSON, RegExp});
+let unavailableCalls = 0;
+const unavailable = unavailableWindow.FlitFancyModelHistory.create({publicMode: true, request: async () => { unavailableCalls++; }});
+await assert.rejects(() => unavailable.create(randomUUID()), /不支持保存/);
+assert.equal(unavailableCalls, 0, "do not send a request when browser history cannot be stored");
+console.log("guest model history: browser persistence, session context, errors and deduplication passed");

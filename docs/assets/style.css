@@ -1743,7 +1743,9 @@ body.console-page .section {
 .dialogue-modes[hidden] { display: none; }
 .dialogue-modes button[aria-pressed="true"] { border-color: rgba(245, 184, 75, 0.65); color: var(--amber); }
 
-.gpt-actions { margin-top: 12px; }
+.gpt-actions { margin-top: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.gpt-history-picker { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+.gpt-history-picker select { max-width: 260px; padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; }
 .gpt-settings { margin-top: 18px; }
 
 .consultation-panel { margin: 16px 0; padding: 14px; border: 1px solid var(--border); border-radius: 10px; }

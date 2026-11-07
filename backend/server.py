@@ -38,6 +38,8 @@ from flitfancy_core import (
     now_iso,
 )
 from flitfancy_http import HttpDependencies, create_handler
+from flitfancy_model_history import ModelHistoryService
+from flitfancy_openai import ask_openai
 from flitfancy_consultations import ConsultationStore
 from flitfancy_collectors import CollectorService
 from flitfancy_observations import ObservationService, decode_tags
@@ -595,6 +597,7 @@ _activity_service = ActivityService(
 
 Handler = create_handler(HttpDependencies(
     consultation_service=ConsultationStore(),
+    model_history_service=ModelHistoryService(db, _read_local_cfg, ask_openai),
     collector_service=CollectorService(db, ingest_json, os.path.join(SENSOR_RAW_DATA_DIR, "collectors")),
     sensor_device_service=SensorDeviceService(),
     audio_service=_audio_service,

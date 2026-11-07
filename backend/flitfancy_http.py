@@ -20,6 +20,7 @@ from flitfancy_refresh import RefreshRegistry
 from flitfancy_collectors import CollectorError
 from flitfancy_storage import latest_sensor_rows
 from flitfancy_openai import OpenAIError, ask_openai, bootstrap_secret_manager, public_status, save_gateway_config
+from flitfancy_model_history import ModelHistoryError
 
 # Every API requires an administrator unless its exact method/path is listed
 # here. These exceptions apply only to verified loopback clients and Hosts;
@@ -75,6 +76,7 @@ class HttpDependencies:
     sensor_device_service: object = None
     collector_service: object = None
     consultation_service: object = None
+    model_history_service: object = None
 
 
 def create_handler(app):
@@ -83,6 +85,7 @@ def create_handler(app):
     sensor_device_service = app.sensor_device_service
     collector_service = app.collector_service
     consultation_service = app.consultation_service
+    model_history_service = app.model_history_service
     activity_service = app.activity_service
     launcher_service = app.launcher_service
     bridge_service = app.bridge_service
@@ -271,6 +274,8 @@ def create_handler(app):
                 self._api_openai_config()
             elif parsed.path in ("/api/openai/cloudflare-token", "/api/model-gateway/cloudflare-token"):
                 self._api_cloudflare_token()
+            elif parsed.path == "/api/model-gateway/conversations" or parsed.path.startswith("/api/model-gateway/conversations/"):
+                self._api_model_history_post(parsed.path)
             elif parsed.path == "/api/admin/login":
                 self._api_admin_login()
             elif parsed.path == "/api/admin/logout":
@@ -291,6 +296,8 @@ def create_handler(app):
                 self._api_audio_control()
             elif parsed.path == "/api/dialogue/messages":
                 self._api_dialogue_message()
+            elif parsed.path == "/api/dialogue/conversations":
+                self._api_dialogue_conversation()
             elif parsed.path == "/api/audio/play-file":
                 self._api_audio_play_file(parsed.query)
             elif parsed.path == "/api/audio/firmware":
@@ -411,6 +418,8 @@ def create_handler(app):
                         self._send(200, {"ok": True, "events": consultation_service.list_events(int(after))})
                     except (OSError, sqlite3.Error, ValueError):
                         self._send(503, {"ok": False, "error": "咨询记录暂不可用。"})
+            elif path == '/api/model-gateway/conversations' or path.startswith('/api/model-gateway/conversations/'):
+                self._api_model_history_get(path, query)
             elif path == '/api/refresh/status':
                 self._send(200, refresh_registry.snapshot())
             elif path.startswith('/api/activity/'):
@@ -1130,6 +1139,53 @@ def create_handler(app):
             except OpenAIError as exc:
                 self._send(exc.status, {"ok": False, "error": str(exc), "code": exc.code})
 
+        def _api_model_history_get(self, path, query):
+            if model_history_service is None:
+                self._send(503, {"ok": False, "error": "对话历史暂不可用。"})
+                return
+            params = urllib.parse.parse_qs(query)
+            try:
+                def number(name, default=None):
+                    value = (params.get(name) or [None])[0]
+                    if value is None:
+                        return default
+                    if not value.isdigit() or len(value) > 9:
+                        raise ModelHistoryError("历史查询参数无效。")
+                    return int(value)
+                limit = number("limit", 50)
+                if path == "/api/model-gateway/conversations":
+                    result = model_history_service.list_conversations(offset=number("offset", 0), limit=limit)
+                else:
+                    identifier = path.removeprefix("/api/model-gateway/conversations/")
+                    result = model_history_service.get_conversation(identifier, before=number("before"), limit=limit)
+                self._send(200, {"ok": True, **result})
+            except ModelHistoryError as exc:
+                self._send(exc.status, {"ok": False, "error": str(exc), "code": exc.code})
+            except (OSError, sqlite3.Error):
+                self._send(503, {"ok": False, "error": "对话历史暂不可用。"})
+
+        def _api_model_history_post(self, path):
+            data = self._json_body()
+            if data is None:
+                return
+            if model_history_service is None:
+                self._send(503, {"ok": False, "error": "对话历史暂不可用。"})
+                return
+            try:
+                if path == "/api/model-gateway/conversations":
+                    self._send(200, {"ok": True, "conversation": model_history_service.create_conversation(data.get("id"))})
+                    return
+                match = re.fullmatch(r"/api/model-gateway/conversations/([^/]+)/turns", path)
+                if not match:
+                    self._send(404, {"ok": False, "error": "未找到该接口。"})
+                    return
+                result = model_history_service.send(match.group(1), data.get("request_id"), data.get("text"), data.get("profile_id"))
+                self._send(202 if result["state"] == "pending" else 200, {"ok": True, **result})
+            except (ModelHistoryError, OpenAIError) as exc:
+                self._send(exc.status, {"ok": False, "error": str(exc), "code": exc.code})
+            except (OSError, sqlite3.Error):
+                self._send(503, {"ok": False, "error": "对话历史暂不可用。"})
+
         def _api_openai_chat(self):
             data = self._json_body()
             if data is None:
@@ -1389,6 +1445,19 @@ def create_handler(app):
                 self._send(202, result)
             except Exception as exc:
                 self._send(getattr(exc, "status", 502), {"error": str(exc) if hasattr(exc, "status") else "对话服务暂不可用"})
+
+        def _api_dialogue_conversation(self):
+            if not cfg_bool(_read_local_cfg().get("dialogue_enabled"), True):
+                self._send(403, {"error": "AI 对话已由管理员关闭"})
+                return
+            data = self._json_body()
+            if data is None:return
+            try:
+                result = audio_service.control_dialogue_conversation(
+                    data.get("action"), data.get("request_id"), data.get("conversation_id", ""))
+                self._send(202, result)
+            except Exception as exc:
+                self._send(getattr(exc, "status", 502), {"error": str(exc) if hasattr(exc, "status") else "会话服务暂不可用"})
 
         def _api_audio_play_file(self, query):
             params = urllib.parse.parse_qs(query)

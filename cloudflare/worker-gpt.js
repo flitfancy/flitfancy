@@ -26,6 +26,7 @@ const ERROR = {
   profile_changed: "模型配置已改变，请开启新对话。",
   daily_limit: "访客今日对话次数已用完。",
   invalid_messages: "对话内容为空或过长。",
+  invalid_purpose: "模型请求用途无效。",
   upstream_error: "模型服务暂时无法完成请求。",
   invalid_api_key: "模型服务拒绝了 API 密钥，请检查密钥是否有效。",
   insufficient_balance: "模型服务账户余额不足，请检查所选服务的额度。",
@@ -122,7 +123,8 @@ async function status(env, config, provider) {
   return { configured: item.configured, provider: item.provider, provider_label: item.provider_label,
     selected_provider: config.selected || "legacy", model: item.model, base_url: item.base_url,
     profile_id: await profileId(item), access, public_daily_limit: limit,
-    manager_ready: Boolean(configuredSecret(env.CF_SECRET_MANAGER_TOKEN)), storage: "cloudflare" };
+    manager_ready: Boolean(configuredSecret(env.CF_SECRET_MANAGER_TOKEN)), storage: "cloudflare",
+    interface_version: 1, capabilities: { text: true, multi_turn: true, streaming: false, tools: false, images: false } };
 }
 async function updateSecret(env, name, value) {
   const token = configuredSecret(env.CF_SECRET_MANAGER_TOKEN);
@@ -245,11 +247,13 @@ export async function handleModelAdmin(request, env, action) {
       return json({ ok: true, ...result }, 200, { "Cache-Control": "no-store" });
     }
     if (action === "chat") {
+      const purpose = body.purpose === undefined ? "chat" : body.purpose;
+      if (!["chat", "consult"].includes(purpose)) throw new GatewayError("invalid_purpose");
       const item = profile(env, config);
-      if (body.purpose !== "consult" && config.access === "off") throw new GatewayError("chat_disabled", 403);
+      if (purpose !== "consult" && config.access === "off") throw new GatewayError("chat_disabled", 403);
       if (body.profile_id !== undefined && body.profile_id !== await profileId(item)) throw new GatewayError("profile_changed", 409);
       const messages = cleanMessages(body.messages, false);
-      return json({ ok: true, ...await infer(item, messages, body.purpose === "consult" ? "consult" : "chat") }, 200, { "Cache-Control": "no-store" });
+      return json({ ok: true, ...await infer(item, messages, purpose) }, 200, { "Cache-Control": "no-store" });
     }
     return json({ ok: false }, 404);
   } catch (error) { return failure(error); }

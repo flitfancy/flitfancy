@@ -147,6 +147,20 @@ class AudioService:
             raise AudioServiceError("请求编号无效", 400) from None
         return self._json("POST", "/v1/dialogue/messages", {"text": text, "request_id": request_id})
 
+    def control_dialogue_conversation(self, action, request_id, conversation_id=""):
+        import uuid
+        try:
+            if str(uuid.UUID(request_id)) != request_id:
+                raise ValueError()
+        except (ValueError, TypeError, AttributeError):
+            raise AudioServiceError("请求编号无效", 400) from None
+        if (action not in ("new", "select") or not isinstance(conversation_id, str)
+                or len(conversation_id) > 128 or (action == "new" and conversation_id)
+                or (action == "select" and not conversation_id)):
+            raise AudioServiceError("会话操作无效", 400)
+        return self._json("POST", "/v1/dialogue/conversations", {
+            "action": action, "request_id": request_id, "conversation_id": conversation_id})
+
     @staticmethod
     def validate_filename(filename):
         raw = str(filename or "").strip().replace("\\", "/")

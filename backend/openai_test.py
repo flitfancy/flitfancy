@@ -41,6 +41,14 @@ class Opener:
 
 
 class GatewayTests(unittest.TestCase):
+    def test_status_exposes_supported_gateway_capabilities(self):
+        capabilities = {"text": True, "multi_turn": True, "streaming": False, "tools": False, "images": False}
+        opener = Opener({"ok": True, "configured": True, "interface_version": 1, "capabilities": capabilities, "secret": KEY})
+        status = gateway.public_status(CONFIG, opener=opener)
+        self.assertEqual(status["interface_version"], 1)
+        self.assertEqual(status["capabilities"], capabilities)
+        self.assertNotIn(KEY, json.dumps(status))
+
     def test_daily_limit_sql_is_atomic_under_concurrent_attempts(self):
         source = (Path(__file__).resolve().parent.parent / "cloudflare" / "worker-gpt.js").read_text(encoding="utf-8")
         marker = 'env.DB.prepare("INSERT INTO model_gateway_daily'
