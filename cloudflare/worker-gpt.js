@@ -34,6 +34,7 @@ const ERROR = {
   provider_rate_limit: "模型服务请求过于频繁，请稍后再试。",
   invalid_request: "模型服务无法处理请求，请检查模型和接口配置。",
   provider_connection: "云端无法连接所选模型服务，请稍后重试。",
+  provider_redirect: "模型接口发生跳转；为保护密钥，请在控制台填写最终接口地址。",
   provider_unavailable: "模型服务暂时不可用，请稍后重试。",
   invalid_response: "模型服务返回格式异常。",
   incomplete_response: "模型未完成本次回答，请重试。",
@@ -130,7 +131,7 @@ async function updateSecret(env, name, value) {
   try {
     response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}/workers/scripts/${WORKER_NAME}/secrets`, {
       method: "PUT", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
-      body: JSON.stringify({ name, text: value, type: "secret_text" }), redirect: "error", signal: AbortSignal.timeout(20000),
+      body: JSON.stringify({ name, text: value, type: "secret_text" }), redirect: "manual", signal: AbortSignal.timeout(20000),
     });
   } catch { throw new GatewayError("manager_error", 502); }
   if (!response.ok) throw new GatewayError("manager_error", 502);
@@ -178,8 +179,9 @@ async function infer(item, messages, purpose) {
   let response;
   try {
     response = await fetch(item.base_url + endpoint, { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + item.secret.api_key },
-      body: JSON.stringify(payload), redirect: "error", signal: AbortSignal.timeout(90000) });
+      body: JSON.stringify(payload), redirect: "manual", signal: AbortSignal.timeout(90000) });
   } catch (error) { throw new GatewayError("provider_connection", 502, connectionDiagnostic(error)); }
+  if (response.status >= 300 && response.status < 400) throw new GatewayError("provider_redirect", 502);
   if (!response.ok) {
     const codes = { 400: "invalid_request", 401: "invalid_api_key", 402: "insufficient_balance",
       403: "provider_forbidden", 404: "model_not_found", 429: "provider_rate_limit" };

@@ -32,6 +32,7 @@ ERRORS = {
     "provider_rate_limit": "模型服务请求过于频繁，请稍后再试。",
     "invalid_request": "模型服务无法处理请求，请检查模型和接口配置。",
     "provider_connection": "云端无法连接所选模型服务，请稍后重试。",
+    "provider_redirect": "模型接口发生跳转；为保护密钥，请在控制台填写最终接口地址。",
     "provider_unavailable": "模型服务暂时不可用，请稍后重试。",
     "invalid_response": "模型服务返回格式异常。",
     "incomplete_response": "模型未完成本次回答，请重试。",

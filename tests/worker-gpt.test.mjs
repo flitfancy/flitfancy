@@ -12,6 +12,7 @@ let daily = 0;
 let storedConfig = "";
 let providerStatus = 200;
 let providerThrows = "";
+let managerStatus = 200;
 const env = { ADMIN_TOKEN: token, CF_SECRET_MANAGER_TOKEN: manager, AI_API_KEY: "old-deepseek-secret-fixture",
   GPT_RATE_LIMITER: limiter, TRACK_RATE_LIMITER: limiter,
   CONFIG: { get: async key => values.get(key) || null, put: async (key, value) => { values.set(key, value); } },
@@ -28,9 +29,10 @@ const originalFetch = globalThis.fetch;
 const calls = [];
 globalThis.fetch = async (url, options) => {
   calls.push({ url, options });
-  assert.equal(options.redirect, "error", "credentials must never follow a redirect");
+  assert.equal(options.redirect, "manual", "Workers supports manual redirects; credentials must never follow them");
   if (String(url).startsWith("https://api.cloudflare.com/")) {
     assert.equal(options.headers.Authorization, "Bearer " + manager);
+    if (managerStatus !== 200) return new Response(null, {status: managerStatus, headers: {Location: "https://attacker.example/"}});
     const secret = JSON.parse(options.body);
     assert.equal(secret.type, "secret_text");
     env[secret.name] = secret.text;
@@ -39,7 +41,8 @@ globalThis.fetch = async (url, options) => {
   assert.equal(url, "https://api.openai.com/v1/responses");
   assert.equal(options.headers.Authorization, "Bearer " + apiKey);
   if (providerThrows) throw new Error(providerThrows);
-  if (providerStatus !== 200) return Response.json({error: {message: "secret upstream details"}}, {status: providerStatus});
+  if (providerStatus !== 200) return Response.json({error: {message: "secret upstream details"}},
+    {status: providerStatus, headers: {Location: "https://attacker.example/"}});
   return Response.json({ status: "completed", output: [{ type: "message", content: [{ type: "output_text", text: "云端回复" }] }] });
 };
 function req(path, body, admin = false) {
@@ -70,6 +73,12 @@ try {
   assert.equal((await worker.fetch(req("/admin/model/config", config, true), { ...env, CF_SECRET_MANAGER_TOKEN: "" })).status, 503,
     "new keys require scoped Cloudflare authorization");
   assert.equal(env.MODEL_OPENAI_SECRET, undefined);
+  managerStatus = 302;
+  const beforeRedirect = calls.length;
+  assert.equal((await worker.fetch(req("/admin/model/config", config, true), env)).status, 502);
+  assert.equal(calls.length, beforeRedirect + 1, "manager token must not follow redirects");
+  assert.equal(env.MODEL_OPENAI_SECRET, undefined);
+  managerStatus = 200;
   response = await worker.fetch(req("/admin/model/config", config, true), env);
   assert.equal(response.status, 200);
   const saved = await response.json();
@@ -104,6 +113,11 @@ try {
   const failedBody = await failed.json();
   assert.equal(failedBody.code, "insufficient_balance");
   assert(!JSON.stringify(failedBody).includes("secret upstream details"));
+  providerStatus = 302;
+  const beforeProviderRedirect = calls.length;
+  const providerRedirect = await worker.fetch(req("/admin/model/chat", { ...msg, purpose: "chat" }, true), env);
+  assert.equal((await providerRedirect.json()).code, "provider_redirect");
+  assert.equal(calls.length, beforeProviderRedirect + 1, "provider key must not follow redirects");
   providerStatus = 200;
   providerThrows = "redirect blocked; secret transport details";
   const connectionFailure = await worker.fetch(req("/admin/model/chat", { ...msg, purpose: "chat" }, true), env);
