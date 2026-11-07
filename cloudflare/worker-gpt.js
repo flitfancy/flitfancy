@@ -27,6 +27,12 @@ const ERROR = {
   daily_limit: "访客今日对话次数已用完。",
   invalid_messages: "对话内容为空或过长。",
   upstream_error: "模型服务暂时无法完成请求。",
+  invalid_api_key: "模型服务拒绝了 API 密钥，请检查密钥是否有效。",
+  insufficient_balance: "模型服务账户余额不足，请检查所选服务的额度。",
+  provider_forbidden: "模型服务拒绝了访问，请检查账户权限。",
+  model_not_found: "模型或接口地址不存在，请检查配置。",
+  provider_rate_limit: "模型服务请求过于频繁，请稍后再试。",
+  invalid_request: "模型服务无法处理请求，请检查模型和接口配置。",
   manager_error: "Cloudflare 未能保存密钥，请检查管理令牌权限。",
   partial_save: "密钥可能已保存，但模型设置未完成。请先刷新状态确认，再决定是否重试。",
 };
@@ -155,7 +161,11 @@ async function infer(item, messages, purpose) {
     response = await fetch(item.base_url + endpoint, { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + item.secret.api_key },
       body: JSON.stringify(payload), redirect: "error", signal: AbortSignal.timeout(90000) });
   } catch { throw new GatewayError("upstream_error", 502); }
-  if (!response.ok) throw new GatewayError("upstream_error", response.status === 429 ? 429 : 502);
+  if (!response.ok) {
+    const codes = { 400: "invalid_request", 401: "invalid_api_key", 402: "insufficient_balance",
+      403: "provider_forbidden", 404: "model_not_found", 429: "provider_rate_limit" };
+    throw new GatewayError(codes[response.status] || "upstream_error", response.status === 429 ? 429 : 502);
+  }
   let data;
   try {
     const text = await response.text();

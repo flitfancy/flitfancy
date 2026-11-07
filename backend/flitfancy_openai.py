@@ -6,6 +6,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from flitfancy_sync import WORKER_UA
+
 WORKER_ORIGIN = "https://api.flitfancy.com"
 CF_SECRET_URL = ("https://api.cloudflare.com/client/v4/accounts/"
                  "99007f44dc64030aa39ddba200194c89/workers/scripts/flitfancy/secrets")
@@ -23,6 +25,12 @@ ERRORS = {
     "daily_limit": "访客今日对话次数已用完。",
     "invalid_messages": "对话内容为空或过长。",
     "upstream_error": "模型服务暂时无法完成请求。",
+    "invalid_api_key": "模型服务拒绝了 API 密钥，请检查密钥是否有效。",
+    "insufficient_balance": "模型服务账户余额不足，请检查所选服务的额度。",
+    "provider_forbidden": "模型服务拒绝了访问，请检查账户权限。",
+    "model_not_found": "模型或接口地址不存在，请检查配置。",
+    "provider_rate_limit": "模型服务请求过于频繁，请稍后再试。",
+    "invalid_request": "模型服务无法处理请求，请检查模型和接口配置。",
     "manager_error": "Cloudflare 未能保存密钥，请检查管理令牌权限。",
     "partial_save": "密钥可能已保存，但模型设置未完成。请先刷新状态确认，再决定是否重试。",
 }
@@ -76,7 +84,7 @@ def gateway_request(config, endpoint, body=None, *, opener=None, timeout=95):
         path += "?" + urllib.parse.urlencode({"provider": body["provider"]})
     data = None if endpoint == "/admin/model/status" else json.dumps(body or {}, ensure_ascii=False).encode("utf-8")
     request = urllib.request.Request(WORKER_ORIGIN + path, data=data,
-        headers={"Content-Type": "application/json", "Authorization": "Bearer " + token},
+        headers={"Content-Type": "application/json", "Authorization": "Bearer " + token, "User-Agent": WORKER_UA},
         method="GET" if data is None else "POST")
     try:
         with _transport(opener).open(request, timeout=timeout) as response:
@@ -124,7 +132,7 @@ def bootstrap_secret_manager(value, *, opener=None):
         raise OpenAIError("Cloudflare 管理令牌格式不正确。", 400, "invalid_manager_token")
     request = urllib.request.Request(CF_SECRET_URL,
         data=json.dumps({"name": "CF_SECRET_MANAGER_TOKEN", "text": value, "type": "secret_text"}).encode("utf-8"),
-        headers={"Content-Type": "application/json", "Authorization": "Bearer " + value}, method="PUT")
+        headers={"Content-Type": "application/json", "Authorization": "Bearer " + value, "User-Agent": WORKER_UA}, method="PUT")
     try:
         with _transport(opener).open(request, timeout=25) as response:
             result = _response_json(response)

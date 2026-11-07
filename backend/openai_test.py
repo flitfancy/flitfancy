@@ -69,6 +69,7 @@ class GatewayTests(unittest.TestCase):
         request = opener.requests[0]
         self.assertEqual(request.full_url, "https://api.flitfancy.com/admin/model/config")
         self.assertEqual(request.get_header("Authorization"), "Bearer " + ADMIN)
+        self.assertIn("Mozilla/5.0", request.get_header("User-agent"))
         self.assertEqual(json.loads(request.data)["api_key"], KEY)
         self.assertNotIn("unrelated", json.loads(request.data))
         self.assertNotIn(KEY, json.dumps(result))
@@ -83,6 +84,7 @@ class GatewayTests(unittest.TestCase):
         self.assertEqual(gateway.bootstrap_secret_manager(MANAGER, opener=opener), {"ok": True})
         request = opener.requests[0]
         self.assertEqual(request.full_url, gateway.CF_SECRET_URL)
+        self.assertIn("Mozilla/5.0", request.get_header("User-agent"))
         self.assertEqual(json.loads(request.data), {"name": "CF_SECRET_MANAGER_TOKEN", "text": MANAGER, "type": "secret_text"})
         with self.assertRaises(gateway.OpenAIError): gateway.bootstrap_secret_manager("bad token", opener=opener)
 
