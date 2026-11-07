@@ -7,9 +7,9 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='24' fill='%23f5b84b' opacity='0.22'/%3E%3Ccircle cx='32' cy='32' r='12' fill='%23f5b84b'/%3E%3Ccircle cx='32' cy='32' r='5' fill='%23ffe9c4'/%3E%3C/svg%3E">
   <title>存在 — 云萤 · FlitFancy</title>
   <meta name="description" content="小流萤的存在：感知周围，侧耳倾听，与你对话。">
-  <link rel="stylesheet" href="assets/style.css?v=1.30.0">
-  <link rel="stylesheet" href="assets/console-activity.css?v=1.30.0">
-  <script src="assets/track.js?v=1.30.0" defer></script>
+  <link rel="stylesheet" href="assets/style.css?v=1.31.2">
+  <link rel="stylesheet" href="assets/console-activity.css?v=1.31.2">
+  <script src="assets/track.js?v=1.31.2" defer></script>
 </head>
 <body class="console-page presence-page">
   <canvas id="sky" aria-hidden="true"></canvas>
@@ -272,6 +272,11 @@
           <h2 data-role="chat-title">有求必应</h2>
           <span class="console-eyebrow">CONVERSATION</span>
         </div>
+        <div class="dialogue-modes" data-role="dialogue-modes" aria-label="选择对话" hidden>
+          <button type="button" class="btn btn-ghost" data-role="mode-firefly" aria-pressed="true">小流萤</button>
+          <button type="button" class="btn btn-ghost" data-role="mode-gpt" aria-pressed="false">模型直聊</button>
+        </div>
+        <div data-role="firefly-chat-panel">
         <div class="dialogue-header" data-role="dialogue-header" hidden>
           <span class="dialogue-state" data-role="dialogue-state" role="status">正在连接…</span>
           <span class="hint" data-role="dialogue-note">共享本机对话</span>
@@ -279,6 +284,11 @@
         <div class="chat-log" data-role="chat-log">
           <p class="chat-empty" data-role="chat-empty">有求必应</p>
         </div>
+        <section class="consultation-panel" data-role="consultation-panel" hidden>
+          <h3>她的咨询</h3>
+          <p class="hint" data-role="consultation-status">外部模型的提问与答复会显示在这里。</p>
+          <div class="consultation-list" data-role="consultation-list"></div>
+        </section>
         <div class="chat-form">
           <div class="chat-field">
             <textarea rows="2" aria-label="聊天消息" placeholder="你会如何问出你的问题" data-role="chat-input"></textarea>
@@ -286,6 +296,22 @@
           </div>
         </div>
         <p class="hint status-gap" data-role="chat-status"></p>
+        </div>
+        <div data-role="gpt-chat-panel" hidden>
+          <p class="hint">直接和所选模型对话，记录保留在当前页面。</p>
+          <div class="chat-log" data-role="gpt-log" aria-live="polite">
+            <p class="chat-empty">从这里开始和模型对话。</p>
+          </div>
+          <div class="chat-form">
+            <div class="chat-field">
+              <textarea rows="2" maxlength="4000" aria-label="发送给模型的消息" placeholder="想问些什么？" data-role="gpt-input"></textarea>
+              <button type="button" class="btn chat-send" data-role="gpt-send">发送</button>
+            </div>
+          </div>
+          <p class="hint status-gap" data-role="gpt-status" role="status"></p>
+          <div class="gpt-actions"><button type="button" class="btn btn-ghost" data-role="gpt-clear">新对话</button></div>
+          <p class="hint gpt-settings" data-role="gpt-settings"><a href="console.html">在控制台配置模型接口和密钥</a></p>
+        </div>
       </div>
 
     </section>
@@ -311,21 +337,23 @@
 
   <div class="js-error" data-role="js-error" hidden></div>
 
-  <script src="assets/firefly.js?v=1.30.0"></script>
-  <script src="assets/sitefx.js?v=1.30.0"></script>
-  <script src="assets/sensor-state.js?v=1.30.0" data-console-module="FlitFancySensorState"></script>
-  <script src="assets/admin-core.js?v=1.30.0" data-console-module="FlitFancyAdmin"></script>
-  <script src="assets/refresh-scheduler.js?v=1.30.0" data-console-module="FlitFancyRefresh"></script>
-  <script src="assets/console-overview.js?v=1.30.0" data-console-module="FlitFancyConsoleOverview"></script>
-  <script src="assets/console-sensors.js?v=1.30.0" data-console-module="FlitFancyConsoleSensors"></script>
-  <script src="assets/console-sensor-ota.js?v=1.30.0" data-console-module="FlitFancySensorOta"></script>
-  <script src="assets/console-chat.js?v=1.30.0" data-console-module="FlitFancyConsoleChat"></script>
-  <script src="assets/console-dialogue.js?v=1.30.0" data-console-module="FlitFancyConsoleDialogue"></script>
-  <script src="assets/console-admin.js?v=1.30.0" data-console-module="FlitFancyConsoleAdmin"></script>
-  <script src="assets/console-services.js?v=1.30.0" data-console-module="FlitFancyConsoleServices"></script>
-  <script src="assets/console-activity.js?v=1.30.0" data-console-module="FlitFancyConsoleActivity"></script>
-  <script src="assets/console-audio-history.js?v=1.30.0" data-console-module="FlitFancyAudioHistory"></script>
-  <script src="assets/console-audio.js?v=1.30.0" data-console-module="FlitFancyConsoleAudio"></script>
-  <script src="assets/console.js?v=1.30.0"></script>
+  <script src="assets/firefly.js?v=1.31.2"></script>
+  <script src="assets/sitefx.js?v=1.31.2"></script>
+  <script src="assets/sensor-state.js?v=1.31.2" data-console-module="FlitFancySensorState"></script>
+  <script src="assets/admin-core.js?v=1.31.2" data-console-module="FlitFancyAdmin"></script>
+  <script src="assets/refresh-scheduler.js?v=1.31.2" data-console-module="FlitFancyRefresh"></script>
+  <script src="assets/console-overview.js?v=1.31.2" data-console-module="FlitFancyConsoleOverview"></script>
+  <script src="assets/console-sensors.js?v=1.31.2" data-console-module="FlitFancyConsoleSensors"></script>
+  <script src="assets/console-sensor-ota.js?v=1.31.2" data-console-module="FlitFancySensorOta"></script>
+  <script src="assets/console-chat.js?v=1.31.2" data-console-module="FlitFancyConsoleChat"></script>
+  <script src="assets/console-dialogue.js?v=1.31.2" data-console-module="FlitFancyConsoleDialogue"></script>
+  <script src="assets/console-consultations.js?v=1.31.2" data-console-module="FlitFancyConsultations"></script>
+  <script src="assets/console-gpt.js?v=1.31.2" data-console-module="FlitFancyConsoleGPT"></script>
+  <script src="assets/console-admin.js?v=1.31.2" data-console-module="FlitFancyConsoleAdmin"></script>
+  <script src="assets/console-services.js?v=1.31.2" data-console-module="FlitFancyConsoleServices"></script>
+  <script src="assets/console-activity.js?v=1.31.2" data-console-module="FlitFancyConsoleActivity"></script>
+  <script src="assets/console-audio-history.js?v=1.31.2" data-console-module="FlitFancyAudioHistory"></script>
+  <script src="assets/console-audio.js?v=1.31.2" data-console-module="FlitFancyConsoleAudio"></script>
+  <script src="assets/console.js?v=1.31.2"></script>
 </body>
 </html>

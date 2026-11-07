@@ -19,6 +19,7 @@ from flitfancy_activity import ActivityError
 from flitfancy_refresh import RefreshRegistry
 from flitfancy_collectors import CollectorError
 from flitfancy_storage import latest_sensor_rows
+from flitfancy_openai import OpenAIError, ask_openai, bootstrap_secret_manager, public_status, save_gateway_config
 
 # Every API requires an administrator unless its exact method/path is listed
 # here. These exceptions apply only to verified loopback clients and Hosts;
@@ -73,6 +74,7 @@ class HttpDependencies:
     sync_public_config: object
     sensor_device_service: object = None
     collector_service: object = None
+    consultation_service: object = None
 
 
 def create_handler(app):
@@ -80,6 +82,7 @@ def create_handler(app):
     audio_service = app.audio_service
     sensor_device_service = app.sensor_device_service
     collector_service = app.collector_service
+    consultation_service = app.consultation_service
     activity_service = app.activity_service
     launcher_service = app.launcher_service
     bridge_service = app.bridge_service
@@ -262,6 +265,12 @@ def create_handler(app):
                 self._api_memories_import_static()
             elif parsed.path == "/api/chat":
                 self._api_chat()
+            elif parsed.path in ("/api/openai/chat", "/api/model-gateway/chat"):
+                self._api_openai_chat()
+            elif parsed.path in ("/api/openai/config", "/api/model-gateway/config"):
+                self._api_openai_config()
+            elif parsed.path in ("/api/openai/cloudflare-token", "/api/model-gateway/cloudflare-token"):
+                self._api_cloudflare_token()
             elif parsed.path == "/api/admin/login":
                 self._api_admin_login()
             elif parsed.path == "/api/admin/logout":
@@ -384,6 +393,24 @@ def create_handler(app):
                 self._send(200, collector_service.list_devices())
             elif path == '/api/admin/session':
                 self._send(200, {"ok": True})
+            elif path in ('/api/openai/status', '/api/model-gateway/status'):
+                try:
+                    provider = (urllib.parse.parse_qs(query).get("provider") or [None])[0]
+                    self._send(200, {"ok": True, **public_status(_read_local_cfg(), provider=provider)})
+                except OpenAIError as exc:
+                    self._send(exc.status, {"ok": False, "error": str(exc), "code": exc.code})
+            elif path == '/api/consultations':
+                params = urllib.parse.parse_qs(query)
+                after = (params.get("after") or ["0"])[0]
+                if not after.isdigit() or len(after) > 18:
+                    self._send(400, {"ok": False, "error": "咨询记录游标无效。"})
+                elif consultation_service is None:
+                    self._send(503, {"ok": False, "error": "咨询记录暂不可用。"})
+                else:
+                    try:
+                        self._send(200, {"ok": True, "events": consultation_service.list_events(int(after))})
+                    except (OSError, sqlite3.Error, ValueError):
+                        self._send(503, {"ok": False, "error": "咨询记录暂不可用。"})
             elif path == '/api/refresh/status':
                 self._send(200, refresh_registry.snapshot())
             elif path.startswith('/api/activity/'):
@@ -1083,6 +1110,35 @@ def create_handler(app):
                 "public_sync": ok,
                 "public_sync_note": note,
             })
+
+        def _api_openai_config(self):
+            data = self._json_body()
+            if data is None:
+                return
+            try:
+                self._send(200, {"ok": True, **save_gateway_config(_read_local_cfg(), data)})
+            except OpenAIError as exc:
+                self._send(exc.status, {"ok": False, "error": str(exc), "code": exc.code})
+
+        def _api_cloudflare_token(self):
+            data = self._json_body()
+            if data is None:
+                return
+            try:
+                bootstrap_secret_manager(data.get("token"))
+                self._send(200, {"ok": True})
+            except OpenAIError as exc:
+                self._send(exc.status, {"ok": False, "error": str(exc), "code": exc.code})
+
+        def _api_openai_chat(self):
+            data = self._json_body()
+            if data is None:
+                return
+            try:
+                result = ask_openai(data.get("messages"), _read_local_cfg(), profile_id=data.get("profile_id"))
+                self._send(200, {"ok": True, **result})
+            except OpenAIError as exc:
+                self._send(exc.status, {"ok": False, "error": str(exc), "code": exc.code})
 
         def _api_chat(self):
             data = self._json_body()

@@ -133,6 +133,7 @@
   const authOnly = !query('[data-role="admin-panel"]');
   const admin = createModule("管理面板", window.FlitFancyConsoleAdmin, {
     query:query, authOnly:authOnly, isServerOnline:function () { return serverOnline; },
+    externalModelSettings:!!(serverOnline && query('[data-role="gpt-admin-settings"]')),
     onAuthenticated:function () { syncContext(true); },
     onSignedOut:function () {
       authenticated = false; authRevision++;
@@ -145,6 +146,15 @@
     isServerOnline:function () { return serverOnline; },
     isAdmin:function () { return !!call(admin,"token"); },
     setStatus:function (text) { query('[data-role="chat-status"]').textContent = text || ""; },
+  }) : null;
+  const gpt = query('[data-role="gpt-chat-panel"]') ? createModule("模型对话", window.FlitFancyConsoleGPT, {
+    query:query, request:request, publicMode:!serverOnline, publicBase:PUBLIC_BASE,
+  }) : null;
+  const gptSettings = serverOnline && query('[data-role="gpt-admin-settings"]') ? createModule("模型设置", window.FlitFancyGPTSettings, {
+    query:query, request:request, publicBase:PUBLIC_BASE,
+  }) : null;
+  const consultations = serverOnline && query('[data-role="consultation-panel"]') ? createModule("咨询记录", window.FlitFancyConsultations, {
+    query:query, request:request,
   }) : null;
   const audio = query('[data-role="audio-panel"]') ? createModule("音频面板", window.FlitFancyConsoleAudio, {
     query:query, request:request, scheduler:scheduler,
@@ -190,6 +200,9 @@
 
   function clearPrivateViews() {
     call(chat,"updateState",null);
+    call(gpt,"clearPrivate");
+    call(gptSettings,"clearPrivate");
+    call(consultations,"clearPrivate");
     for (const module of [audio,sensorOta,activity,bridge,launcher,sensors,heartbeats,collectors]) call(module,"clearPrivate");
   }
   function syncContext(runNow) {
@@ -199,6 +212,9 @@
       authenticated = signedIn; authRevision++;
       if (!signedIn) clearPrivateViews();
     }
+    call(gpt,"setAuthenticated",serverOnline ? signedIn : true);
+    call(gptSettings,"setAuthenticated",signedIn);
+    call(consultations,"setAuthenticated",signedIn);
     if (!online) { setStatus(false,'网络离线'); call(services,'update',null); }
     scheduler.reconcile({authenticated:signedIn,hidden:!!document.hidden,
       online:online,runNow:runNow === true});
@@ -251,11 +267,15 @@
     disabledReason:function () { return '等待服务状态'; },run:refreshSensors}) : null;
   if (chat && !serverOnline) scheduler.register({id:"public-config",label:"公开对话配置",page:pageName,
     interval:CONFIG_REFRESH_MS,hidden:"pause",run:function () { return chat.instance.refreshPublicConfig(); }});
+  if (gpt && !serverOnline) scheduler.register({id:"public-gpt",label:"模型对话状态",page:pageName,
+    interval:CONFIG_REFRESH_MS,hidden:"pause",run:function () { return gpt.instance.refreshStatus(); }});
+  if (consultations) scheduler.register({id:"consultations",label:"咨询记录",page:pageName,
+    interval:SENSOR_REFRESH_MS,requiresAuth:true,hidden:"pause",run:function () { return consultations.instance.refresh(); }});
 
   call(sensors,"render",[]);
   call(services,"update",null);
   syncContext();
-  for (const module of [admin,chat,audio,sensorOta,launcher,bridge,activity,heartbeats,collectors]) call(module,"start");
+  for (const module of [admin,chat,gpt,gptSettings,consultations,audio,sensorOta,launcher,bridge,activity,heartbeats,collectors]) call(module,"start");
   if (!serverOnline) setStatus(false,sensors ? "公开感知" : "公开访问");
   scheduler.start();
   document.addEventListener("visibilitychange",function () { syncContext(); });
@@ -269,7 +289,7 @@
         return;
       }
       scheduler.dispose();
-      for (const module of [audio,sensorOta,activity,sensors,launcher,bridge,heartbeats,collectors]) call(module,"dispose");
+      for (const module of [gpt,gptSettings,consultations,audio,sensorOta,activity,sensors,launcher,bridge,heartbeats,collectors]) call(module,"dispose");
     });
     window.addEventListener('pageshow',function (event) { if (event.persisted) syncContext(true); });
   }

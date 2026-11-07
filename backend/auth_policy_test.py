@@ -31,7 +31,7 @@ def run():
         validations.append((token, ip))
         return token == 'fixture-valid' and ip == '127.0.0.1'
     deps = {f.name: reached for f in fields(HttpDependencies)}
-    for key in ('audio_service', 'sensor_device_service', 'activity_service', 'bridge_service', 'launcher_service', 'observation_service', 'essay_service',
+    for key in ('audio_service', 'sensor_device_service', 'activity_service', 'bridge_service', 'launcher_service', 'observation_service', 'essay_service', 'consultation_service',
                 'resource_service', 'worker_client', 'ai_opener'):
         deps[key] = Domain()
     deps.update(admin_token_valid=valid, now_iso=lambda: '2026-09-20T00:00:00+08:00',
@@ -72,13 +72,15 @@ def run():
         '/api/sensors/heart-rate', '/api/sensors/heart-rate/history',
         '/api/activity/summary', '/api/activity/export',
         '/api/notes', '/api/audio/status', '/api/audio/history', '/api/audio/recording?name=test.wav',
+        '/api/openai/status', '/api/model-gateway/status', '/api/consultations',
         '/api/admin/session', '/api/admin/config', '/api/admin/essays', '/api/admin/observations', '/api/admin/observation-links',
         '/api/visits', '/api/launcher', '/api/bridge/config', '/api/bridge/status', '/api/bridge/transfers?id=test',
     ]
     private_post = [
         '/api/command', '/api/notes', '/api/memories', '/api/memories/import-static', '/api/anchors',
         '/api/essays', '/api/essays/featured', '/api/observations', '/api/observation-links', '/api/reflections',
-        '/api/chat', '/api/dialogue/messages', '/api/audio/control', '/api/audio/play-file?filename=test.wav',
+        '/api/chat', '/api/dialogue/messages', '/api/openai/chat', '/api/openai/config', '/api/openai/cloudflare-token',
+        '/api/model-gateway/chat', '/api/model-gateway/config', '/api/model-gateway/cloudflare-token', '/api/audio/control', '/api/audio/play-file?filename=test.wav',
         '/api/audio/firmware', '/api/sensors/firmware', '/api/admin/config', '/api/admin/logout', '/api/resources/prepare',
         '/api/resources/upload?token=test', '/api/resources/update', '/api/resources/delete', '/api/resources/publish',
         '/api/launcher/save', '/api/launcher/delete', '/api/launcher/run', '/api/launcher/pick', '/api/launcher/resolve',

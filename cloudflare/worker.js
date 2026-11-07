@@ -7,6 +7,7 @@
  */
 
 import { handleChat } from "./worker-chat.js";
+import { handleGPTChat, handleGPTStatus, handleModelAdmin } from "./worker-gpt.js";
 import { handleConfig, handleFeaturedEssay, handleToggle } from "./worker-config.js";
 import {
   handleAnchorCreate,
@@ -69,6 +70,21 @@ async function routeRequest(request, env, ctx, url) {
   }
   if (pathname === "/config" && request.method === "GET") {
     return handleConfig(request, env, ctx);
+  }
+  if (pathname === "/gpt/status" && request.method === "GET") {
+    return handleGPTStatus(request, env);
+  }
+  if (pathname === "/gpt/chat" && request.method === "POST") {
+    return handleGPTChat(request, env);
+  }
+  if (pathname === "/admin/model/status" && request.method === "GET") {
+    return handleModelAdmin(request, env, "status");
+  }
+  if (pathname === "/admin/model/config" && request.method === "POST") {
+    return handleModelAdmin(request, env, "config");
+  }
+  if (pathname === "/admin/model/chat" && request.method === "POST") {
+    return handleModelAdmin(request, env, "chat");
   }
   if (pathname === "/track" && (request.method === "GET" || request.method === "POST")) {
     return handleTrack(request, env);

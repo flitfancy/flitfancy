@@ -42,6 +42,14 @@
       }
     },
     {
+      "name": "GPT_RATE_LIMITER",
+      "namespace_id": "1004",
+      "simple": {
+        "limit": 5,
+        "period": 60
+      }
+    },
+    {
       "name": "TRACK_RATE_LIMITER",
       "namespace_id": "1003",
       "simple": {

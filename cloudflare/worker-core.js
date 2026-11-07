@@ -17,10 +17,15 @@ const PUBLIC_CORS_PATHS = new Set([
   "/observations",
   "/sensors/latest",
   "/chat",
+  "/gpt/status",
+  "/gpt/chat",
 ]);
 
 const ADMIN_CORS_PATHS = new Set([
   "/admin/toggle",
+  "/admin/model/status",
+  "/admin/model/config",
+  "/admin/model/chat",
   "/admin/memories",
   "/admin/anchors",
   "/admin/essays",

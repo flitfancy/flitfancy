@@ -49,6 +49,9 @@ async function run(status, fault = "", page = "presence", publicHost = false, si
       return { start: noop, token: () => signedIn ? 'fixture-session' : '', setLoginRequired: value => notices.push(value) };
     } },
     FlitFancyConsoleDialogue: { create: () => chat },
+    FlitFancyConsoleGPT: { create: () => ({start: noop, setAuthenticated: noop, clearPrivate: noop, dispose: noop, refreshStatus: async () => ({ok:true})}) },
+    FlitFancyGPTSettings: { create: () => ({start: noop, setAuthenticated: noop, clearPrivate: noop, dispose: noop}) },
+    FlitFancyConsultations: { create: () => ({start: noop, setAuthenticated: noop, clearPrivate: noop, dispose: noop, refresh: async () => ({ok:true})}) },
     FlitFancyConsoleChat: { create: () => chat },
     FlitFancyConsoleAudio: { create: options => {
       audioOptions = options;

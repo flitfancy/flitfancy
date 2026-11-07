@@ -38,6 +38,7 @@ from flitfancy_core import (
     now_iso,
 )
 from flitfancy_http import HttpDependencies, create_handler
+from flitfancy_consultations import ConsultationStore
 from flitfancy_collectors import CollectorService
 from flitfancy_observations import ObservationService, decode_tags
 from flitfancy_essays import EssayService
@@ -290,12 +291,19 @@ def ai_config():
 def ai_config_save(updates):
     """把更新写回 ai_local.json（保留已有字段）。"""
     with _config_lock:
-        cfg = _read_local_cfg()
+        cfg = dict(_read_local_cfg())
         cfg.update(updates)
         tmp_path = AI_CONFIG_PATH + ".tmp"
-        with open(tmp_path, "w", encoding="utf-8") as f:
-            json.dump(cfg, f, ensure_ascii=False, indent=2)
-        os.replace(tmp_path, AI_CONFIG_PATH)
+        try:
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump(cfg, f, ensure_ascii=False, indent=2)
+            os.replace(tmp_path, AI_CONFIG_PATH)
+            _local_cfg_cache.update({"path": "", "mtime": 0.0, "data": {}})
+        finally:
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
         return cfg
 
 
@@ -586,6 +594,7 @@ _activity_service = ActivityService(
 )
 
 Handler = create_handler(HttpDependencies(
+    consultation_service=ConsultationStore(),
     collector_service=CollectorService(db, ingest_json, os.path.join(SENSOR_RAW_DATA_DIR, "collectors")),
     sensor_device_service=SensorDeviceService(),
     audio_service=_audio_service,

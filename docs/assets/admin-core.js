@@ -40,9 +40,14 @@
 
   async function fetchWithTimeout(url, opts, headers) {
     const ctrl = new AbortController();
-    const timer = setTimeout(function () { ctrl.abort(); }, TIMEOUT_MS);
+    const requested = Number(opts.timeoutMs);
+    const timeout = Number.isFinite(requested) && requested > 0
+      ? Math.min(120000, Math.max(TIMEOUT_MS, requested)) : TIMEOUT_MS;
+    const timer = setTimeout(function () { ctrl.abort(); }, timeout);
     try {
-      return await fetch(url, Object.assign({}, opts, { headers: headers, signal: ctrl.signal }));
+      const fetchOptions = Object.assign({}, opts, { headers: headers, signal: ctrl.signal });
+      delete fetchOptions.timeoutMs;
+      return await fetch(url, fetchOptions);
     } catch (e) {
       if (e && (e.name === "AbortError" || e.name === "TimeoutError")) {
         const err = new Error("请求超时，请重试");

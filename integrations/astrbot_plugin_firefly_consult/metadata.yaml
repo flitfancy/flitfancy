@@ -1,0 +1,5 @@
+name: astrbot_plugin_firefly_consult
+display_name: Firefly Model Consultation
+desc: 小流萤保留本地对话，按需咨询所选外部模型并记录问答。
+version: v0.2.0
+author: Yunwe & Codex

@@ -166,7 +166,7 @@
           throw Object.assign(new Error(data.error || '暂时无法读取管理配置'), { status: response.status });
         }
         if (token() !== expectedToken) return;
-        setModelSelect(data.model || "");
+        if (!opts.externalModelSettings) setModelSelect(data.model || "");
         query('[data-role="cfg-chat-toggle"]').checked = !!data.chat_enabled;
         quickLinks = Array.isArray(data.quick_links) ? data.quick_links : [];
         quickLinkEditing = -1;
@@ -402,13 +402,15 @@
       });
       query('[data-role="admin-logout"]').addEventListener("click", logout);
       if (authOnly) return;
-      query('[data-role="cfg-save"]').addEventListener("click", saveModelConfig);
-      query('[data-role="cfg-model"]').addEventListener("change", function () {
-        const select = query('[data-role="cfg-model"]');
-        const custom = query('[data-role="cfg-model-custom"]');
-        custom.hidden = select.value !== "__custom__";
-        if (select.value !== "__custom__") custom.value = "";
-      });
+      if (!opts.externalModelSettings) {
+        query('[data-role="cfg-save"]').addEventListener("click", saveModelConfig);
+        query('[data-role="cfg-model"]').addEventListener("change", function () {
+          const select = query('[data-role="cfg-model"]');
+          const custom = query('[data-role="cfg-model-custom"]');
+          custom.hidden = select.value !== "__custom__";
+          if (select.value !== "__custom__") custom.value = "";
+        });
+      }
       query('[data-role="cfg-chat-toggle"]').addEventListener("change", saveChatToggle);
       query('[data-role="ql-add"]').addEventListener("click", saveQuickLink);
       query('[data-role="visits-refresh"]').addEventListener("click", visitsPanel.load);

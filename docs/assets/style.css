@@ -1733,6 +1733,28 @@ body.console-page .section {
 
 .dialogue-title-row h2 { margin: 0; }
 
+.dialogue-modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.dialogue-modes[hidden] { display: none; }
+.dialogue-modes button[aria-pressed="true"] { border-color: rgba(245, 184, 75, 0.65); color: var(--amber); }
+
+.gpt-actions { margin-top: 12px; }
+.gpt-settings { margin-top: 18px; }
+
+.consultation-panel { margin: 16px 0; padding: 14px; border: 1px solid var(--border); border-radius: 10px; }
+.consultation-panel[hidden] { display: none; }
+.consultation-panel h3 { margin: 0 0 6px; font-size: var(--fs-ui); color: var(--amber-soft); }
+.consultation-list { max-height: 360px; overflow-y: auto; }
+.consultation-list details { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 9px; }
+.consultation-list summary { cursor: pointer; color: var(--text); }
+.consultation-list p { margin: 10px 0 4px; color: var(--muted); }
+.consultation-list pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text); font: inherit; }
+
 .dialogue-header {
   display: flex;
   align-items: center;
