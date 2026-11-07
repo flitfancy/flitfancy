@@ -27,7 +27,7 @@
       saveButton.disabled = !signedIn || !loaded || saving;
       const fieldsDisabled = !signedIn || !loaded || saving;
       key.disabled = fieldsDisabled || select.value === "__legacy__";
-      model.disabled = key.disabled; base.disabled = key.disabled; access.disabled = fieldsDisabled; daily.disabled = fieldsDisabled;
+      model.disabled = fieldsDisabled; base.disabled = key.disabled; access.disabled = fieldsDisabled; daily.disabled = fieldsDisabled;
       select.disabled = !signedIn || saving;
       cfToken.disabled = !signedIn || !loaded || cfSaving || saving;
       cfSave.disabled = cfToken.disabled;

@@ -11,7 +11,7 @@ const limiter = { limit: async () => ({ success: true }) };
 let daily = 0;
 let storedConfig = "";
 let providerStatus = 200;
-let providerThrows = false;
+let providerThrows = "";
 const env = { ADMIN_TOKEN: token, CF_SECRET_MANAGER_TOKEN: manager, AI_API_KEY: "old-deepseek-secret-fixture",
   GPT_RATE_LIMITER: limiter, TRACK_RATE_LIMITER: limiter,
   CONFIG: { get: async key => values.get(key) || null, put: async (key, value) => { values.set(key, value); } },
@@ -38,7 +38,7 @@ globalThis.fetch = async (url, options) => {
   }
   assert.equal(url, "https://api.openai.com/v1/responses");
   assert.equal(options.headers.Authorization, "Bearer " + apiKey);
-  if (providerThrows) throw new Error("secret transport details");
+  if (providerThrows) throw new Error(providerThrows);
   if (providerStatus !== 200) return Response.json({error: {message: "secret upstream details"}}, {status: providerStatus});
   return Response.json({ status: "completed", output: [{ type: "message", content: [{ type: "output_text", text: "云端回复" }] }] });
 };
@@ -55,8 +55,16 @@ try {
   const legacy = await response.json();
   assert.equal(legacy.provider, "legacy");
   assert.equal(legacy.configured, true);
+  assert.equal(legacy.model, "deepseek-flash", "retired DeepSeek default migrates only inside the new gateway");
   assert(!JSON.stringify(legacy).includes(env.AI_API_KEY));
   assert.equal((await (await worker.fetch(req("/gpt/status"), env)).json()).enabled, false);
+  const legacyConfig = {provider: "legacy", model: "deepseek-v4-pro", base_url: "https://api.deepseek.com", access: "admin", public_daily_limit: 20};
+  response = await worker.fetch(req("/admin/model/config", legacyConfig, true), env);
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).model, "deepseek-v4-pro", "legacy model can change without replacing its secret");
+  assert.equal(env.AI_API_KEY, "old-deepseek-secret-fixture");
+  assert.equal(calls.length, 0, "changing legacy model must not invoke secret management");
+  assert.equal((await worker.fetch(req("/admin/model/config", { ...legacyConfig, base_url: "https://elsewhere.example" }, true), env)).status, 400);
 
   const config = { provider: "openai", model: "gpt-fixture", base_url: "https://api.openai.com/v1", api_key: apiKey, access: "all", public_daily_limit: 1 };
   assert.equal((await worker.fetch(req("/admin/model/config", config, true), { ...env, CF_SECRET_MANAGER_TOKEN: "" })).status, 503,
@@ -97,12 +105,13 @@ try {
   assert.equal(failedBody.code, "insufficient_balance");
   assert(!JSON.stringify(failedBody).includes("secret upstream details"));
   providerStatus = 200;
-  providerThrows = true;
+  providerThrows = "redirect blocked; secret transport details";
   const connectionFailure = await worker.fetch(req("/admin/model/chat", { ...msg, purpose: "chat" }, true), env);
   const connectionBody = await connectionFailure.json();
   assert.equal(connectionBody.code, "provider_connection");
+  assert.equal(connectionBody.diagnostic, "redirect");
   assert(!JSON.stringify(connectionBody).includes("secret transport details"));
-  providerThrows = false;
+  providerThrows = "";
   assert.equal((await worker.fetch(req("/admin/model/config", { ...config, base_url: "https://attacker.example", api_key: undefined }, true), env)).status, 400,
     "old secret must not be sent to a changed endpoint");
   assert.equal((await worker.fetch(req("/admin/model/config", { ...config, base_url: "http://127.0.0.1", api_key: undefined }, true), env)).status, 400);

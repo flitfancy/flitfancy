@@ -8,7 +8,7 @@ const MODEL_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,159}$/;
 const PROVIDERS = {
   legacy: { label: "原 Cloudflare 接口", secret: "AI_API_KEY", protocol: "chat" },
   openai: { label: "OpenAI", secret: "MODEL_OPENAI_SECRET", protocol: "responses", model: "gpt-6.1-sol", base_url: "https://api.openai.com/v1" },
-  deepseek: { label: "DeepSeek", secret: "MODEL_DEEPSEEK_SECRET", protocol: "chat", model: "deepseek-chat", base_url: "https://api.deepseek.com" },
+  deepseek: { label: "DeepSeek", secret: "MODEL_DEEPSEEK_SECRET", protocol: "chat", model: "deepseek-flash", base_url: "https://api.deepseek.com" },
   mimo: { label: "小米 MiMo", secret: "MODEL_MIMO_SECRET", protocol: "chat", model: "mimo-v2.5", base_url: "https://api.xiaomimimo.com/v1" },
   custom: { label: "自定义接口", secret: "MODEL_CUSTOM_SECRET", protocol: "chat", model: "", base_url: "" },
 };
@@ -43,11 +43,23 @@ const ERROR = {
 };
 
 class GatewayError extends Error {
-  constructor(code, status = 400) { super(ERROR[code] || "模型服务暂不可用。"); this.code = code; this.status = status; }
+  constructor(code, status = 400, diagnostic = "") {
+    super(ERROR[code] || "模型服务暂不可用。"); this.code = code; this.status = status; this.diagnostic = diagnostic;
+  }
 }
 function failure(error) {
   const known = error instanceof GatewayError;
-  return json({ ok: false, error: known ? error.message : "模型服务暂不可用。", code: known ? error.code : "gateway_error" }, known ? error.status : 503, { "Cache-Control": "no-store" });
+  const result = { ok: false, error: known ? error.message : "模型服务暂不可用。", code: known ? error.code : "gateway_error" };
+  if (known && error.diagnostic) result.diagnostic = error.diagnostic;
+  return json(result, known ? error.status : 503, { "Cache-Control": "no-store" });
+}
+function connectionDiagnostic(error) {
+  const detail = String(error && error.message || "").toLowerCase();
+  if (/redirect/.test(detail)) return "redirect";
+  if (/timeout|timed out|abort/.test(detail) || error?.name === "TimeoutError") return "timeout";
+  if (/dns|resolve/.test(detail)) return "dns";
+  if (/tls|ssl|certificate/.test(detail)) return "tls";
+  return "other";
 }
 function baseUrl(value) {
   if (typeof value !== "string" || value.length > 512 || /\s/.test(value)) throw new GatewayError("invalid_base_url");
@@ -83,8 +95,10 @@ function profile(env, config, name) {
   const defaults = PROVIDERS[name];
   const saved = config.profiles && typeof config.profiles[name] === "object" ? config.profiles[name] : {};
   const legacy = name === "legacy";
-  const model = legacy ? String(env.AI_MODEL || "deepseek-chat") : String(saved.model || defaults.model || "");
   const base = legacy ? String(env.AI_BASE_URL || "https://api.deepseek.com").replace(/\/+$/, "") : String(saved.base_url || defaults.base_url || "");
+  const originalModel = String(env.AI_MODEL || "deepseek-chat");
+  const defaultLegacyModel = base === "https://api.deepseek.com" && originalModel === "deepseek-chat" ? "deepseek-flash" : originalModel;
+  const model = legacy ? String(saved.model || defaultLegacyModel) : String(saved.model || defaults.model || "");
   let secret = null;
   if (legacy) {
     if (configuredSecret(env.AI_API_KEY)) secret = { base_url: base, api_key: env.AI_API_KEY };
@@ -165,7 +179,7 @@ async function infer(item, messages, purpose) {
   try {
     response = await fetch(item.base_url + endpoint, { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + item.secret.api_key },
       body: JSON.stringify(payload), redirect: "error", signal: AbortSignal.timeout(90000) });
-  } catch { throw new GatewayError("provider_connection", 502); }
+  } catch (error) { throw new GatewayError("provider_connection", 502, connectionDiagnostic(error)); }
   if (!response.ok) {
     const codes = { 400: "invalid_request", 401: "invalid_api_key", 402: "insufficient_balance",
       403: "provider_forbidden", 404: "model_not_found", 429: "provider_rate_limit" };
@@ -212,7 +226,7 @@ export async function handleModelAdmin(request, env, action) {
       const model = typeof body.model === "string" ? body.model.trim() : "";
       if (!MODEL_PATTERN.test(model)) throw new GatewayError("invalid_model");
       const base = baseUrl(body.base_url);
-      if (name === "legacy" && (base !== previous.base_url || model !== previous.model || body.api_key !== undefined)) throw new GatewayError("key_required");
+      if (name === "legacy" && (base !== previous.base_url || body.api_key !== undefined)) throw new GatewayError("key_required");
       if (name !== "legacy" && body.api_key !== undefined && !keyValid(body.api_key, name)) throw new GatewayError("invalid_key");
       if (name !== "legacy" && body.api_key === undefined && previous.secret && previous.secret.base_url !== base) throw new GatewayError("key_required");
       const ready = name === "legacy" ? previous.configured : Boolean(body.api_key || (previous.configured && previous.base_url === base));

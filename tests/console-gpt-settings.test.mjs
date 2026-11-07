@@ -24,9 +24,9 @@ const settings = window.FlitFancyGPTSettings.create({query, request: async (url,
   requests.push({url, opts});
   if (pending) return await new Promise(resolve => { pending.resolve = resolve; });
   if (url.startsWith("/api/model-gateway/status")) {
-    const provider = url.includes("provider=openai") ? "openai" : "deepseek";
+    const provider = url.includes("provider=openai") ? "openai" : url.includes("provider=legacy") ? "legacy" : "deepseek";
     return {storage: "cloudflare", configured: false, provider, selected_provider: "deepseek", provider_label: provider === "openai" ? "OpenAI" : "DeepSeek",
-      model: provider === "openai" ? "gpt-6.1-sol" : "deepseek-chat",
+      model: provider === "openai" ? "gpt-6.1-sol" : "deepseek-flash",
       base_url: provider === "openai" ? "https://api.openai.com/v1" : "https://api.deepseek.com", access: "admin", public_daily_limit: 20};
   }
   if (url.includes("/gpt/status")) return {enabled: false};
@@ -39,12 +39,17 @@ assert.equal(requests.length, 0, "signed-out users cannot configure models");
 settings.setAuthenticated(true);
 await new Promise(resolve => setImmediate(resolve));
 assert.equal(get("cfg-model").value, "deepseek-chat", "existing selection is preserved");
-assert.equal(get("gpt-admin-model").value, "deepseek-chat");
+assert.equal(get("gpt-admin-model").value, "deepseek-flash");
 get("gpt-cloudflare-token").value = "fixture-cf-token-never-shown";
 await get("gpt-cloudflare-save").handlers.click();
 assert.equal(get("gpt-cloudflare-token").value, "", "Cloudflare token clears after submission");
 assert.equal(requests.find(item => item.url === "/api/model-gateway/cloudflare-token").opts.method, "POST");
 assert.doesNotMatch(get("gpt-cloudflare-message").textContent, /fixture-cf-token/);
+await settings.refresh("legacy");
+assert.equal(get("cfg-model").value, "__legacy__");
+assert.equal(get("gpt-admin-model").disabled, false, "the previous Cloudflare API can select a current model");
+assert.equal(get("gpt-admin-base").disabled, true, "the previous key remains bound to its original endpoint");
+assert.equal(get("gpt-admin-key").disabled, true, "the previous secret is not overwritten");
 get("gpt-admin-key").value = "old-unsaved-secret";
 get("cfg-model").value = "__openai__";
 get("cfg-model").handlers.change();
