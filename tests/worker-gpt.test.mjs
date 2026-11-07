@@ -11,6 +11,7 @@ const limiter = { limit: async () => ({ success: true }) };
 let daily = 0;
 let storedConfig = "";
 let providerStatus = 200;
+let providerThrows = false;
 const env = { ADMIN_TOKEN: token, CF_SECRET_MANAGER_TOKEN: manager, AI_API_KEY: "old-deepseek-secret-fixture",
   GPT_RATE_LIMITER: limiter, TRACK_RATE_LIMITER: limiter,
   CONFIG: { get: async key => values.get(key) || null, put: async (key, value) => { values.set(key, value); } },
@@ -37,6 +38,7 @@ globalThis.fetch = async (url, options) => {
   }
   assert.equal(url, "https://api.openai.com/v1/responses");
   assert.equal(options.headers.Authorization, "Bearer " + apiKey);
+  if (providerThrows) throw new Error("secret transport details");
   if (providerStatus !== 200) return Response.json({error: {message: "secret upstream details"}}, {status: providerStatus});
   return Response.json({ status: "completed", output: [{ type: "message", content: [{ type: "output_text", text: "云端回复" }] }] });
 };
@@ -95,6 +97,12 @@ try {
   assert.equal(failedBody.code, "insufficient_balance");
   assert(!JSON.stringify(failedBody).includes("secret upstream details"));
   providerStatus = 200;
+  providerThrows = true;
+  const connectionFailure = await worker.fetch(req("/admin/model/chat", { ...msg, purpose: "chat" }, true), env);
+  const connectionBody = await connectionFailure.json();
+  assert.equal(connectionBody.code, "provider_connection");
+  assert(!JSON.stringify(connectionBody).includes("secret transport details"));
+  providerThrows = false;
   assert.equal((await worker.fetch(req("/admin/model/config", { ...config, base_url: "https://attacker.example", api_key: undefined }, true), env)).status, 400,
     "old secret must not be sent to a changed endpoint");
   assert.equal((await worker.fetch(req("/admin/model/config", { ...config, base_url: "http://127.0.0.1", api_key: undefined }, true), env)).status, 400);

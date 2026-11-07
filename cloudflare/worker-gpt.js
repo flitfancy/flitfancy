@@ -33,6 +33,11 @@ const ERROR = {
   model_not_found: "模型或接口地址不存在，请检查配置。",
   provider_rate_limit: "模型服务请求过于频繁，请稍后再试。",
   invalid_request: "模型服务无法处理请求，请检查模型和接口配置。",
+  provider_connection: "云端无法连接所选模型服务，请稍后重试。",
+  provider_unavailable: "模型服务暂时不可用，请稍后重试。",
+  invalid_response: "模型服务返回格式异常。",
+  incomplete_response: "模型未完成本次回答，请重试。",
+  empty_response: "模型没有返回文字，请重试。",
   manager_error: "Cloudflare 未能保存密钥，请检查管理令牌权限。",
   partial_save: "密钥可能已保存，但模型设置未完成。请先刷新状态确认，再决定是否重试。",
 };
@@ -160,30 +165,31 @@ async function infer(item, messages, purpose) {
   try {
     response = await fetch(item.base_url + endpoint, { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + item.secret.api_key },
       body: JSON.stringify(payload), redirect: "error", signal: AbortSignal.timeout(90000) });
-  } catch { throw new GatewayError("upstream_error", 502); }
+  } catch { throw new GatewayError("provider_connection", 502); }
   if (!response.ok) {
     const codes = { 400: "invalid_request", 401: "invalid_api_key", 402: "insufficient_balance",
       403: "provider_forbidden", 404: "model_not_found", 429: "provider_rate_limit" };
-    throw new GatewayError(codes[response.status] || "upstream_error", response.status === 429 ? 429 : 502);
+    throw new GatewayError(codes[response.status] || "provider_unavailable", response.status === 429 ? 429 : 502);
   }
   let data;
   try {
     const text = await response.text();
     if (text.length > 2 * 1024 * 1024) throw new Error();
     data = JSON.parse(text);
-  } catch { throw new GatewayError("upstream_error", 502); }
+  } catch { throw new GatewayError("invalid_response", 502); }
   let reply = "";
   if (item.protocol === "responses") {
-    if (data.status !== "completed") throw new GatewayError("upstream_error", 502);
+    if (data.status !== "completed") throw new GatewayError("incomplete_response", 502);
     reply = (Array.isArray(data.output) ? data.output : []).filter(x => x && x.type === "message")
       .flatMap(x => Array.isArray(x.content) ? x.content : []).map(x => x && (x.type === "output_text" ? x.text : x.type === "refusal" ? x.refusal : ""))
       .filter(x => typeof x === "string" && x).join("\n").trim();
   } else {
     const choice = Array.isArray(data.choices) && data.choices[0];
-    if (!choice || choice.finish_reason === "length") throw new GatewayError("upstream_error", 502);
+    if (!choice) throw new GatewayError("invalid_response", 502);
+    if (choice.finish_reason === "length") throw new GatewayError("incomplete_response", 502);
     reply = typeof choice.message?.content === "string" ? choice.message.content.trim() : "";
   }
-  if (!reply) throw new GatewayError("upstream_error", 502);
+  if (!reply) throw new GatewayError("empty_response", 502);
   const usage = data.usage || {};
   return { reply, provider: item.provider, provider_label: item.provider_label, model: item.model,
     usage: { input_tokens: usage.input_tokens || usage.prompt_tokens || 0, output_tokens: usage.output_tokens || usage.completion_tokens || 0 } };
