@@ -26,6 +26,7 @@ const ADMIN_CORS_PATHS = new Set([
   "/admin/model/status",
   "/admin/model/config",
   "/admin/model/chat",
+  "/admin/model/cleanup-old",
   "/admin/memories",
   "/admin/anchors",
   "/admin/essays",

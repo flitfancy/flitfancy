@@ -60,8 +60,7 @@
   ],
   "secrets": {
     "required": [
-      "ADMIN_TOKEN",
-      "AI_API_KEY"
+      "ADMIN_TOKEN"
     ]
   },
   "observability": {

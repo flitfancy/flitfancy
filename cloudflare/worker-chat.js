@@ -21,7 +21,7 @@ export async function handleChat(request, env) {
     return json({ ok: false, error: "AI 对话已由管理员关闭" }, 403);
   }
   if (!configuredSecret(env.AI_API_KEY)) {
-    return json({ ok: false, error: "AI_API_KEY 未配置" }, 503);
+    return json({ ok: false, error: "原访客聊天已停用；如管理员已开放，请使用模型直聊。" }, 503);
   }
 
   const ip = clientIp(request);

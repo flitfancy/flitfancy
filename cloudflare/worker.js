@@ -2,7 +2,7 @@
  * 云萤 · flitfancy —— 公网 API Worker
  *
  * 部署：仓库 push 后由 Workers Builds 自动构建部署。
- * 必需加密变量：AI_API_KEY、ADMIN_TOKEN；缺失时相关接口返回 503。
+ * 必需加密变量：ADMIN_TOKEN；模型凭据按所选服务配置。
  * 必需绑定：KV（CONFIG）、D1（DB）与三个 Rate Limiting 绑定。
  */
 
@@ -85,6 +85,9 @@ async function routeRequest(request, env, ctx, url) {
   }
   if (pathname === "/admin/model/chat" && request.method === "POST") {
     return handleModelAdmin(request, env, "chat");
+  }
+  if (pathname === "/admin/model/cleanup-old" && request.method === "POST") {
+    return handleModelAdmin(request, env, "cleanup-old");
   }
   if (pathname === "/track" && (request.method === "GET" || request.method === "POST")) {
     return handleTrack(request, env);

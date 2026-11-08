@@ -42,6 +42,9 @@ const ERROR = {
   empty_response: "模型没有返回文字，请重试。",
   manager_error: "Cloudflare 未能保存密钥，请检查管理令牌权限。",
   partial_save: "密钥可能已保存，但模型设置未完成。请先刷新状态确认，再决定是否重试。",
+  cleanup_not_ready: "请先确认新的 OpenAI 接口可用，并关闭原访客聊天。",
+  cleanup_uncertain: "旧密钥清理状态暂不确定，请先检查当前配置；没有自动重试。",
+  cleanup_partial: "旧密钥已清理，但旧模型配置未能完成清理。请先检查当前配置。",
 };
 
 class GatewayError extends Error {
@@ -141,6 +144,32 @@ async function updateSecret(env, name, value) {
   try { data = await response.json(); } catch { throw new GatewayError("manager_error", 502); }
   if (!data || data.success !== true) throw new GatewayError("manager_error", 502);
 }
+async function cleanupOldModels(env, config, body) {
+  const current = profile(env, config, "openai");
+  if (body.confirm !== "remove-old-models" || config.selected !== "openai" || !current.configured ||
+      body.profile_id !== await profileId(current)) throw new GatewayError("cleanup_not_ready", 409);
+  // The old public /chat endpoint still depends on AI_API_KEY. Never remove it while enabled.
+  if (!env.CONFIG || await env.CONFIG.get("chat_enabled") !== "false") throw new GatewayError("cleanup_not_ready", 409);
+  const token = configuredSecret(env.CF_SECRET_MANAGER_TOKEN);
+  if (!token) throw new GatewayError("setup_required", 503);
+  const secrets = {AI_API_KEY: null, MODEL_DEEPSEEK_SECRET: null, MODEL_MIMO_SECRET: null, MODEL_CUSTOM_SECRET: null};
+  let response;
+  try {
+    response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}/workers/scripts/${WORKER_NAME}/secrets-bulk`, {
+      method: "PATCH", headers: {"Content-Type": "application/json", Authorization: "Bearer " + token},
+      body: JSON.stringify({secrets}), redirect: "manual", signal: AbortSignal.timeout(20000),
+    });
+    if (!response.ok || !(await response.json())?.success) throw new Error("unconfirmed");
+  } catch { throw new GatewayError("cleanup_uncertain", 502); }
+  try {
+    // JSON modification happens inside D1: do not overwrite newer unrelated settings.
+    const result = await env.DB.prepare(`UPDATE model_gateway_config
+      SET data = json_remove(data, '$.profiles.legacy', '$.profiles.deepseek', '$.profiles.mimo', '$.profiles.custom')
+      WHERE id = 1 AND json_extract(data, '$.selected') = 'openai'`).run();
+    if (result?.meta?.changes !== 1) throw new Error("configuration changed");
+  } catch { throw new GatewayError("cleanup_partial", 503); }
+  return {ok: true, pending: true};
+}
 function cleanMessages(messages, isPublic) {
   const maxCount = isPublic ? 6 : 20, maxTotal = isPublic ? 6000 : 40000;
   if (!Array.isArray(messages) || messages.length < 1 || messages.length > maxCount) throw new GatewayError("invalid_messages");
@@ -222,6 +251,7 @@ export async function handleModelAdmin(request, env, action) {
     const parsed = await readJsonBody(request);
     if (parsed.error) return parsed.error;
     const body = parsed.body;
+    if (action === "cleanup-old") return json(await cleanupOldModels(env, config, body), 200, {"Cache-Control": "no-store"});
     if (action === "config") {
       const name = providerName(body.provider), previous = profile(env, config, name);
       const access = body.access;

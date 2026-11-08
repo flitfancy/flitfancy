@@ -35,7 +35,7 @@ pnpm run check
 注意：`package.json` 声明了 `packageManager: pnpm@11.19.0`，请确认 Cloudflare
 后台的 Install/Build/Deploy 命令与上面一致（全部用 pnpm），避免 npm 与 pnpm 混用。
 
-运行时密钥 `ADMIN_TOKEN`、`AI_API_KEY` 只保存在 Cloudflare Secrets。
+运行时密钥 `ADMIN_TOKEN` 及模型密钥只保存在 Cloudflare Secrets；已清理的旧 `AI_API_KEY` 不再是部署必需项。
 仓库仅声明必需的密钥名称，不保存任何密钥值。
 `ADMIN_TOKEN` 必须是至少 32 个字符的随机固定令牌，并与本机
 `backend/ai_local.json` 的 `worker_admin_token` 保持一致。

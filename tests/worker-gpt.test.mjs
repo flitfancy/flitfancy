@@ -13,11 +13,22 @@ let storedConfig = "";
 let providerStatus = 200;
 let providerThrows = "";
 let managerStatus = 200;
+let cleanupDbFails = false;
 const env = { ADMIN_TOKEN: token, CF_SECRET_MANAGER_TOKEN: manager, AI_API_KEY: "old-deepseek-secret-fixture",
   GPT_RATE_LIMITER: limiter, TRACK_RATE_LIMITER: limiter,
   CONFIG: { get: async key => values.get(key) || null, put: async (key, value) => { values.set(key, value); } },
   DB: { prepare(sql) { return {
-    run: async () => ({}),
+    run: async () => {
+      if (sql.includes("json_remove")) {
+        if (cleanupDbFails) throw new Error("fixture D1 failure");
+        const data = JSON.parse(storedConfig);
+        if (data.selected !== "openai") return {meta: {changes: 0}};
+        for (const name of ["legacy", "deepseek", "mimo", "custom"]) delete (data.profiles || {})[name];
+        storedConfig = JSON.stringify(data);
+        return {meta: {changes: 1}};
+      }
+      return {};
+    },
     first: async () => storedConfig ? { data: storedConfig } : null,
     bind(...args) { return {
       first: async () => daily < args[1] ? { requests: ++daily } : null,
@@ -34,6 +45,12 @@ globalThis.fetch = async (url, options) => {
     assert.equal(options.headers.Authorization, "Bearer " + manager);
     if (managerStatus !== 200) return new Response(null, {status: managerStatus, headers: {Location: "https://attacker.example/"}});
     const secret = JSON.parse(options.body);
+    if (String(url).endsWith("/secrets-bulk")) {
+      assert.equal(options.method, "PATCH");
+      assert.deepEqual(secret.secrets, {AI_API_KEY: null, MODEL_DEEPSEEK_SECRET: null, MODEL_MIMO_SECRET: null, MODEL_CUSTOM_SECRET: null});
+      for (const name of Object.keys(secret.secrets)) delete env[name];
+      return Response.json({success: true});
+    }
     assert.equal(secret.type, "secret_text");
     env[secret.name] = secret.text;
     return Response.json({ success: true });
@@ -134,6 +151,38 @@ try {
   storedConfig = JSON.stringify({ selected: "openai", profiles: { openai: { model: "gpt-fixture", base_url: "https://attacker.example" } }, access: "all", public_daily_limit: 10 });
   assert.equal((await worker.fetch(req("/gpt/chat", msg), env)).status, 503, "changed metadata cannot redirect the secret");
   assert.equal(calls.length, before);
+  storedConfig = JSON.stringify({...selectedConfig, access: "admin", profiles: {...selectedConfig.profiles,
+    legacy: {model: "old"}, deepseek: {model: "old"}, custom: {model: "old"}}});
+  const current = await (await worker.fetch(req("/admin/model/status?provider=openai", null, true), env)).json();
+  const cleanup = {confirm: "remove-old-models", profile_id: current.profile_id};
+  assert.equal((await worker.fetch(req("/admin/model/cleanup-old", cleanup), env)).status, 401,
+    "cleanup requires administrator authentication");
+  assert.equal((await worker.fetch(req("/admin/model/cleanup-old", cleanup, true), env)).status, 409,
+    "cleanup cannot remove an old secret while public legacy chat is enabled");
+  values.set("chat_enabled", "false");
+  assert.equal((await worker.fetch(req("/admin/model/cleanup-old", {...cleanup, profile_id: "stale"}, true), env)).status, 409,
+    "cleanup must not proceed if the chosen model changed");
+  managerStatus = 500;
+  response = await worker.fetch(req("/admin/model/cleanup-old", cleanup, true), env);
+  assert.equal((await response.json()).code, "cleanup_uncertain");
+  assert.equal(env.AI_API_KEY, "old-deepseek-secret-fixture", "failed cleanup does not pretend the old key was deleted");
+  managerStatus = 200;
+  cleanupDbFails = true;
+  response = await worker.fetch(req("/admin/model/cleanup-old", cleanup, true), env);
+  assert.equal((await response.json()).code, "cleanup_partial", "a D1 failure after secret removal is reported accurately");
+  assert.equal(env.AI_API_KEY, undefined);
+  assert.equal(JSON.parse(env.MODEL_OPENAI_SECRET).api_key, apiKey);
+  assert(Object.hasOwn(JSON.parse(storedConfig).profiles, "legacy"), "failed D1 cleanup leaves the configuration for later recovery");
+  cleanupDbFails = false;
+  response = await worker.fetch(req("/admin/model/cleanup-old", cleanup, true), env);
+  assert.equal(response.status, 200);
+  assert.equal(env.AI_API_KEY, undefined);
+  assert.equal(JSON.parse(env.MODEL_OPENAI_SECRET).api_key, apiKey, "cleanup preserves the active OpenAI key");
+  assert.equal(env.CF_SECRET_MANAGER_TOKEN, manager, "cleanup preserves Cloudflare management authorization");
+  const afterCleanup = JSON.parse(storedConfig);
+  assert.deepEqual(Object.keys(afterCleanup.profiles), ["openai"]);
+  assert.equal(afterCleanup.access, "admin");
+  assert.equal((await (await worker.fetch(req("/admin/model/status", null, true), env)).json()).configured, true);
   assert.equal((await worker.fetch(new Request("https://api.flitfancy.com/gpt/chat", { method: "OPTIONS", headers: { Origin: "https://flitfancy.com" } }), env)).status, 204);
 } finally { globalThis.fetch = originalFetch; }
 console.log("model gateway: CF secret storage, legacy preservation, authorization, endpoint binding and visitor limits passed");
