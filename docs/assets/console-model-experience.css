@@ -1,0 +1,19 @@
+/* Model settings and per-turn controls inherit the site's existing theme. */
+.model-manager-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.model-manager-heading h3, .model-manager-heading h4 { margin: 0; }
+.model-manager > select { margin-top: 12px; width: 100%; }
+.model-key-summary { margin: 6px 0 12px; color: var(--muted); }
+.model-edit-panel { display: grid; gap: 8px; margin-top: 14px; }
+.model-edit-panel[hidden], .model-switch-choice[hidden] { display: none; }
+.model-edit-panel input:not([type="checkbox"]), .model-edit-panel select { width: 100%; }
+.model-usage { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); }
+.model-usage p { margin: 8px 0; }
+.model-usage a { color: var(--amber-soft); text-decoration: underline; }
+.model-chat-controls { display: flex; flex-wrap: wrap; gap: 12px; margin: 12px 0; }
+.model-chat-controls label { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+.model-chat-controls select { max-width: 250px; padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; }
+.gpt-settings a { color: var(--amber-soft); }
+.model-switch-choice { margin: 12px 0; padding: 12px; border: 1px solid var(--border); border-radius: 10px; }
+.model-switch-choice p { margin: 0 0 10px; }
+.model-switch-choice button { margin: 0 8px 6px 0; }
+.model-context-boundary { text-align: center; color: var(--muted); }

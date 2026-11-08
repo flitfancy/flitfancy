@@ -4,7 +4,7 @@
 
   const BASE = "/api/model-gateway/conversations";
   const DB_NAME = "flitfancy-model-history-v1";
-  const PENDING_MS = 120000;
+  const PENDING_MS = 240000;
   const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
   function problem(message, status, code) {
@@ -97,11 +97,12 @@
       return value;
     }
 
-    function context(turns, text) {
+    function context(turns, text, floor) {
       const messages = [{role: "user", content: text}];
       let size = text.length;
       for (let index = turns.length - 1; index >= 0; index--) {
         const turn = turns[index];
+        if (Number(turn.seq || 0) <= floor) break;
         if (turn.status !== "complete" || !turn.reply) continue;
         const question = clip(turn.text, 1000), answer = clip(turn.reply, 4000);
         if (messages.length + 2 > 6 || size + question.length + answer.length > 6000) break;
@@ -159,22 +160,41 @@
       if (!text || text.length > 1000) throw problem("访客每条消息需为 1–1000 字。", 400, "invalid_text");
       if (!/^[0-9a-f]{16}$/.test(payload.profile_id || "")) throw problem("模型配置已改变，请重新选择。", 409, "profile_changed");
       if (typeof payload.request_id !== "string" || !UUID.test(payload.request_id)) throw problem("请求编号无效。", 400, "invalid_id");
+      if (payload.provider && !["openai", "deepseek", "mimo", "custom", "custom2", "custom3"].includes(payload.provider)) throw problem("模型服务无效。", 400, "invalid_provider");
+      if (payload.effort && !["auto", "none", "low", "medium", "high", "xhigh", "max"].includes(payload.effort)) throw problem("思考强度无效。", 400, "invalid_effort");
+      if (payload.context_policy && !["carry", "reset"].includes(payload.context_policy)) throw problem("上下文选择无效。", 400, "invalid_context_policy");
       return transaction(["sessions", "histories"], "readwrite", function (tx, done, fail) {
         pair(tx, id, function (meta, history) {
           const recovered = recover(meta, history);
+          const labels = {"OpenAI": "openai", "DeepSeek": "deepseek", "小米 MiMo": "mimo", "自定义接口": "custom", "自定义接口 2": "custom2", "自定义接口 3": "custom3"};
+          if (!meta.current_provider) meta.current_provider = labels[meta.provider_label] || "";
+          history.turns.forEach(function (turn) {
+            if (!turn.profile_id && meta.profile_id) {
+              turn.profile_id = meta.profile_id; turn.provider = meta.current_provider || labels[meta.provider_label] || "";
+              turn.model = meta.model || ""; turn.effort = turn.effort || "auto";
+            }
+          });
           const existing = history.turns.find(function (turn) { return turn.request_id === payload.request_id; });
           if (existing) {
-            if (existing.text !== text || meta.profile_id !== payload.profile_id) throw problem("请求编号已用于其他消息。", 409, "request_conflict");
+            if (existing.text !== text || (existing.profile_id || meta.profile_id) !== payload.profile_id ||
+              (existing.provider && existing.provider !== (payload.provider || "")) || (existing.effort || "auto") !== (payload.effort || "auto") ||
+              (payload.context_policy && Boolean(existing.context_reset) !== (payload.context_policy === "reset"))) throw problem("请求编号已用于其他消息。", 409, "request_conflict");
             if (recovered) { tx.objectStore("sessions").put(meta); tx.objectStore("histories").put(history); }
             done({created: false, turn: existing}); return;
           }
-          if (meta.profile_id && meta.profile_id !== payload.profile_id) throw problem("当前模型与此会话不同，请切回原模型或新建对话。", 409, "profile_changed");
+          if (meta.profile_id && meta.profile_id !== payload.profile_id && !["carry", "reset"].includes(payload.context_policy))
+            throw problem("切换模型前请选择是否携带当前会话上下文。", 409, "context_choice_required");
           if (history.turns.some(function (turn) { return turn.status === "pending"; })) throw problem("请等待当前回复完成。", 409, "busy");
-          const messages = context(history.turns, text), now = new Date().toISOString();
+          let floor = Number(meta.context_floor || 0);
+          if (payload.context_policy === "reset") floor = history.turns.reduce(function (n, turn) { return Math.max(n, Number(turn.seq || 0)); }, 0);
+          const messages = context(history.turns, text, floor), now = new Date().toISOString();
           if (!meta.profile_id) { meta.title = text.replace(/\s+/g, " ").slice(0, 40); meta.profile_id = payload.profile_id; }
+          meta.profile_id = payload.profile_id; meta.current_provider = payload.provider || meta.current_provider || "";
+          meta.current_effort = payload.effort || "auto"; meta.context_floor = floor;
           meta.updated_at = now;
           const turn = {seq: meta.next_seq++, conversation_id: id, request_id: payload.request_id, text: text,
-            reply: "", status: "pending", error: "", created_at: now, updated_at: now};
+            reply: "", status: "pending", error: "", created_at: now, updated_at: now,
+            profile_id: payload.profile_id, provider: payload.provider || "", model: payload.model || "", effort: payload.effort || "auto", context_reset: payload.context_policy === "reset"};
           history.turns.push(turn);
           tx.objectStore("sessions").put(meta); tx.objectStore("histories").put(history);
           done({created: true, turn: turn, messages: messages});
@@ -182,7 +202,7 @@
       });
     }
 
-    async function guestFinish(id, payload, state, reply, note) {
+    async function guestFinish(id, payload, state, reply, note, usage) {
       return transaction(["sessions", "histories"], "readwrite", function (tx, done, fail) {
         pair(tx, id, function (meta, history) {
           const turn = history.turns.find(function (item) { return item.request_id === payload.request_id; });
@@ -190,6 +210,7 @@
           if (turn.status === "pending") {
             turn.status = state; turn.reply = reply || ""; turn.error = clip(note, 240); turn.updated_at = new Date().toISOString();
             if (state === "complete") {
+              turn.usage = usage || null;
               meta.model = clip(payload.model || meta.model, 160); meta.provider_label = clip(payload.provider_label || meta.provider_label, 60);
             }
             meta.updated_at = turn.updated_at;
@@ -205,16 +226,17 @@
       if (!begun.created) return {state: begun.turn.status, turn: begun.turn, replayed: true};
       let response;
       try {
-        response = await opts.request(publicBase + "/gpt/chat", {method: "POST", authMode: "none", timeoutMs: 110000,
-          body: JSON.stringify({messages: begun.messages, profile_id: payload.profile_id})});
+        response = await opts.request(publicBase + "/gpt/chat", {method: "POST", authMode: "none", timeoutMs: 200000,
+          body: JSON.stringify({messages: begun.messages, profile_id: payload.profile_id, provider: payload.provider || undefined, model: payload.model || undefined, effort: payload.effort || "auto"})});
         if (!response || typeof response.reply !== "string" || !response.reply.trim()) throw problem("模型没有返回文字。", 502, "empty_response");
       } catch (error) {
-        try { await guestFinish(id, payload, "failed", "", error.message || "模型服务暂不可用。"); } catch (ignored) { /* pending remains visible */ }
+        const uncertain = !error.status || error.status >= 500;
+        try { await guestFinish(id, payload, uncertain ? "interrupted" : "failed", "", uncertain ? "请求结果未知，可能已产生用量；不会自动重发。" : (error.message || "模型服务暂不可用。")); } catch (ignored) { /* pending remains visible */ }
         throw error;
       }
       try {
-        const turn = await guestFinish(id, payload, "complete", response.reply, "");
-        return {state: turn.status, turn: turn, replayed: false};
+        const turn = await guestFinish(id, payload, "complete", response.reply, "", response.usage);
+        return {state: turn.status, turn: turn, replayed: false, usage_recorded: response.usage_recorded};
       } catch (error) {
         return {state: "unsaved", reply: response.reply, error: "模型已回复，但浏览器未能保存历史；请先复制答复。"};
       }
@@ -227,7 +249,8 @@
       load: function (id, before, limit) { limit = limit || 50; return publicMode ? guestLoad(id, before, limit) :
         api(BASE + "/" + encodeURIComponent(id) + "?limit=" + limit + (before == null ? "" : "&before=" + before)); },
       send: function (id, payload) { return publicMode ? guestSend(id, payload) : api(BASE + "/" + encodeURIComponent(id) + "/turns",
-        {method: "POST", timeoutMs: 110000, body: JSON.stringify({request_id: payload.request_id, text: payload.text, profile_id: payload.profile_id})}); },
+        {method: "POST", timeoutMs: 200000, body: JSON.stringify({request_id: payload.request_id, text: payload.text, profile_id: payload.profile_id,
+          provider: payload.provider || undefined, model: payload.model || undefined, effort: payload.effort || "auto", context_policy: payload.context_policy || undefined})}); },
       remember: remember, recalled: recalled, forgetSelection: forgetSelection,
     };
   }

@@ -31,7 +31,7 @@ class ModelHistoryTests(unittest.TestCase):
             connection = sqlite3.connect(self.path, timeout=5)
             connection.row_factory = sqlite3.Row
             return connection
-        def model(messages, config, *, profile_id):
+        def model(messages, config, *, profile_id, provider=None, model=None, effort=None):
             self.calls.append(copy.deepcopy(messages))
             return {"reply": "答复 " + messages[-1]["content"], "model": "fixture-model", "provider_label": "fixture"}
         self.db, self.model = db, model
@@ -110,6 +110,60 @@ class ModelHistoryTests(unittest.TestCase):
         self.assertEqual(caught.exception.status, 409)
         self.assertEqual(len(self.calls), 1)
 
+    def test_provider_switch_requires_choice_and_reset_survives_reopening(self):
+        session = self.service.create_conversation()["id"]
+        def model(messages, config, **options):
+            self.calls.append((copy.deepcopy(messages), options))
+            return {"reply": "reply", "model": "fixture", "provider_label": options.get("provider", "")}
+        self.service.call_model = model
+        self.service.send(session, str(uuid.uuid4()), "old question", self.profile, provider="openai", effort="low")
+        other = "fedcba0987654321"
+        with self.assertRaises(ModelHistoryError) as caught:
+            self.service.send(session, str(uuid.uuid4()), "unapproved switch", other, provider="deepseek")
+        self.assertEqual(caught.exception.code, "context_choice_required")
+        self.service.send(session, str(uuid.uuid4()), "carry question", other, provider="deepseek", effort="high", context_policy="carry")
+        self.assertIn("old question", [row["content"] for row in self.calls[-1][0]])
+        self.service.send(session, str(uuid.uuid4()), "new boundary", self.profile, provider="openai", context_policy="reset")
+        self.assertEqual([row["content"] for row in self.calls[-1][0]], ["new boundary"])
+        reopened = ModelHistoryService(self.db, lambda: {}, model)
+        reopened.send(session, str(uuid.uuid4()), "follow up", self.profile, provider="openai", effort="medium")
+        self.assertEqual([row["content"] for row in self.calls[-1][0]], ["new boundary", "reply", "follow up"])
+        turns = reopened.get_conversation(session)["turns"]
+        self.assertEqual(len(turns), 4, "reset does not remove older visible history")
+        self.assertEqual(turns[2]["context_reset"], 1)
+        self.assertEqual(turns[-1]["effort"], "medium")
+
+    def test_additive_migration_preserves_existing_history(self):
+        session = str(uuid.uuid4())
+        connection = self.db()
+        try:
+            connection.execute("CREATE TABLE model_conversations(id TEXT PRIMARY KEY,title TEXT NOT NULL,profile_id TEXT NOT NULL,provider_label TEXT NOT NULL,model TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL)")
+            connection.execute("CREATE TABLE model_conversation_turns(seq INTEGER PRIMARY KEY AUTOINCREMENT,conversation_id TEXT NOT NULL,request_id TEXT UNIQUE NOT NULL,text TEXT NOT NULL,reply TEXT NOT NULL,status TEXT NOT NULL,error TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL)")
+            connection.execute("INSERT INTO model_conversations VALUES(?,?,?,?,?,?,?)", (session, "old", self.profile, "OpenAI", "model", "now", "now"))
+            connection.execute("INSERT INTO model_conversation_turns(conversation_id,request_id,text,reply,status,error,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)", (session,str(uuid.uuid4()),"before upgrade","saved reply","complete","","now","now"))
+            connection.commit()
+        finally:
+            connection.close()
+        loaded = self.service.get_conversation(session)
+        self.assertEqual(loaded["turns"][0]["text"], "before upgrade")
+        self.assertEqual((loaded["turns"][0]["provider"], loaded["turns"][0]["model"]), ("openai", "model"))
+        self.send(session, "after upgrade")
+        self.assertIn("before upgrade", [row["content"] for row in self.calls[-1]])
+
+    def test_same_provider_model_switch_keeps_selected_conversation(self):
+        session = self.service.create_conversation()["id"]
+        calls = []
+        def model(messages, config, **options):
+            calls.append((copy.deepcopy(messages), options))
+            return {"reply": "answer", "model": options.get("model", ""), "provider_label": "OpenAI"}
+        self.service.call_model = model
+        self.service.send(session, str(uuid.uuid4()), "first", self.profile, provider="openai", model="gpt-6.1-sol")
+        self.service.send(session, str(uuid.uuid4()), "second", "3333333333333333", provider="openai", model="gpt-6-astra", effort="high", context_policy="carry")
+        self.assertEqual([m["content"] for m in calls[-1][0]], ["first", "answer", "second"])
+        self.assertEqual(calls[-1][1]["model"], "gpt-6-astra")
+        with self.assertRaises(ModelHistoryError):
+            self.service.send(session, str(uuid.uuid4()), "x", self.profile, provider="openai", model="sk-fixture-key-not-a-model-123456789", context_policy="carry")
+
     def test_request_id_deduplicates_pending_and_completed_calls(self):
         session = self.service.create_conversation()["id"]
         request = str(uuid.uuid4())
@@ -186,8 +240,11 @@ const selections=new Map();
 const window={crypto:{randomUUID},setTimeout,clearTimeout,sessionStorage:{getItem:k=>selections.get(k)||null,setItem:(k,v)=>selections.set(k,v),removeItem:k=>selections.delete(k)}};
 vm.runInNewContext(fs.readFileSync('docs/assets/console-model-history.js','utf8'),{window,Date,Promise,Error,Object,String,Number,Array,JSON,RegExp});
 vm.runInNewContext(fs.readFileSync('docs/assets/console-gpt.js','utf8'),{window,document:{createElement:()=>new Element()},Map,Set});
+const profiles=[{provider:'openai',provider_label:'OpenAI',model:'fixture-model',profile_id:'1234567890abcdef',efforts:['auto','high']},
+                {provider:'deepseek',provider_label:'DeepSeek',model:'fixture-ds',profile_id:'fedcba0987654321',efforts:['auto','high']}];
 const request=async(url,options={})=>{
-  if(url==='/api/model-gateway/status')return {configured:true,access:'admin',provider_label:'fixture',model:'fixture-model',profile_id:'1234567890abcdef'};
+  if(url==='/api/model-gateway/status')return {configured:true,access:'admin',selected_provider:'openai',...profiles[0]};
+  if(url==='/api/model-gateway/catalog')return {profiles,selected_provider:'openai'};
   const response=await fetch('http://127.0.0.1:'+process.env.FIXTURE_PORT+url,{method:options.method||'GET',headers:{'Authorization':'Bearer fixture-admin','Content-Type':'application/json'},body:options.body});
   const data=await response.json();if(!response.ok)throw Object.assign(new Error(data.error),{status:response.status,data});return data;
 };
@@ -200,7 +257,12 @@ const tick=()=>new Promise(resolve=>setTimeout(resolve,30));
   await a.chat.selectSession(first);a.chat.dispose();
   const b=mount();b.chat.start();b.chat.setAuthenticated(true);await b.chat.refreshStatus();await tick();
   assert.equal(b.get('gpt-log').children[0].children[1].textContent,'first session');
-  b.get('gpt-input').value='continue first';await b.chat.send();b.chat.dispose();
+  b.get('gpt-input').value='continue first';await b.chat.send();
+  b.get('gpt-provider').value=profiles[1].profile_id;b.get('gpt-provider').handlers.change();
+  assert.equal(b.get('gpt-switch-choice').hidden,false);
+  b.get('gpt-switch-reset').handlers.click();b.get('gpt-effort').value='high';
+  b.get('gpt-input').value='reset boundary';await b.chat.send();
+  b.get('gpt-input').value='after boundary';await b.chat.send();b.chat.dispose();
   console.log('admin UI to backend history passed');
 })().catch(error=>{console.error(error);process.exit(1)});
 '''
@@ -209,8 +271,10 @@ const tick=()=>new Promise(resolve=>setTimeout(resolve,30));
                                     env=env, capture_output=True, text=True, timeout=20)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn("admin UI to backend history passed", result.stdout)
-            self.assertEqual([item["content"] for item in self.calls[-1]],
+            self.assertEqual([item["content"] for item in self.calls[-3]],
                              ["first session", "答复 first session", "continue first"])
+            self.assertEqual([item["content"] for item in self.calls[-2]], ["reset boundary"])
+            self.assertEqual([item["content"] for item in self.calls[-1]], ["reset boundary", "答复 reset boundary", "after boundary"])
         finally:
             server.shutdown(); server.server_close(); thread.join(3)
 

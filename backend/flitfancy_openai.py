@@ -25,8 +25,9 @@ ERRORS = {
     "daily_limit": "访客今日对话次数已用完。",
     "invalid_messages": "对话内容为空或过长。",
     "invalid_purpose": "模型请求用途无效。",
+    "invalid_effort": "当前模型不支持这个思考强度。",
     "upstream_error": "模型服务暂时无法完成请求。",
-    "invalid_api_key": "模型服务拒绝了 API 密钥，请检查密钥是否有效。",
+    "invalid_api_key": "模型服务认证失败，请检查密钥、项目权限或访问限制。",
     "insufficient_balance": "模型服务账户余额不足，请检查所选服务的额度。",
     "provider_forbidden": "模型服务拒绝了访问，请检查账户权限。",
     "model_not_found": "模型或接口地址不存在，请检查配置。",
@@ -83,13 +84,13 @@ def _response_json(response):
 
 
 def gateway_request(config, endpoint, body=None, *, opener=None, timeout=95):
-    if endpoint not in ("/admin/model/status", "/admin/model/config", "/admin/model/chat"):
+    if endpoint not in ("/admin/model/status", "/admin/model/config", "/admin/model/chat", "/admin/model/catalog", "/admin/model/usage"):
         raise OpenAIError("云端接口路径无效。", 500, "gateway_error")
     token = _worker_credentials(config)
     path = endpoint
     if endpoint == "/admin/model/status" and isinstance(body, dict) and body.get("provider"):
         path += "?" + urllib.parse.urlencode({"provider": body["provider"]})
-    data = None if endpoint == "/admin/model/status" else json.dumps(body or {}, ensure_ascii=False).encode("utf-8")
+    data = None if endpoint in ("/admin/model/status", "/admin/model/catalog", "/admin/model/usage") else json.dumps(body or {}, ensure_ascii=False).encode("utf-8")
     request = urllib.request.Request(WORKER_ORIGIN + path, data=data,
         headers={"Content-Type": "application/json", "Authorization": "Bearer " + token, "User-Agent": WORKER_UA},
         method="GET" if data is None else "POST")
@@ -116,8 +117,8 @@ def gateway_request(config, endpoint, body=None, *, opener=None, timeout=95):
 
 def public_status(config=None, environ=None, provider=None, *, opener=None):
     result = gateway_request(config, "/admin/model/status", {"provider": provider} if provider else None, opener=opener, timeout=12)
-    fields = ("configured", "provider", "provider_label", "selected_provider", "model", "base_url",
-              "profile_id", "access", "public_daily_limit", "manager_ready", "storage", "interface_version", "capabilities")
+    fields = ("configured", "key_saved", "provider", "provider_label", "selected_provider", "model", "models", "default_effort", "base_url",
+              "profile_id", "connection_id", "access", "public_daily_limit", "public_enabled", "manager_ready", "storage", "interface_version", "model_ui_version", "capabilities", "efforts")
     return {name: result[name] for name in fields if name in result}
 
 
@@ -125,12 +126,22 @@ def configured_settings(config=None, environ=None, provider=None):
     return public_status(config, environ, provider)
 
 
+def model_catalog(config):
+    result = gateway_request(config, "/admin/model/catalog", timeout=12)
+    return {"profiles": result.get("profiles", []), "selected_provider": result.get("selected_provider", "")}
+
+
+def model_usage(config):
+    result = gateway_request(config, "/admin/model/usage", timeout=12)
+    return {name: result.get(name) for name in ("today", "month", "recent", "breakdown", "timezone", "from_ms")}
+
+
 def save_gateway_config(config, data, *, opener=None):
-    allowed = ("provider", "model", "base_url", "api_key", "access", "public_daily_limit")
+    allowed = ("provider", "model", "models", "default_effort", "base_url", "api_key", "access", "public_daily_limit", "set_default", "public_enabled")
     payload = {key: data[key] for key in allowed if key in data}
     result = gateway_request(config, "/admin/model/config", payload, opener=opener, timeout=35)
-    return {name: result[name] for name in ("configured", "provider", "provider_label", "selected_provider", "model",
-            "base_url", "profile_id", "access", "public_daily_limit", "manager_ready", "storage", "pending",
+    return {name: result[name] for name in ("configured", "key_saved", "provider", "provider_label", "selected_provider", "model", "models", "default_effort",
+            "base_url", "profile_id", "access", "public_daily_limit", "public_enabled", "manager_ready", "storage", "pending",
             "interface_version", "capabilities") if name in result}
 
 
@@ -151,12 +162,18 @@ def bootstrap_secret_manager(value, *, opener=None):
     return {"ok": True}
 
 
-def ask_openai(messages, config=None, *, purpose="chat", opener=None, timeout=95, environ=None, profile_id=None):
+def ask_openai(messages, config=None, *, purpose="chat", opener=None, timeout=190, environ=None, profile_id=None, provider=None, model=None, effort=None):
     body = {"messages": messages, "purpose": purpose}
     if profile_id:
         body["profile_id"] = profile_id
+    if provider:
+        body["provider"] = provider
+    if model:
+        body["model"] = model
+    if effort and effort != "auto":
+        body["effort"] = effort
     result = gateway_request(config, "/admin/model/chat", body, opener=opener, timeout=timeout)
     reply = result.get("reply")
     if not isinstance(reply, str) or not reply.strip():
         raise OpenAIError("模型没有返回文字，请重试。", 502, "gateway_error")
-    return {name: result[name] for name in ("reply", "model", "provider", "provider_label", "usage") if name in result}
+    return {name: result[name] for name in ("reply", "model", "provider", "provider_label", "usage", "usage_recorded") if name in result}

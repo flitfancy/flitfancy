@@ -42,7 +42,7 @@
     const ctrl = new AbortController();
     const requested = Number(opts.timeoutMs);
     const timeout = Number.isFinite(requested) && requested > 0
-      ? Math.min(120000, Math.max(TIMEOUT_MS, requested)) : TIMEOUT_MS;
+      ? Math.min(210000, Math.max(TIMEOUT_MS, requested)) : TIMEOUT_MS;
     const timer = setTimeout(function () { ctrl.abort(); }, timeout);
     try {
       const fetchOptions = Object.assign({}, opts, { headers: headers, signal: ctrl.signal });

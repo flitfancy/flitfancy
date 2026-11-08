@@ -75,16 +75,22 @@ async function routeRequest(request, env, ctx, url) {
     return handleGPTStatus(request, env);
   }
   if (pathname === "/gpt/chat" && request.method === "POST") {
-    return handleGPTChat(request, env);
+    return handleGPTChat(request, env, ctx);
   }
   if (pathname === "/admin/model/status" && request.method === "GET") {
     return handleModelAdmin(request, env, "status");
+  }
+  if (pathname === "/admin/model/catalog" && request.method === "GET") {
+    return handleModelAdmin(request, env, "catalog");
+  }
+  if (pathname === "/admin/model/usage" && request.method === "GET") {
+    return handleModelAdmin(request, env, "usage");
   }
   if (pathname === "/admin/model/config" && request.method === "POST") {
     return handleModelAdmin(request, env, "config");
   }
   if (pathname === "/admin/model/chat" && request.method === "POST") {
-    return handleModelAdmin(request, env, "chat");
+    return handleModelAdmin(request, env, "chat", ctx);
   }
   if (pathname === "/admin/model/cleanup-old" && request.method === "POST") {
     return handleModelAdmin(request, env, "cleanup-old");

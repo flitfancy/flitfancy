@@ -4,7 +4,7 @@ import vm from "node:vm";
 
 const source = fs.readFileSync(new URL("../docs/assets/admin-core.js", import.meta.url), "utf8");
 function fixture() {
-  const values = new Map(), requests = [];
+  const values = new Map(), requests = [], timers = [];
   const sessionStorage = {
     getItem: key => values.get(key) || null,
     setItem: (key, value) => values.set(key, value),
@@ -13,11 +13,19 @@ function fixture() {
   const window = { location: { hostname: "localhost" } };
   vm.runInNewContext(source, {
     window, sessionStorage, AbortController,
-    setTimeout: () => 1, clearTimeout() {},
+    setTimeout: (fn, ms) => { timers.push(ms); return 1; }, clearTimeout() {},
     fetch: (url, options) => new Promise(resolve => requests.push({ url, options, resolve })),
   });
   const finish401 = () => requests.at(-1).resolve({ status: 401, ok: false, json: async () => ({ error: "fixture unauthorized" }) });
-  return { core: window.FlitFancyAdmin, requests, finish401 };
+  return { core: window.FlitFancyAdmin, requests, timers, finish401 };
+}
+
+{
+  const f = fixture();
+  const pending = f.core.fetchRaw('/api/model-gateway/conversations', {timeoutMs: 200000});
+  assert.equal(f.timers.at(-1), 200000, 'long reasoning requests are not cut off at the old two-minute cap');
+  f.requests.at(-1).resolve({status: 200, ok: true});
+  await pending;
 }
 async function unauthorized(core, method, options) {
   try {

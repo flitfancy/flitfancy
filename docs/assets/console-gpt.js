@@ -20,6 +20,13 @@
     const historyMore = query('[data-role="gpt-history-more"]');
     const historyOlder = query('[data-role="gpt-history-older"]');
     const historyNote = query('[data-role="gpt-history-note"]');
+    const providerSelect = query('[data-role="gpt-provider"]');
+    const effortSelect = query('[data-role="gpt-effort"]');
+    const switchChoice = query('[data-role="gpt-switch-choice"]');
+    const switchMessage = query('[data-role="gpt-switch-message"]');
+    const switchCarry = query('[data-role="gpt-switch-carry"]');
+    const switchReset = query('[data-role="gpt-switch-reset"]');
+    const switchCancel = query('[data-role="gpt-switch-cancel"]');
     const publicMode = opts.publicMode === true;
     const publicBase = opts.publicBase || "https://api.flitfancy.com";
     const archive = opts.historyStore || (global.FlitFancyModelHistory && global.FlitFancyModelHistory.create({
@@ -30,18 +37,74 @@
     let sending = false, loading = false, historyReady = false, initializing = false;
     let epoch = 0, configRevision = 0, selectionRevision = 0, profileId = "", modelLabel = "模型", modelId = "";
     let active = null, turns = [], sessions = [], nextOffset = null, before = null, pollTimer = null;
+    let profiles = [], selectedProfile = null, pendingSwitch = null, contextPolicy = null, defaultProvider = "";
     const drafts = new Map();
 
-    function mismatch() { return Boolean(active && active.profile_id && profileId && active.profile_id !== profileId); }
+    function mismatch() { return Boolean(active && active.profile_id && profileId && active.profile_id !== profileId && !contextPolicy); }
     function pending() { return turns.find(function (turn) { return turn.status === "pending"; }); }
     function unsaved() { return turns.some(function (turn) { return turn.status === "unsaved"; }); }
     function gate() {
-      input.disabled = !authenticated || !ready || !historyReady || loading || sending || Boolean(pending()) || unsaved() || mismatch();
+      input.disabled = !authenticated || !ready || !historyReady || loading || sending || Boolean(pending()) || unsaved() || mismatch() || Boolean(pendingSwitch);
       sendButton.disabled = input.disabled;
       clearButton.disabled = !authenticated || !historyReady || loading || sending;
       historySelect.disabled = !authenticated || !historyReady || loading || sending;
       historyMore.disabled = historySelect.disabled;
       historyOlder.disabled = historySelect.disabled;
+      providerSelect.disabled = !authenticated || !ready || loading || sending || Boolean(pending()) || Boolean(pendingSwitch) || !profiles.length;
+      effortSelect.disabled = providerSelect.disabled;
+    }
+
+    function chooseProfile(row, effort) {
+      if (!row) return;
+      selectedProfile = row; profileId = row.profile_id; modelLabel = row.provider_label || "模型"; modelId = row.model || "";
+      providerSelect.value = profileId;
+      const choices = Array.isArray(row.efforts) && row.efforts.length ? row.efforts : ["auto"];
+      const labels = {auto: "自动", none: "关闭思考", low: "快速", medium: "平衡", high: "深入", xhigh: "更深入", max: "最高"};
+      effortSelect.replaceChildren();
+      choices.forEach(function (value) { const item = document.createElement("option"); item.value = value; item.textContent = labels[value] || value; effortSelect.appendChild(item); });
+      const preferred = effort || row.default_effort || "auto";
+      effortSelect.value = choices.includes(preferred) ? preferred : "auto";
+    }
+
+    function renderProfiles() {
+      providerSelect.replaceChildren();
+      profiles.forEach(function (row) { const item = document.createElement("option"); item.value = row.profile_id;
+        item.textContent = (row.provider_label || "模型") + " · " + row.model; providerSelect.appendChild(item); });
+      if (pendingSwitch || selectedProfile) providerSelect.value = (pendingSwitch || selectedProfile).profile_id;
+    }
+
+    function showSwitch(row) {
+      pendingSwitch = row;
+      switchMessage.textContent = "切换到 " + (row.provider_label || "新服务") + " · " + row.model + " 时，是否携带当前会话的近期消息？";
+      switchChoice.hidden = false; gate();
+    }
+
+    function requestProfile(row) {
+      if (!row || sending || loading || pending()) return;
+      if (active && active.profile_id && active.profile_id !== row.profile_id) {
+        const previous = profiles.find(function (item) { return item.profile_id === active.profile_id; });
+        if (previous && previous.provider === row.provider && previous.connection_id && previous.connection_id === row.connection_id) {
+          contextPolicy = "carry"; chooseProfile(row, null); gate(); return;
+        }
+        showSwitch(row); return;
+      }
+      contextPolicy = null; chooseProfile(row, null); gate();
+    }
+
+    function finishSwitch(policy) {
+      if (!pendingSwitch) return;
+      if (policy) { contextPolicy = policy; chooseProfile(pendingSwitch, null); }
+      else if (selectedProfile) providerSelect.value = selectedProfile.profile_id;
+      pendingSwitch = null; switchChoice.hidden = true; status.textContent = ""; gate();
+    }
+
+    function syncActiveProfile() {
+      if (!active || !active.profile_id || contextPolicy || pendingSwitch) return;
+      const previous = profiles.find(function (row) { return row.profile_id === active.profile_id; });
+      if (previous) chooseProfile(previous, active.current_effort || "auto");
+      else if (selectedProfile && selectedProfile.profile_id !== active.profile_id) {
+        showSwitch(selectedProfile);
+      }
     }
 
     function stopPoll() {
@@ -67,8 +130,14 @@
         log.appendChild(empty);
       } else {
         turns.forEach(function (turn) {
+          if (turn.context_reset) { const boundary = document.createElement("p"); boundary.className = "hint model-context-boundary";
+            boundary.textContent = "从这里开始，不携带更早消息"; log.appendChild(boundary); }
           addMessage("user", turn.text || "");
-          if (turn.reply) addMessage("assistant", turn.reply, (active && active.provider_label) || modelLabel);
+          if (turn.reply) {
+            const labels = {none: "关闭思考", low: "快速", medium: "平衡", high: "深入", xhigh: "更深入", max: "最高"};
+            const name = turn.model || turn.provider || (active && active.provider_label) || modelLabel;
+            addMessage("assistant", turn.reply, name + (labels[turn.effort] ? " · " + labels[turn.effort] : ""));
+          }
           if (turn.status !== "complete" && turn.status !== "unsaved") {
             const note = document.createElement("p"); note.className = "hint";
             note.textContent = turn.status === "pending" ? "正在等待回复…" : (turn.error || "本轮未完成，请确认后重试。");
@@ -92,7 +161,7 @@
     }
 
     function noteAvailability() {
-      if (mismatch()) status.textContent = "当前模型与此会话不同，请切回原模型或新建对话。";
+      if (mismatch() || pendingSwitch) status.textContent = "请选择切换服务时是否携带当前会话上下文。";
       else if (pending()) status.textContent = "上一条请求仍在处理，不会自动重复发送。";
       else if (unsaved()) status.textContent = "答复未能保存，请先复制，再新建或重新打开会话。";
       else if (!ready) status.textContent = "请先在控制台配置模型接口和访问范围。";
@@ -132,6 +201,7 @@
       const data = await archive.load(id, older ? before : null, 50);
       if (current !== epoch || revision !== selectionRevision) return false;
       active = data.conversation;
+      syncActiveProfile();
       const incoming = Array.isArray(data.turns) ? data.turns : [];
       if (older) {
         const known = new Set(turns.map(function (turn) { return turn.seq; }));
@@ -154,10 +224,11 @@
       const current = epoch, revision = ++selectionRevision;
       const previousInput = input.value;
       drafts.set(active ? active.id : "", input.value);
-      stopPoll(); loading = true; gate();
+      stopPoll(); loading = true; pendingSwitch = null; contextPolicy = null; switchChoice.hidden = true; gate();
       try {
         if (!id) {
           active = null; turns = []; before = null; input.value = drafts.get("") || "";
+          chooseProfile(profiles.find(function (row) { return row.provider === defaultProvider; }) || profiles[0], null);
           archive.remember(""); render(); renderSessions(); status.textContent = ""; noteAvailability();
         } else {
           input.value = drafts.get(id) || "";
@@ -203,9 +274,19 @@
       try {
         const data = await opts.request(publicMode ? publicBase + "/gpt/status" : "/api/model-gateway/status",
           publicMode ? {authMode: "none"} : undefined);
+        let list = publicMode ? data.profiles : null;
+        if (!publicMode) {
+          try { const found = await opts.request("/api/model-gateway/catalog"); list = found.profiles; defaultProvider = found.selected_provider || data.selected_provider || data.provider || ""; }
+          catch (ignored) { list = null; }
+        }
         if (current !== epoch || revision !== configRevision) return;
-        if (data.profile_id) profileId = data.profile_id;
-        modelLabel = data.provider_label || "模型"; modelId = data.model || "";
+        if (publicMode) defaultProvider = data.selected_provider || data.provider || defaultProvider;
+        if (!Array.isArray(list) && data.profile_id && (publicMode ? data.enabled : data.configured)) list = [{provider: data.provider || "", provider_label: data.provider_label || "模型",
+          model: data.model || "", profile_id: data.profile_id, efforts: data.efforts || ["auto"]}];
+        profiles = (Array.isArray(list) ? list : []).filter(function (row) { return row && row.profile_id && row.model; });
+        const matching = selectedProfile && profiles.find(function (row) { return row.profile_id === selectedProfile.profile_id; });
+        chooseProfile(matching || profiles.find(function (row) { return row.provider === defaultProvider; }) || profiles[0], matching ? effortSelect.value : null);
+        renderProfiles(); syncActiveProfile();
         if (publicMode) {
           ready = data.enabled === true; modes.hidden = !authenticated || !ready;
           if (!ready && mode === "gpt") {
@@ -213,7 +294,7 @@
             fireflyMode.setAttribute("aria-pressed", "true"); modelMode.setAttribute("aria-pressed", "false");
           }
         } else {
-          ready = data.configured === true && data.access !== "off";
+          ready = profiles.length > 0 && data.access !== "off";
         }
         if (!sending && !loading) {
           if (mismatch() || pending() || unsaved() || !ready) noteAvailability(); else status.textContent = "";
@@ -233,10 +314,11 @@
 
     async function send() {
       const text = input.value.trim();
-      if (!authenticated || !ready || !historyReady || loading || sending || pending() || unsaved() || mismatch() || !text) return;
+      if (!authenticated || !ready || !historyReady || loading || sending || pending() || unsaved() || mismatch() || pendingSwitch || !text) return;
       const maxLength = publicMode ? 1000 : 4000;
       if (text.length > maxLength) { status.textContent = "每条消息最多 " + maxLength + " 字。"; return; }
       const current = epoch, revision = selectionRevision;
+      const chosen = selectedProfile, chosenEffort = effortSelect.value || "auto", chosenContext = contextPolicy;
       drafts.delete(active ? active.id : "");
       sending = true; input.value = ""; status.textContent = "模型正在思考…"; gate();
       let id = active && active.id, requestId;
@@ -251,6 +333,7 @@
         requestId = global.crypto.randomUUID();
         turns.push({request_id: requestId, text: text, reply: "", status: "pending", error: ""}); render();
         const result = await archive.send(id, {request_id: requestId, text: text, profile_id: profileId,
+          provider: chosen && chosen.provider || undefined, effort: chosenEffort, context_policy: chosenContext || undefined,
           provider_label: modelLabel, model: modelId});
         if (current !== epoch || revision !== selectionRevision) return;
         if (result.state === "unsaved") {
@@ -258,9 +341,9 @@
           turns.push({request_id: requestId, text: text, reply: result.reply || "", status: "unsaved", error: result.error || ""});
           render(); status.textContent = result.error || "答复未能保存，请先复制。";
         } else {
-          await loadActive(id, revision, false);
+          contextPolicy = null; await loadActive(id, revision, false);
           if (current !== epoch || revision !== selectionRevision) return;
-          if (result.state === "complete" && !mismatch()) status.textContent = "";
+          if (result.state === "complete" && !mismatch()) status.textContent = result.usage_recorded === false ? "回复成功，本次用量暂未记入统计。" : "";
           else if (result.state === "failed" || result.state === "interrupted") {
             if (!input.value) input.value = text;
             status.textContent = (result.turn && result.turn.error) || "本轮未完成，请确认后重试。";
@@ -272,6 +355,7 @@
         let loaded = false;
         if (id) { try { loaded = await loadActive(id, revision, false); } catch (ignored) { /* status remains unknown */ } }
         if (current !== epoch || revision !== selectionRevision) return;
+        if (loaded && turns.some(function (turn) { return turn.request_id === requestId; })) { contextPolicy = null; syncActiveProfile(); }
         if (loaded && pending()) {
           status.textContent = "请求状态尚未确认，正在查看历史；不会自动重复发送。";
         } else {
@@ -290,7 +374,8 @@
       epoch++; configRevision++; selectionRevision++; stopPoll();
       authenticated = false; ready = false; sending = false; loading = false; historyReady = false; initializing = false;
       mode = "firefly"; active = null; turns = []; sessions = []; nextOffset = null; before = null;
-      profileId = ""; modelLabel = "模型"; modelId = ""; input.value = ""; drafts.clear();
+      profileId = ""; modelLabel = "模型"; modelId = ""; profiles = []; selectedProfile = null; pendingSwitch = null; contextPolicy = null; defaultProvider = "";
+      providerSelect.replaceChildren(); effortSelect.replaceChildren(); switchChoice.hidden = true; input.value = ""; drafts.clear();
       if (forget !== false && wasAuthenticated && !publicMode) archive.forgetSelection();
       status.textContent = "";
       modes.hidden = true; fireflyPanel.hidden = false; modelPanel.hidden = true;
@@ -311,6 +396,10 @@
       if (publicMode) { settings.hidden = true; fireflyMode.textContent = "访客对话"; input.maxLength = 1000; }
       fireflyMode.addEventListener("click", function () { selectMode("firefly"); });
       modelMode.addEventListener("click", function () { selectMode("gpt"); });
+      providerSelect.addEventListener("change", function () { requestProfile(profiles.find(function (row) { return row.profile_id === providerSelect.value; })); });
+      switchCarry.addEventListener("click", function () { finishSwitch("carry"); });
+      switchReset.addEventListener("click", function () { finishSwitch("reset"); });
+      switchCancel.addEventListener("click", function () { finishSwitch(null); });
       sendButton.addEventListener("click", send);
       clearButton.addEventListener("click", function () { if (!sending && !loading) void selectSession(""); });
       historySelect.addEventListener("change", function () { void selectSession(historySelect.value); });

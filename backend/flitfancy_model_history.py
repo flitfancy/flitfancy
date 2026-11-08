@@ -89,6 +89,31 @@ class ModelHistoryService:
                     status TEXT NOT NULL, error TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
                     FOREIGN KEY(conversation_id) REFERENCES model_conversations(id)
                 )""")
+                # Additive migration: retain every existing session and message.
+                for table, additions in (
+                    ("model_conversations", (("context_floor", "INTEGER NOT NULL DEFAULT 0"), ("current_provider", "TEXT NOT NULL DEFAULT ''"), ("current_effort", "TEXT NOT NULL DEFAULT 'auto'"))),
+                    ("model_conversation_turns", (("profile_id", "TEXT NOT NULL DEFAULT ''"), ("provider", "TEXT NOT NULL DEFAULT ''"),
+                        ("model", "TEXT NOT NULL DEFAULT ''"), ("effort", "TEXT NOT NULL DEFAULT 'auto'"), ("context_reset", "INTEGER NOT NULL DEFAULT 0"))),
+                ):
+                    columns = {row[1] for row in connection.execute("PRAGMA table_info(" + table + ")")}
+                    for name, definition in additions:
+                        if name not in columns:
+                            connection.execute("ALTER TABLE " + table + " ADD COLUMN " + name + " " + definition)
+                # Existing sessions were locked to one profile, so preserve their
+                # original model labels when later turns use another provider.
+                connection.execute("""UPDATE model_conversation_turns SET
+                    profile_id = COALESCE((SELECT profile_id FROM model_conversations WHERE id=conversation_id), ''),
+                    model = COALESCE((SELECT model FROM model_conversations WHERE id=conversation_id), ''),
+                    provider = COALESCE((SELECT CASE provider_label
+                        WHEN 'OpenAI' THEN 'openai' WHEN 'DeepSeek' THEN 'deepseek'
+                        WHEN '小米 MiMo' THEN 'mimo' WHEN '自定义接口' THEN 'custom' WHEN '自定义接口 2' THEN 'custom2' WHEN '自定义接口 3' THEN 'custom3'
+                        WHEN '原 Cloudflare 接口' THEN 'legacy' ELSE '' END
+                        FROM model_conversations WHERE id=conversation_id), '')
+                    WHERE profile_id = ''""")
+                connection.execute("""UPDATE model_conversations SET current_provider = CASE provider_label
+                    WHEN 'OpenAI' THEN 'openai' WHEN 'DeepSeek' THEN 'deepseek' WHEN '小米 MiMo' THEN 'mimo'
+                    WHEN '自定义接口' THEN 'custom' WHEN '自定义接口 2' THEN 'custom2' WHEN '自定义接口 3' THEN 'custom3' WHEN '原 Cloudflare 接口' THEN 'legacy' ELSE '' END
+                    WHERE current_provider = ''""")
                 connection.execute("CREATE INDEX IF NOT EXISTS model_turns_conversation ON model_conversation_turns(conversation_id, seq)")
                 connection.execute("UPDATE model_conversation_turns SET status = 'interrupted', error = ?, updated_at = ? WHERE status = 'pending'",
                                    ("服务重启，本轮结果未知，请确认后再重试。", _now()))
@@ -106,7 +131,7 @@ class ModelHistoryService:
         stamp = _now()
         connection = self._connect()
         try:
-            connection.execute("INSERT OR IGNORE INTO model_conversations VALUES (?, ?, '', '', '', ?, ?)",
+            connection.execute("INSERT OR IGNORE INTO model_conversations(id,title,profile_id,provider_label,model,created_at,updated_at) VALUES (?, ?, '', '', '', ?, ?)",
                                (identifier, "新对话", stamp, stamp))
             connection.commit()
             return dict(connection.execute("SELECT * FROM model_conversations WHERE id = ?", (identifier,)).fetchone())
@@ -148,13 +173,23 @@ class ModelHistoryService:
         finally:
             connection.close()
 
-    def begin_turn(self, conversation_id, request_id, text, profile_id):
+    def begin_turn(self, conversation_id, request_id, text, profile_id, *, provider=None, model=None, effort=None, context_policy=None):
         self._ensure()
         identifier, request_id = _uuid(conversation_id), _uuid(request_id)
         if not isinstance(text, str) or not text.strip() or _units(text.strip()) > 4000:
             raise ModelHistoryError("消息长度需为 1–4000 字。", 400, "invalid_text")
         if not isinstance(profile_id, str) or not PROFILE.fullmatch(profile_id):
             raise ModelHistoryError("模型配置已改变，请重新选择。", 409, "profile_changed")
+        if provider is not None and provider not in ("openai", "deepseek", "mimo", "custom", "custom2", "custom3"):
+            raise ModelHistoryError("模型服务无效。", 400, "invalid_provider")
+        if model is not None and (not isinstance(model, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,159}", model)
+                or re.fullmatch(r"(?:sk-|cfat_|cfut_|ghp_)[A-Za-z0-9_-]{12,}", model, re.I)):
+            raise ModelHistoryError("模型名称无效。", 400, "invalid_model")
+        if effort is not None and effort not in ("auto", "none", "low", "medium", "high", "xhigh", "max"):
+            raise ModelHistoryError("思考强度无效。", 400, "invalid_effort")
+        if context_policy is not None and context_policy not in ("carry", "reset"):
+            raise ModelHistoryError("上下文选择无效。", 400, "invalid_context_policy")
+        effort = effort or "auto"
         text = text.strip()
         connection = self._connect()
         try:
@@ -164,18 +199,25 @@ class ModelHistoryService:
                 raise ModelHistoryError("未找到该对话。", 404, "not_found")
             existing = connection.execute("SELECT * FROM model_conversation_turns WHERE request_id = ?", (request_id,)).fetchone()
             if existing is not None:
-                if existing["conversation_id"] != identifier or existing["text"] != text or session["profile_id"] != profile_id:
+                if (existing["conversation_id"] != identifier or existing["text"] != text or
+                    (existing["profile_id"] or session["profile_id"]) != profile_id or
+                    (existing["provider"] and existing["provider"] != (provider or "")) or existing["effort"] != effort or
+                    (context_policy is not None and bool(existing["context_reset"]) != (context_policy == "reset"))):
                     raise ModelHistoryError("请求编号已用于其他消息。", 409, "request_conflict")
                 connection.commit()
                 return {"created": False, "turn": dict(existing)}
-            if session["profile_id"] and session["profile_id"] != profile_id:
-                raise ModelHistoryError("当前模型与此会话不同，请切回原模型或新建对话。", 409, "profile_changed")
+            switched = bool(session["profile_id"] and session["profile_id"] != profile_id)
+            if switched and context_policy not in ("carry", "reset"):
+                raise ModelHistoryError("切换模型前请选择是否携带当前会话上下文。", 409, "context_choice_required")
             pending = connection.execute("SELECT 1 FROM model_conversation_turns WHERE conversation_id = ? AND status = 'pending' LIMIT 1",
                                          (identifier,)).fetchone()
             if pending:
                 raise ModelHistoryError("请等待当前回复完成。", 409, "busy")
-            rows = connection.execute("SELECT text, reply FROM model_conversation_turns WHERE conversation_id = ? AND status = 'complete' ORDER BY seq DESC LIMIT ?",
-                                      (identifier, MAX_HISTORY_TURNS)).fetchall()
+            floor = session["context_floor"]
+            if context_policy == "reset":
+                floor = connection.execute("SELECT COALESCE(MAX(seq),0) FROM model_conversation_turns WHERE conversation_id = ?", (identifier,)).fetchone()[0]
+            rows = connection.execute("SELECT text, reply FROM model_conversation_turns WHERE conversation_id = ? AND status = 'complete' AND seq > ? ORDER BY seq DESC LIMIT ?",
+                                      (identifier, floor, MAX_HISTORY_TURNS)).fetchall()
             selected, used, used_bytes = [], _units(text), _json_bytes(text)
             for row in rows:
                 question, answer = row["text"], _clip_units(row["reply"], 12000)
@@ -192,10 +234,10 @@ class ModelHistoryService:
             messages.append({"role": "user", "content": text})
             stamp = _now()
             title = " ".join(text.split())[:40] if not session["profile_id"] else session["title"]
-            connection.execute("UPDATE model_conversations SET title = ?, profile_id = ?, updated_at = ? WHERE id = ?",
-                               (title, profile_id, stamp, identifier))
-            connection.execute("INSERT INTO model_conversation_turns(conversation_id, request_id, text, reply, status, error, created_at, updated_at) VALUES (?, ?, ?, '', 'pending', '', ?, ?)",
-                               (identifier, request_id, text, stamp, stamp))
+            connection.execute("UPDATE model_conversations SET title = ?, profile_id = ?, context_floor = ?, current_provider = ?, current_effort = ?, updated_at = ? WHERE id = ?",
+                               (title, profile_id, floor, provider or session["current_provider"], effort, stamp, identifier))
+            connection.execute("INSERT INTO model_conversation_turns(conversation_id, request_id, text, reply, status, error, created_at, updated_at, profile_id, provider, model, effort, context_reset) VALUES (?, ?, ?, '', 'pending', '', ?, ?, ?, ?, ?, ?, ?)",
+                               (identifier, request_id, text, stamp, stamp, profile_id, provider or "", model or "", effort, int(context_policy == "reset")))
             turn = dict(connection.execute("SELECT * FROM model_conversation_turns WHERE request_id = ?", (request_id,)).fetchone())
             connection.commit()
             return {"created": True, "turn": turn, "messages": messages}
@@ -216,6 +258,7 @@ class ModelHistoryService:
             if row is None:
                 raise ModelHistoryError("对话记录暂不可用。", 503, "history_unavailable")
             if row["status"] == status and status == "complete":
+                connection.execute("UPDATE model_conversation_turns SET model = ? WHERE request_id = ?", (str(model)[:160], request_id))
                 connection.execute("UPDATE model_conversations SET model = ?, provider_label = ?, updated_at = ? WHERE id = ?",
                                    (str(model)[:160], str(provider_label)[:60], stamp, row["conversation_id"]))
             else:
@@ -228,12 +271,16 @@ class ModelHistoryService:
         finally:
             connection.close()
 
-    def send(self, conversation_id, request_id, text, profile_id):
-        begun = self.begin_turn(conversation_id, request_id, text, profile_id)
+    def send(self, conversation_id, request_id, text, profile_id, *, provider=None, model=None, effort=None, context_policy=None):
+        begun = self.begin_turn(conversation_id, request_id, text, profile_id, provider=provider, model=model, effort=effort, context_policy=context_policy)
         if not begun["created"]:
             return {"state": begun["turn"]["status"], "turn": begun["turn"], "replayed": True}
         try:
-            result = self.call_model(begun["messages"], self.read_config(), profile_id=profile_id)
+            options = {"profile_id": profile_id}
+            if provider: options["provider"] = provider
+            if model: options["model"] = model
+            if effort and effort != "auto": options["effort"] = effort
+            result = self.call_model(begun["messages"], self.read_config(), **options)
             reply = result.get("reply")
             if not isinstance(reply, str) or not reply.strip():
                 raise OpenAIError("模型没有返回文字。", 502, "empty_response")
@@ -248,4 +295,4 @@ class ModelHistoryService:
                                 model=result.get("model", ""), provider_label=result.get("provider_label", ""))
         except sqlite3.Error:
             return {"state": "unsaved", "reply": reply, "error": "模型已回复，但历史记录保存失败；请先复制答复。"}
-        return {"state": turn["status"], "turn": turn, "replayed": False}
+        return {"state": turn["status"], "turn": turn, "replayed": False, "usage_recorded": result.get("usage_recorded", False)}

@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 
 const source = fs.readFileSync(new URL("../docs/assets/console-gpt.js", import.meta.url), "utf8");
 const html = fs.readFileSync(new URL("../docs/presence.html", import.meta.url), "utf8");
-for (const role of ["dialogue-modes", "firefly-chat-panel", "gpt-chat-panel", "mode-firefly", "mode-gpt", "gpt-log", "gpt-input", "gpt-send", "gpt-clear", "gpt-status", "gpt-settings", "gpt-history", "gpt-history-more", "gpt-history-older", "gpt-history-note"]) {
+for (const role of ["dialogue-modes", "firefly-chat-panel", "gpt-chat-panel", "mode-firefly", "mode-gpt", "gpt-log", "gpt-input", "gpt-send", "gpt-clear", "gpt-status", "gpt-settings", "gpt-history", "gpt-history-more", "gpt-history-older", "gpt-history-note", "gpt-provider", "gpt-effort", "gpt-switch-choice", "gpt-switch-message", "gpt-switch-carry", "gpt-switch-reset", "gpt-switch-cancel"]) {
   assert.equal(html.split('data-role="' + role + '"').length - 1, 1, role + " must be present exactly once");
 }
 assert.match(html, /data-role="dialogue-modes"[^>]*hidden/);
@@ -32,11 +32,12 @@ class MemoryHistory {
   async send(id, payload) {
     this.sent.push({id, ...payload});
     const row = this.rows.get(id);
-    if (row.conversation.profile_id && row.conversation.profile_id !== payload.profile_id) throw Object.assign(new Error("模型变化"), {status: 409});
+    if (row.conversation.profile_id && row.conversation.profile_id !== payload.profile_id && !payload.context_policy) throw Object.assign(new Error("模型变化"), {status: 409});
     row.conversation.profile_id = payload.profile_id;
+    row.conversation.current_provider = payload.provider || ""; row.conversation.current_effort = payload.effort || "auto";
     row.conversation.title = payload.text;
     row.conversation.provider_label = payload.provider_label;
-    const turn = {seq: row.turns.length + 1, request_id: payload.request_id, text: payload.text, reply: "", status: "pending", error: ""};
+    const turn = {seq: row.turns.length + 1, request_id: payload.request_id, text: payload.text, reply: "", status: "pending", error: "", context_reset: payload.context_policy === "reset", provider: payload.provider, model: payload.model};
     row.turns.push(turn);
     if (this.deferred) await new Promise(resolve => { this.deferred.resolve = resolve; });
     if (this.failNext) { this.failNext = false; turn.status = "failed"; turn.error = "模拟网络故障"; throw Object.assign(new Error(turn.error), {status: 0}); }
@@ -116,5 +117,31 @@ assert.equal(visitorArchive.sent.at(-1).text, "访客测试");
 publicEnabled = false; await visitor.chat.refreshStatus();
 assert.equal(visitor.get("dialogue-modes").hidden, true);
 assert.equal(visitor.get("gpt-chat-panel").hidden, true);
+const multiple = [
+  {provider:'openai', provider_label:'OpenAI', model:'gpt-6.1-sol', profile_id:'aaaaaaaaaaaaaaaa', connection_id:'same-openai', efforts:['auto','low','medium','high']},
+  {provider:'deepseek', provider_label:'DeepSeek', model:'deepseek-flash', profile_id:'bbbbbbbbbbbbbbbb', connection_id:'deepseek', efforts:['auto','none','low','high','max']},
+  {provider:'openai', provider_label:'OpenAI', model:'gpt-6-astra', profile_id:'cccccccccccccccc', connection_id:'same-openai', efforts:['auto','low','medium','high','xhigh','max']},
+];
+const multiArchive = new MemoryHistory();
+const multiRequest = async url => url.endsWith('/catalog') ? {profiles: multiple, selected_provider:'openai'} :
+  {configured:true, access:'admin', ...multiple[0]};
+const multi = mount(multiArchive, multiRequest);
+multi.chat.start(); multi.chat.setAuthenticated(true); await wait(); await multi.chat.refreshStatus(); await wait();
+multi.get('gpt-input').value='before switch'; await multi.chat.send();
+multi.get('gpt-provider').value=multiple[1].profile_id; multi.get('gpt-provider').handlers.change();
+assert.equal(multi.get('gpt-switch-choice').hidden,false);
+assert.match(multi.get('gpt-switch-message').textContent,/DeepSeek/);
+assert.equal(multi.get('gpt-send').disabled,true, 'do not send before the context decision');
+multi.get('gpt-switch-reset').handlers.click();
+multi.get('gpt-effort').value='high';multi.get('gpt-input').value='independent turn';await multi.chat.send();
+assert.equal(multiArchive.sent.at(-1).provider,'deepseek');assert.equal(multiArchive.sent.at(-1).effort,'high');
+assert.equal(multiArchive.sent.at(-1).context_policy,'reset');
+assert(multi.get('gpt-log').children.some(node=>node.textContent==='从这里开始，不携带更早消息'));
+multi.get('gpt-provider').value=multiple[0].profile_id;multi.get('gpt-provider').handlers.change();multi.get('gpt-switch-carry').handlers.click();
+multi.get('gpt-input').value='carry back';await multi.chat.send();assert.equal(multiArchive.sent.at(-1).context_policy,'carry');
+multi.get('gpt-provider').value=multiple[2].profile_id;multi.get('gpt-provider').handlers.change();
+assert.equal(multi.get('gpt-switch-choice').hidden,true,'switching models within one provider keeps the conversation');
+multi.get('gpt-input').value='same provider';await multi.chat.send();assert.equal(multiArchive.sent.at(-1).model,'gpt-6-astra');
+multi.chat.dispose();
 assert.doesNotMatch(source, /localStorage|innerHTML/);
 console.log("model chat UI: saved sessions, resume, provider isolation, failures and logout passed");

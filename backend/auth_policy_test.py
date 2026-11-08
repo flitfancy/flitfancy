@@ -72,7 +72,7 @@ def run():
         '/api/sensors/heart-rate', '/api/sensors/heart-rate/history',
         '/api/activity/summary', '/api/activity/export',
         '/api/notes', '/api/audio/status', '/api/audio/history', '/api/audio/recording?name=test.wav',
-        '/api/openai/status', '/api/model-gateway/status', '/api/model-gateway/conversations', '/api/consultations',
+        '/api/openai/status', '/api/model-gateway/status', '/api/model-gateway/catalog', '/api/model-gateway/usage', '/api/model-gateway/conversations', '/api/consultations',
         '/api/admin/session', '/api/admin/config', '/api/admin/essays', '/api/admin/observations', '/api/admin/observation-links',
         '/api/visits', '/api/launcher', '/api/bridge/config', '/api/bridge/status', '/api/bridge/transfers?id=test',
     ]

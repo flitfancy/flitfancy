@@ -19,7 +19,7 @@ from flitfancy_activity import ActivityError
 from flitfancy_refresh import RefreshRegistry
 from flitfancy_collectors import CollectorError
 from flitfancy_storage import latest_sensor_rows
-from flitfancy_openai import OpenAIError, ask_openai, bootstrap_secret_manager, public_status, save_gateway_config
+from flitfancy_openai import OpenAIError, ask_openai, bootstrap_secret_manager, public_status, save_gateway_config, model_catalog, model_usage
 from flitfancy_model_history import ModelHistoryError
 
 # Every API requires an administrator unless its exact method/path is listed
@@ -403,7 +403,13 @@ def create_handler(app):
             elif path in ('/api/openai/status', '/api/model-gateway/status'):
                 try:
                     provider = (urllib.parse.parse_qs(query).get("provider") or [None])[0]
-                    self._send(200, {"ok": True, **public_status(_read_local_cfg(), provider=provider)})
+                    self._send(200, {"ok": True, **public_status(_read_local_cfg(), provider=provider), "local_model_ui_version": 2})
+                except OpenAIError as exc:
+                    self._send(exc.status, {"ok": False, "error": str(exc), "code": exc.code})
+            elif path in ('/api/model-gateway/catalog', '/api/model-gateway/usage'):
+                try:
+                    result = model_catalog(_read_local_cfg()) if path.endswith('/catalog') else model_usage(_read_local_cfg())
+                    self._send(200, {"ok": True, **result})
                 except OpenAIError as exc:
                     self._send(exc.status, {"ok": False, "error": str(exc), "code": exc.code})
             elif path == '/api/consultations':
@@ -1179,7 +1185,8 @@ def create_handler(app):
                 if not match:
                     self._send(404, {"ok": False, "error": "未找到该接口。"})
                     return
-                result = model_history_service.send(match.group(1), data.get("request_id"), data.get("text"), data.get("profile_id"))
+                result = model_history_service.send(match.group(1), data.get("request_id"), data.get("text"), data.get("profile_id"),
+                    provider=data.get("provider"), model=data.get("model"), effort=data.get("effort"), context_policy=data.get("context_policy"))
                 self._send(202 if result["state"] == "pending" else 200, {"ok": True, **result})
             except (ModelHistoryError, OpenAIError) as exc:
                 self._send(exc.status, {"ok": False, "error": str(exc), "code": exc.code})
@@ -1191,7 +1198,8 @@ def create_handler(app):
             if data is None:
                 return
             try:
-                result = ask_openai(data.get("messages"), _read_local_cfg(), profile_id=data.get("profile_id"))
+                result = ask_openai(data.get("messages"), _read_local_cfg(), profile_id=data.get("profile_id"),
+                    provider=data.get("provider"), model=data.get("model"), effort=data.get("effort"))
                 self._send(200, {"ok": True, **result})
             except OpenAIError as exc:
                 self._send(exc.status, {"ok": False, "error": str(exc), "code": exc.code})

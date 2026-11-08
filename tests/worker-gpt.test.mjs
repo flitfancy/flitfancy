@@ -32,7 +32,7 @@ const env = { ADMIN_TOKEN: token, CF_SECRET_MANAGER_TOKEN: manager, AI_API_KEY: 
     first: async () => storedConfig ? { data: storedConfig } : null,
     bind(...args) { return {
       first: async () => daily < args[1] ? { requests: ++daily } : null,
-      run: async () => { storedConfig = args[0]; return {}; },
+      run: async () => { if (sql.includes("INSERT INTO model_gateway_config")) storedConfig = args[0]; return {}; },
     }; },
   }; } },
 };
@@ -114,11 +114,18 @@ try {
   assert.equal((await worker.fetch(req("/admin/model/chat", { ...msg, purpose: "unexpected" }, true), env)).status, 400);
   response = await worker.fetch(req("/gpt/chat", msg), env);
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { ok: true, reply: "云端回复" });
+  const publicReply = await response.json();
+  assert.equal(publicReply.ok, true); assert.equal(publicReply.reply, "云端回复");
   assert.equal((await worker.fetch(req("/gpt/chat", msg), env)).status, 429, "daily budget is enforced");
   assert.equal((await worker.fetch(req("/gpt/chat", { ...msg, profile_id: "0000000000000000" }), env)).status, 409);
   assert.equal((await worker.fetch(req("/gpt/chat", { messages: [{ role: "system", content: "x" }] }), env)).status, 400);
   assert.equal((await worker.fetch(req("/gpt/chat", msg), { ...env, GPT_RATE_LIMITER: undefined })).status, 503);
+  const beforeOpenAI = env.MODEL_OPENAI_SECRET;
+  response = await worker.fetch(req("/admin/model/config", {provider:"custom2", model:"compatible-model", base_url:"https://custom.example/v1",
+    api_key:"fixture-custom-key-012345", access:"all", public_daily_limit:10, set_default:false, public_enabled:false}, true), env);
+  assert.equal(response.status,200);
+  assert.equal(JSON.parse(env.MODEL_CUSTOM2_SECRET).base_url,"https://custom.example/v1");
+  assert.equal(env.MODEL_OPENAI_SECRET,beforeOpenAI,"adding another AI never overwrites the existing OpenAI secret");
   const selectedConfig = JSON.parse(storedConfig);
   storedConfig = JSON.stringify({ ...selectedConfig, access: "off" });
   assert.equal((await worker.fetch(req("/admin/model/chat", { ...msg, purpose: "chat" }, true), env)).status, 403);
@@ -180,7 +187,8 @@ try {
   assert.equal(JSON.parse(env.MODEL_OPENAI_SECRET).api_key, apiKey, "cleanup preserves the active OpenAI key");
   assert.equal(env.CF_SECRET_MANAGER_TOKEN, manager, "cleanup preserves Cloudflare management authorization");
   const afterCleanup = JSON.parse(storedConfig);
-  assert.deepEqual(Object.keys(afterCleanup.profiles), ["openai"]);
+  assert.deepEqual(Object.keys(afterCleanup.profiles), ["openai", "custom2"]);
+  assert(env.MODEL_CUSTOM2_SECRET, "cleanup of old slots cannot remove subsequently added custom services");
   assert.equal(afterCleanup.access, "admin");
   assert.equal((await (await worker.fetch(req("/admin/model/status", null, true), env)).json()).configured, true);
   assert.equal((await worker.fetch(new Request("https://api.flitfancy.com/gpt/chat", { method: "OPTIONS", headers: { Origin: "https://flitfancy.com" } }), env)).status, 204);
