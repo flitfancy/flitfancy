@@ -5,9 +5,9 @@
   const list = document.querySelector('[data-role="essay-list"]');
   const prologue = document.querySelector('[data-role="essay-prologue"]');
   if (!library || !list || !prologue) return;
-  const local = location.hostname === "localhost" || location.hostname === "127.0.0.1";
-  const API = local ? "/api/essays/featured" : "https://api.flitfancy.com/essays/featured";
+  const API = "https://api.flitfancy.com/essays/featured";
   let pending = null;
+  let displayed = null;
 
   function render(row) {
     list.textContent = "";
@@ -44,14 +44,23 @@
     pending = ctrl;
     const timer = setTimeout(function () { ctrl.abort(); }, 8000);
     try {
-      const response = await fetch(API, { headers: { "Accept": "application/json" }, signal: ctrl.signal });
+      const response = await fetch(API, { headers: { "Accept": "application/json" }, cache: "no-store", signal: ctrl.signal });
       if (!response.ok) throw new Error("HTTP " + response.status);
       const data = await response.json();
-      if (pending === ctrl && !ctrl.signal.aborted) render(data.essay || null);
-    } catch (error) { /* 网络失败时保留已显示的文章。 */ }
+      if (pending === ctrl && !ctrl.signal.aborted) {
+        const signature = JSON.stringify(data.essay || null);
+        if (signature !== displayed) { render(data.essay || null); displayed = signature; }
+      }
+      return { ok: true };
+    } catch (error) { return { ok: false }; /* 保留已显示的文章。 */ }
     finally { clearTimeout(timer); }
   }
 
-  document.addEventListener("flitfancy:essay-saved", refresh);
-  refresh();
+  const job = window.FlitFancyPublicRefresh && window.FlitFancyPublicRefresh.register({
+    id: "featured-essay", label: "展示短文", page: "about", interval: 15000, run: refresh,
+  });
+  document.addEventListener("flitfancy:essay-saved", function () {
+    return job ? job.refresh({ rerun: true }) : refresh();
+  });
+  if (!job) void refresh();
 })();

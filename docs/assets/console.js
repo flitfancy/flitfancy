@@ -50,6 +50,9 @@
   const pageName = query('[data-role="bridge-panel"]') ? 'console' : 'presence';
   const scheduler = window.FlitFancyRefresh.create({concurrency: 3});
   let authenticated = null, authRevision = 0, backendReady = false, statusChecked = false, loginRequired = null;
+  let sensorMode = "public";
+  const sensorSource = query('[data-role="sensor-source"]');
+  const sensorSourceToggle = query('[data-role="sensor-source-toggle"]');
 
   window.FlitFancyAdmin.installErrorHandler('[data-role="js-error"]');
 
@@ -120,8 +123,10 @@
       const response = await fetchPublic(PUBLIC_BASE + "/sensors/latest");
       if (!response.ok) throw Object.assign(new Error("public sensor request failed"), {status:response.status});
       const data = await response.json();
-      if (epoch !== authRevision) return {skipped:true};
+      if (epoch !== authRevision || sensorMode !== "public") return {skipped:true};
+      (data.rows || []).forEach(function (row) { call(sensors,"notePressure",row); });
       call(sensors, "render", data.rows || []);
+      if (sensorSource) sensorSource.textContent = "公开快照";
       return {ok:true};
     } catch (error) { return {ok:false,status:error.status}; }
   }
@@ -199,6 +204,12 @@
   }) : null;
 
   function clearPrivateViews() {
+    if (sensorSourceToggle) { sensorSourceToggle.hidden = true; sensorSourceToggle.textContent = "查看本机实时"; }
+    if (sensorMode === "local") {
+      sensorMode = "public";
+      call(sensors,"render",[]);
+      if (sensorSource) sensorSource.textContent = "等待公开快照";
+    }
     call(chat,"updateState",null);
     call(gpt,"clearPrivate");
     call(gptSettings,"clearPrivate");
@@ -211,6 +222,11 @@
     if (authenticated !== signedIn) {
       authenticated = signedIn; authRevision++;
       if (!signedIn) clearPrivateViews();
+    }
+    if (sensorSourceToggle) {
+      sensorSourceToggle.hidden = !(serverOnline && signedIn);
+      sensorSourceToggle.disabled = !backendReady;
+      sensorSourceToggle.textContent = sensorMode === "local" ? "查看公开快照" : "查看本机实时";
     }
     call(gpt,"setAuthenticated",serverOnline ? signedIn : true);
     call(gptSettings,"setAuthenticated",signedIn);
@@ -228,7 +244,8 @@
       if (epoch !== authRevision) return {skipped:true};
       const wasReady = backendReady;
       backendReady = true; statusChecked = true;
-      setStatus(true);
+      if (sensorSourceToggle) sensorSourceToggle.disabled = false;
+      setStatus(true,call(admin,"token") ? "管理员已连接" : "本机服务已连接");
       updateLoginRequired(!call(admin,"token"));
       call(chat,"setEnabled",status.dialogue_enabled !== false);
       call(services,"setProtocolName",status.protocol_name);
@@ -239,8 +256,9 @@
       if (epoch !== authRevision) return {skipped:true};
       const first = !statusChecked;
       backendReady = false; statusChecked = true;
+      if (sensorSourceToggle) sensorSourceToggle.disabled = true;
       const needsLogin = window.FlitFancyAdmin.isUnauthorized(error);
-      setStatus(false,needsLogin ? "需要登录" : "");
+      setStatus(false,needsLogin ? "需要登录" : "服务暂不可用");
       if (needsLogin) updateLoginRequired(true);
       call(services,"update",null);
       if (first && sensorJob) void sensorJob.refresh();
@@ -249,14 +267,16 @@
   }
   async function refreshSensors() {
     const epoch = authRevision;
-    if (!serverOnline || !backendReady) return readPublicSensors();
+    if (sensorMode === "public") return readPublicSensors();
+    if (!serverOnline || !backendReady || !call(admin,"token")) return {skipped:true};
     try {
       const latest = await request("/api/sensors/latest");
-      if (epoch !== authRevision) return {skipped:true};
+      if (epoch !== authRevision || sensorMode !== "local") return {skipped:true};
       (latest.rows || []).forEach(function (row) { call(sensors,"notePressure",row); });
       call(sensors,"render",latest.rows || []);
+      if (sensorSource) sensorSource.textContent = "本机实时";
       return {ok:true};
-    } catch (error) { return epoch === authRevision ? readPublicSensors() : {skipped:true}; }
+    } catch (error) { return epoch === authRevision ? {ok:false,status:error.status} : {skipped:true}; }
   }
 
   scheduler.register({id:"site-status",label:"服务状态",page:pageName,interval:SENSOR_REFRESH_MS,
@@ -265,6 +285,12 @@
   const sensorJob = sensors ? scheduler.register({id:"sensors-latest",label:"现实感知",page:pageName,
     interval:SENSOR_REFRESH_MS,hidden:"pause",enabled:function () { return !serverOnline || statusChecked; },
     disabledReason:function () { return '等待服务状态'; },run:refreshSensors}) : null;
+  if (sensorSourceToggle && sensorJob) sensorSourceToggle.addEventListener("click", function () {
+    if (!serverOnline || !backendReady || !call(admin,"token")) return;
+    sensorMode = sensorMode === "public" ? "local" : "public";
+    sensorSourceToggle.textContent = sensorMode === "local" ? "查看公开快照" : "查看本机实时";
+    void sensorJob.refresh({rerun:true});
+  });
   if (chat && !serverOnline) scheduler.register({id:"public-config",label:"公开对话配置",page:pageName,
     interval:CONFIG_REFRESH_MS,hidden:"pause",run:function () { return chat.instance.refreshPublicConfig(); }});
   if (gpt && !serverOnline) scheduler.register({id:"public-gpt",label:"模型对话状态",page:pageName,

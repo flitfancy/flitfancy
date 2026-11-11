@@ -7,6 +7,18 @@ import { runDdlOnce, TABLE_ESSAYS } from "./worker-storage.js";
 
 const CONFIG_CACHE_SECONDS = 30;
 let chatEnabledCache = { t: 0, value: true };
+const TABLE_PUBLIC_CONTENT_CONFIG = `CREATE TABLE IF NOT EXISTS public_content_config(
+  config_key TEXT PRIMARY KEY, sync_revision INTEGER NOT NULL, value TEXT NOT NULL
+)`;
+
+async function versionedConfig(env, key) {
+  if (!env.DB) return null;
+  await runDdlOnce(env, TABLE_PUBLIC_CONTENT_CONFIG);
+  const rows = await env.DB.prepare(
+    "SELECT sync_revision, value FROM public_content_config WHERE config_key = ?"
+  ).bind(key).all();
+  return rows.results?.[0] || null;
+}
 
 export async function chatEnabled(env) {
   if (!env.CONFIG) return false;
@@ -36,7 +48,8 @@ function normalizeReflections(values) {
 
 async function reflections(env) {
   if (!env.CONFIG) return [];
-  const value = await env.CONFIG.get("reflections");
+  const saved = await versionedConfig(env, "reflections");
+  const value = saved ? saved.value : await env.CONFIG.get("reflections");
   if (!value) return [];
   try {
     return normalizeReflections(JSON.parse(value));
@@ -94,7 +107,8 @@ function validFeaturedEssay(value) {
 
 export async function handleFeaturedEssay(env) {
   if (!env.CONFIG) return json({ ok: false, error: "config unavailable" }, 503);
-  const raw = await env.CONFIG.get("featured_essay");
+  const saved = await versionedConfig(env, "featured_essay");
+  const raw = saved ? saved.value : await env.CONFIG.get("featured_essay");
   let essay = null;
   try { essay = raw ? JSON.parse(raw) : null; } catch (error) { /* 缺失或损坏时显示原序章。 */ }
   if (!validFeaturedEssay(essay) || !env.DB) {
@@ -130,6 +144,20 @@ export async function handleToggle(request, env) {
   if (hasFeaturedEssay && !validFeaturedEssay(body.featured_essay)) {
     return json({ ok: false, error: "invalid featured essay" }, 400);
   }
+  // Legacy writers cannot silently replace content after a versioned writer has taken over.
+  for (const [key, present] of [["reflections", hasReflections], ["featured_essay", hasFeaturedEssay]]) {
+    if (present && await versionedConfig(env, key)) {
+      // Keep an explicitly requested chat access change effective even if an old
+      // client bundled it with content that now requires a versioned writer.
+      if (hasChatEnabled) {
+        const enabled = !!body.chat_enabled;
+        await env.CONFIG.put("chat_enabled", enabled ? "true" : "false");
+        chatEnabledCache = { t: 0, value: enabled };
+        await clearConfigCache(request);
+      }
+      return json({ ok: false, error: "content configuration requires versioned sync" }, 409);
+    }
+  }
   if (!hasChatEnabled && !hasReflections && !hasFeaturedEssay) {
     return json({ ok: false, error: "no supported config field" }, 400);
   }
@@ -153,4 +181,37 @@ export async function handleToggle(request, env) {
   }
   await clearConfigCache(request);
   return json(result);
+}
+
+export async function handleContentConfig(request, env) {
+  const authError = await adminAuthError(request, env);
+  if (authError) return authError;
+  const parsed = await readJsonBody(request);
+  if (parsed.error) return parsed.error;
+  if (!env.DB || !env.CONFIG) return json({ ok: false, error: "content configuration unavailable" }, 503);
+  const { key, value, sync_revision: revision } = parsed.body;
+  if (!Number.isSafeInteger(revision) || revision < 1 || !["reflections", "featured_essay"].includes(key)) {
+    return json({ ok: false, error: "invalid content configuration revision or key" }, 400);
+  }
+  if (key === "reflections" && !Array.isArray(value) || key === "featured_essay" && !validFeaturedEssay(value)) {
+    return json({ ok: false, error: "invalid content configuration" }, 400);
+  }
+  const normalized = key === "reflections" ? normalizeReflections(value) : {
+    uid: value.uid, title: value.title, content: value.content, updated_at: value.updated_at,
+  };
+  const encoded = JSON.stringify(normalized);
+  await runDdlOnce(env, TABLE_PUBLIC_CONTENT_CONFIG);
+  // Claim and read in one D1 transaction. A timed-out older request cannot overwrite a newer value.
+  const results = await env.DB.batch([
+    env.DB.prepare(`INSERT INTO public_content_config(config_key, sync_revision, value) VALUES(?,?,?)
+      ON CONFLICT(config_key) DO UPDATE SET sync_revision=excluded.sync_revision, value=excluded.value
+      WHERE excluded.sync_revision > public_content_config.sync_revision`).bind(key, revision, encoded),
+    env.DB.prepare("SELECT sync_revision, value FROM public_content_config WHERE config_key = ?").bind(key),
+  ]);
+  const current = results[1].results?.[0];
+  if (!current || current.sync_revision !== revision || current.value !== encoded) {
+    return json({ ok: false, error: "content configuration revision conflict", sync_revision: current?.sync_revision || 0 }, 409);
+  }
+  await clearConfigCache(request);
+  return json({ ok: true, sync_revision: revision });
 }

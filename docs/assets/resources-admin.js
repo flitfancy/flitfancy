@@ -5,13 +5,14 @@
 
   const $ = function (selector) { return document.querySelector(selector); };
   const ADMIN_KEY = "flitfancy.admin.token";
-  const MANIFEST_URL = "resources/manifest.json";
+  const MANIFEST_URL = "https://flitfancy.com/resources/manifest.json";
   const GROUPS = ["firefly", "naturecraft", "flitfancy"];
   const UPLOAD_TIMEOUT_MS = 30 * 60000;
   const adminSurface = window.FlitFancyAdmin.isAdminHost();
   const EDIT_FIELDS = ["title", "group", "desc", "details"];
   let resourceEntries = [], editingId = "", editRevision = 0, managementRevision = 0;
   let loadRevision = 0, publicRevision = 0, metadataBusy = false, uploadBusy = false, savedEditSnapshot = "";
+  let displayedManifest = null;
 
   function token() { return window.FlitFancyAdmin.token(ADMIN_KEY); }
   function setToken(value) { window.FlitFancyAdmin.setToken(ADMIN_KEY, value); }
@@ -132,25 +133,32 @@
   async function renderPublicCards() {
     const revision = ++publicRevision;
     let entries = [];
+    const controller = new AbortController();
+    const timeout = setTimeout(function () { controller.abort(); }, 8000);
     try {
-      entries = await fetch(MANIFEST_URL, {cache:"no-store"}).then(function (r) {
+      entries = await fetch(MANIFEST_URL, {cache:"no-store", signal:controller.signal}).then(function (r) {
         if (!r.ok) throw new Error("manifest unavailable");
         return r.json();
       });
-    } catch (error) { return; }
-    if (revision !== publicRevision) return;
+    } catch (error) { return {ok:false}; }
+    finally { clearTimeout(timeout); }
+    if (revision !== publicRevision) return {skipped:true};
     if (!Array.isArray(entries)) entries = [];
+    const signature = JSON.stringify(entries);
+    if (signature === displayedManifest) return {ok:true};
     GROUPS.forEach(function (group) {
       const box = document.querySelector('[data-column="' + group + '"]');
       if (!box) return;
       box.textContent = "";
       const cards = entries.filter(function (e) { return e.group === group; });
       if (!cards.length) return;
-      cards.forEach(function (entry) { box.appendChild(renderCard(entry)); });
+      cards.forEach(function (entry) { box.appendChild(renderCard(entry, "https://flitfancy.com/resources/")); });
     });
+    displayedManifest = signature;
+    return {ok:true};
   }
 
-  function renderCard(entry) {
+  function renderCard(entry, base) {
     const card = document.createElement("article");
     card.className = "mini-card";
     const latest = (entry.versions || [])[0] || {};
@@ -182,7 +190,7 @@
     if (latest.file) {
       const link = document.createElement("a");
       link.className = "back-link";
-      link.href = "resources/" + latest.file;
+      link.href = (base || "resources/") + latest.file;
       link.textContent = "下载最新版";
       link.setAttribute("download", "");
       card.appendChild(link);
@@ -301,6 +309,8 @@
     EDIT_FIELDS.forEach(function (field) { $('[data-role="res-edit-' + field + '"]').value = ""; });
     $('[data-role="res-upload-form"]').hidden = false;
     $('[data-role="res-edit-form"]').hidden = true;
+    $('[data-role="res-preview"]').textContent = "";
+    $('[data-role="res-preview-wrap"]').hidden = true;
     setStatus('[data-role="res-edit-status"]', "");
   }
 
@@ -348,7 +358,10 @@
       renderAdminList(resourceEntries);
       fillResourceSelect(resourceEntries);
       setStatus('[data-role="res-list-status"]', "资源列表已更新");
-      void renderPublicCards();
+      const preview = $('[data-role="res-preview"]');
+      preview.textContent = "";
+      preview.appendChild(renderCard(entry));
+      $('[data-role="res-preview-wrap"]').hidden = false;
       setStatus('[data-role="res-edit-status"]', "修改已保存到本机，可点击“发布更新”更新公开页面。");
     } catch (error) {
       if (!currentEdit(revision, session, error)) return;
@@ -500,5 +513,8 @@
   });
   if (window.location.hash === "#manage") openManager();
 
-  renderPublicCards();
+  const publicJob = window.FlitFancyPublicRefresh && window.FlitFancyPublicRefresh.register({
+    id:"resources", label:"公开资源", page:"resources", interval:30000, run:renderPublicCards,
+  });
+  if (!publicJob) void renderPublicCards();
 })();

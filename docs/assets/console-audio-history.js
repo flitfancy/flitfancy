@@ -60,8 +60,10 @@
         right: style.getPropertyValue('--cyan').trim() || '#70b8b3',
       };
       context.clearRect(0, 0, width, height);
-      context.font = '11px system-ui';
-      const left = 34, right = width - 10, top = 8, bottom = height - 20;
+      const textSize = parseFloat(style.getPropertyValue('--fs-min')) || 16;
+      context.font = textSize + 'px ' + (style.fontFamily || 'sans-serif');
+      const left = Math.max(34, textSize * 2.5), right = width - 10;
+      const top = Math.max(8, textSize), bottom = height - Math.max(20, Math.ceil(textSize * 1.6));
       const minDb = -80, maxDb = -20;
       const y = function (value) { return bottom - (Math.max(minDb, Math.min(maxDb, value)) - minDb) / (maxDb - minDb) * (bottom - top); };
       [-80, -60, -40, -20].forEach(function (value) {

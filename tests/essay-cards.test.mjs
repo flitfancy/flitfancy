@@ -187,6 +187,7 @@ const readerQuery = (selector) => {
 let readerRefresh;
 let responseEssay = { ...chosen, content: "<img src=x onerror=alert(1)>\n第二段" };
 const readerContext = {
+  window: {},
   location: { hostname: "flitfancy.com" }, AbortController, setTimeout, clearTimeout,
   document: {
     querySelector: readerQuery, createElement: element,

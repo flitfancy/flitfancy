@@ -6,7 +6,7 @@
     CH0: { name: "温湿度", sensor: "SHT41" },
     CH1: { name: "气压", sensor: "BMP580" },
     CH2: { name: "光谱", sensor: "AS7341" },
-    CH3: { name: "环境光与紫外", sensor: "LTR390" },
+    CH3: { name: "光照 / UV", sensor: "LTR390" },
     CH4: { name: "空气质量", sensor: "SGP41" },
     CH5: { name: "二氧化碳", sensor: "SCD40" },
     CH6: { name: "手表心率", sensor: "BLE" },
@@ -167,7 +167,7 @@
       }
       const online = state.isOnline(row, Date.now());
       const age = sampleAgeText(row);
-      return online ? "在线" + (age ? " · " + age : "") :
+      return online ? (age || "—") :
         (Number(row.ok) === 1 ? "离线 · 快照已停止更新" : "暂无读数");
     }
 

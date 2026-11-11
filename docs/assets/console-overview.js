@@ -364,7 +364,10 @@
       context.clearRect(0, 0, width, height);
       const empty = function (text) {
         context.fillStyle = "rgba(139, 148, 168, 0.8)";
-        context.font = "13px system-ui, sans-serif";
+        const textStyle = typeof global.getComputedStyle === "function" ? global.getComputedStyle(canvas) : null;
+        const textFamily = textStyle ? textStyle.fontFamily : "sans-serif";
+        const textSize = textStyle ? parseFloat(textStyle.getPropertyValue("--fs-min")) || 16 : 16;
+        context.font = textSize + "px " + (textFamily || "sans-serif");
         context.textAlign = "center";
         context.fillText(text, width / 2, height / 2);
       };
@@ -402,7 +405,7 @@
       };
 
       const first = plotted[0];
-      context.font = "10px Consolas, monospace";
+      context.font = '10px Consolas, "LXGW WenKai Screen", monospace';
       context.textAlign = "right";
       for (let level = 0; level <= 4; level++) {
         const value = first.min + (first.max - first.min) * level / 4;
@@ -451,7 +454,7 @@
         }
       });
 
-      context.font = "11px Consolas, monospace";
+      context.font = '11px Consolas, "LXGW WenKai Screen", monospace';
       context.textAlign = "left";
       plotted.forEach(function (item, index) {
         const average = item.valid.reduce(function (sum, value) {
@@ -473,7 +476,7 @@
         context.lineTo(x(index), padTop + plotHeight);
         context.stroke();
         context.setLineDash([]);
-        context.font = "11px Consolas, monospace";
+        context.font = '11px Consolas, "LXGW WenKai Screen", monospace';
         const lines = plotted.map(function (item) {
           const value = item.values[index];
           return {
@@ -508,7 +511,7 @@
       }
 
       context.fillStyle = "rgba(139, 148, 168, 0.9)";
-      context.font = "11px Consolas, monospace";
+      context.font = '11px Consolas, "LXGW WenKai Screen", monospace';
       [0, 0.25, 0.5, 0.75, 1].forEach(function (point, pointIndex) {
         const index = Math.round(point * (buckets.length - 1));
         const time = String(buckets[index].bucket || "").slice(11, 16);

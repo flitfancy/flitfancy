@@ -31,7 +31,7 @@ function harness({admin=true}={}) {
   role('group').value='naturecraft';
   role('edit-form').hidden=true;
   const document={querySelector:query,createElement:element,body:element()};
-  const context={document,Blob:class {},
+  const context={document,Blob:class {},AbortController,setTimeout,clearTimeout,
     XMLHttpRequest:class {
       open(){} setRequestHeader(){}
       constructor(){this.upload={};this.status=200;}
@@ -93,8 +93,7 @@ assert.equal(test.writes[0].path,'/api/resources/update');
 assert.deepEqual(test.writes[0].body,{id:original.id,title:'修改后的标题',group:'flitfancy',desc:'',details:'第一行\n第二行 <script>'});
 assert.deepEqual(test.state.entries[0].versions,original.versions);
 assert.equal(test.writes.length,1,'save does not upload or publish');
-assert.equal(test.query('[data-column="firefly"]').children.length,0);
-const movedCard=test.query('[data-column="flitfancy"]').children[0];
+const movedCard=test.role('preview').children[0];
 assert.equal(movedCard.children[0].textContent,'修改后的标题 · 1.0');
 assert.equal(movedCard.children.find(node=>node.tag==='a').href,'resources/'+original.versions[0].file);
 assert.equal(test.role('edit-publish').disabled,false);

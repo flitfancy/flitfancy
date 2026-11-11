@@ -126,7 +126,7 @@
       document.dispatchEvent(new CustomEvent("flitfancy:essay-saved"));
       setStatus('[data-role="essay-write-status"]', data.public_sync
         ? "已设为展示；公网可能需要片刻更新"
-        : "本机已选定，公网尚未更新。请稍后点“更新展示”重试。");
+        : "本机已选定，公网等待同步" + (data.public_sync_note ? "：" + data.public_sync_note : "；将自动重试"));
     } catch (error) {
       setStatus('[data-role="essay-write-status"]', error.message || "展示更新失败，请重试");
     } finally { busy = false; }

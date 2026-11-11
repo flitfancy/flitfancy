@@ -7,14 +7,15 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='24' fill='%23f5b84b' opacity='0.22'/%3E%3Ccircle cx='32' cy='32' r='12' fill='%23f5b84b'/%3E%3Ccircle cx='32' cy='32' r='5' fill='%23ffe9c4'/%3E%3C/svg%3E">
   <title>控制台 — 云萤 · FlitFancy</title>
   <meta name="description" content="小流萤的控制台：服务管理与本机启动。">
-  <link rel="stylesheet" href="assets/style.css?v=1.31.9">
-  <link rel="stylesheet" href="assets/console-model-experience.css?v=1.31.9">
-  <link rel="stylesheet" href="assets/console-launcher.css?v=1.31.9">
-  <link rel="stylesheet" href="assets/console-bridge.css?v=1.31.9">
-  <link rel="stylesheet" href="assets/console-heartbeat.css?v=1.31.9">
-  <script src="assets/track.js?v=1.31.9" defer></script>
+  <link rel="stylesheet" href="assets/style.css?v=1.32.0">
+  <link rel="stylesheet" href="assets/console-model-experience.css?v=1.32.0">
+  <link rel="stylesheet" href="assets/console-launcher.css?v=1.32.0">
+  <link rel="stylesheet" href="assets/console-bridge.css?v=1.32.0">
+  <link rel="stylesheet" href="assets/console-home.css?v=1.32.0">
+  <link rel="stylesheet" href="assets/console-heartbeat.css?v=1.32.0">
+  <script src="assets/track.js?v=1.32.0" defer></script>
 </head>
-<body class="console-page">
+<body class="console-page console-home">
   <canvas id="sky" aria-hidden="true"></canvas>
 
   <header class="nav">
@@ -34,9 +35,11 @@
       <div class="console-title">
         <h1 class="grad-title grad-clip grad-flame">控制台<span class="title-en">CONSOLE</span></h1>
       </div>
+      <p class="console-intro">把日常的连接，安放在这里。</p>
       <div class="console-status">
         <span class="dot" data-role="dot"></span>
         <span data-role="status">正在连接服务…</span>
+        <button type="button" class="console-entry" data-role="console-login">进入管理 <span aria-hidden="true">↗</span></button>
         <span class="ffs-actions" hidden>
           <button class="btn" data-role="ffs-start" data-action="backend" title="启动本地后端 server.py（端口 2671）。首次使用需运行 scripts/install_flitfancy_protocol.ps1"><span class="grad-clip grad-cool">后端</span></button>
           <button class="btn" data-role="ffs-start" data-action="tunnel" title="启动 Cloudflare 隧道（console.flitfancy.com）。首次使用需运行 scripts/install_flitfancy_protocol.ps1"><span class="grad-clip grad-cool">隧道</span></button>
@@ -73,7 +76,9 @@
         </div>
       </section>
 
-      <section class="console-panel bridge-console" data-role="bridge-panel" aria-label="全界之桥">
+      <div class="console-utility-grid">
+      <section class="console-panel bridge-console console-utility" data-role="bridge-panel" aria-label="全界之桥">
+        <div class="console-utility-top"><span>01 · FILES</span><svg viewBox="0 0 64 48" fill="none" aria-hidden="true"><path d="M7 37h50M14 37V11m36 26V11M14 16c11 16 25 16 36 0M24 28v9m8-7v7m8-9v9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></div>
         <div class="bridge-head"><h2>全界之桥</h2><span class="bridge-caption">把文件带回家</span></div>
         <p class="hint" data-bridge="locked">再次点击上方“控制台”登录后，就能把文件传回 NAS。</p>
         <div data-bridge="body" hidden>
@@ -112,7 +117,8 @@
         </div>
       </section>
 
-      <section class="console-panel" data-role="collector-panel" aria-label="手机采集">
+      <section class="console-panel console-utility collector-console" data-role="collector-panel" aria-label="手机采集">
+        <div class="console-utility-top"><span>02 · SENSING</span><svg viewBox="0 0 64 48" fill="none" aria-hidden="true"><rect x="23" y="5" width="18" height="37" rx="4" stroke="currentColor" stroke-width="1.5"/><path d="M29 9h6M30 37h4M14 17c-4 4-4 10 0 14m36-14c4 4 4 10 0 14M9 13c-6 7-6 17 0 24m46-24c6 7 6 17 0 24" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></div>
         <h2>手机采集</h2>
         <p class="hint" data-collector="locked">登录后配对手机，接收感知板数据并持续上报。</p>
         <div data-collector="body" hidden>
@@ -124,6 +130,7 @@
           <p class="hint" data-collector="message" role="status"></p>
         </div>
       </section>
+      </div>
 
       <section class="console-panel launcher-console" data-role="launcher-panel" hidden aria-label="本机启动">
         <div class="launcher-head">
@@ -296,21 +303,21 @@
 
   <div class="js-error" data-role="js-error" hidden></div>
 
-  <script src="assets/firefly.js?v=1.31.9"></script>
-  <script src="assets/sitefx.js?v=1.31.9"></script>
-  <script src="assets/admin-core.js?v=1.31.9" data-console-module="FlitFancyAdmin"></script>
-  <script src="assets/refresh-scheduler.js?v=1.31.9" data-console-module="FlitFancyRefresh"></script>
-  <script src="assets/admin-panel-shell.js?v=1.31.9" data-console-module="FlitFancyPanelShell"></script>
-  <script src="assets/console-visits.js?v=1.31.9" data-console-module="FlitFancyVisits"></script>
-  <script src="assets/console-admin.js?v=1.31.9" data-console-module="FlitFancyConsoleAdmin"></script>
-  <script src="assets/console-gpt-settings.js?v=1.31.9" data-console-module="FlitFancyGPTSettings"></script>
-  <script src="assets/console-services.js?v=1.31.9" data-console-module="FlitFancyConsoleServices"></script>
-  <script src="assets/console-launcher.js?v=1.31.9" data-console-module="FlitFancyConsoleLauncher"></script>
-  <script src="assets/bridge-files.js?v=1.31.9" data-console-module="FlitFancyBridgeFiles"></script>
-  <script src="assets/bridge-hash.js?v=1.31.9" data-console-module="FlitFancyBridgeHash"></script>
-  <script src="assets/console-bridge.js?v=1.31.9" data-console-module="FlitFancyConsoleBridge"></script>
-  <script src="assets/console-heartbeat.js?v=1.31.9" data-console-module="FlitFancyHeartbeats"></script>
-  <script src="assets/console-collectors.js?v=1.31.9" data-console-module="FlitFancyCollectors"></script>
-  <script src="assets/console.js?v=1.31.9"></script>
+  <script src="assets/firefly.js?v=1.32.0"></script>
+  <script src="assets/sitefx.js?v=1.32.0"></script>
+  <script src="assets/admin-core.js?v=1.32.0" data-console-module="FlitFancyAdmin"></script>
+  <script src="assets/refresh-scheduler.js?v=1.32.0" data-console-module="FlitFancyRefresh"></script>
+  <script src="assets/admin-panel-shell.js?v=1.32.0" data-console-module="FlitFancyPanelShell"></script>
+  <script src="assets/console-visits.js?v=1.32.0" data-console-module="FlitFancyVisits"></script>
+  <script src="assets/console-admin.js?v=1.32.0" data-console-module="FlitFancyConsoleAdmin"></script>
+  <script src="assets/console-gpt-settings.js?v=1.32.0" data-console-module="FlitFancyGPTSettings"></script>
+  <script src="assets/console-services.js?v=1.32.0" data-console-module="FlitFancyConsoleServices"></script>
+  <script src="assets/console-launcher.js?v=1.32.0" data-console-module="FlitFancyConsoleLauncher"></script>
+  <script src="assets/bridge-files.js?v=1.32.0" data-console-module="FlitFancyBridgeFiles"></script>
+  <script src="assets/bridge-hash.js?v=1.32.0" data-console-module="FlitFancyBridgeHash"></script>
+  <script src="assets/console-bridge.js?v=1.32.0" data-console-module="FlitFancyConsoleBridge"></script>
+  <script src="assets/console-heartbeat.js?v=1.32.0" data-console-module="FlitFancyHeartbeats"></script>
+  <script src="assets/console-collectors.js?v=1.32.0" data-console-module="FlitFancyCollectors"></script>
+  <script src="assets/console.js?v=1.32.0"></script>
 </body>
 </html>

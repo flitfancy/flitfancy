@@ -9,6 +9,8 @@ const MAX_BODY_BYTES = 64 * 1024;
 
 const PUBLIC_CORS_PATHS = new Set([
   "/config",
+  "/flitime/time",
+  "/flitime/weather",
   "/track",
   "/memories",
   "/anchors",
@@ -23,6 +25,7 @@ const PUBLIC_CORS_PATHS = new Set([
 
 const ADMIN_CORS_PATHS = new Set([
   "/admin/toggle",
+  "/admin/content-config",
   "/admin/model/status",
   "/admin/model/config",
   "/admin/model/chat",

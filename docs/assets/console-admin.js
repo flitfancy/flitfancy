@@ -56,6 +56,8 @@
       }
       query(".ffs-actions").hidden = !show;
       query('[data-role="admin-logout"]').hidden = !show;
+      const entry = query('[data-role="console-login"]');
+      if (entry) entry.hidden = show;
     }
 
     function authFailed(response) {
@@ -391,6 +393,8 @@
         event.preventDefault();
         return enterManagement();
       });
+      const entry = query('[data-role="console-login"]');
+      if (entry) entry.addEventListener("click", enterManagement);
 
       query('[data-role="admin-login"]').addEventListener("click", login);
       query('[data-role="admin-cancel"]').addEventListener("click", closeLogin);

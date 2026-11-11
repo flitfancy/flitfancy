@@ -6,6 +6,7 @@
   /* 令牌读写与主机判定委托共享核心（assets/admin-core.js） */
   const adminSurface = window.FlitFancyAdmin.isAdminHost();
   let sessionRevision = 0;
+  let memoryReadRevision = 0, anchorReadRevision = 0;
 
   function token() {
     return window.FlitFancyAdmin.token(ADMIN_KEY);
@@ -300,7 +301,7 @@
       loadReflections();
       setStatus('[data-role="reflection-write-status"]', data.public_sync
         ? "随笔已保存，页脚正在更新"
-        : "已保存在本机，公网稍后自动补传");
+        : "已保存在本机，公网等待同步" + (data.public_sync_note ? "：" + data.public_sync_note : "；将自动重试"));
       document.dispatchEvent(new CustomEvent("flitfancy:reflection-saved"));
     } catch (e) {
       if (window.FlitFancyAdmin.isUnauthorized(e)) setToken("");
@@ -335,12 +336,16 @@
   });
   $('[data-role="memory-save"]').addEventListener("click", save);
   $('[data-role="memory-cancel"]').addEventListener("click", function () {
+    memoryReadRevision++;
+    $('[data-role="memory-save"]').disabled = false;
     $('[data-role="memory-editor"]').hidden = true;
     document.body.classList.remove("editor-open");
   });
   $('[data-role="memory-logout"]').addEventListener("click", logout);
   $('[data-role="anchor-save"]').addEventListener("click", saveAnchor);
   $('[data-role="anchor-cancel-edit"]').addEventListener("click", function () {
+    anchorReadRevision++;
+    $('[data-role="anchor-save"]').disabled = false;
     resetAnchorEditor();
     setStatus('[data-role="anchor-write-status"]', "");
   });
@@ -376,11 +381,25 @@
 
   /* 既有条目编辑：时间线/锚点列表里的"编辑"按钮派发事件，这里回填表单。
      datetime-local 只吃本地时间（YYYY-MM-DDTHH:MM:SS），取 ISO 前 19 位。 */
-  document.addEventListener("flitfancy:edit-memory", function (event) {
-    const m = event.detail || {};
-    if (!m || !m.uid) return;
+  document.addEventListener("flitfancy:edit-memory", async function (event) {
+    let m = event.detail || {};
+    if (!m || !m.uid || !adminSurface || !token()) return;
     showEditor();
     showEditorPane("flow");
+    const session = token(), revision = sessionRevision, readRevision = ++memoryReadRevision;
+    $('[data-role="memory-save"]').disabled = true;
+    setStatus('[data-role="memory-write-status"]', "正在读取本机版本…");
+    try {
+      const result = await api("/api/memories", { method: "GET" });
+      if (session !== token() || revision !== sessionRevision || readRevision !== memoryReadRevision) return;
+      const local = (Array.isArray(result.rows) ? result.rows : []).find(function (row) { return row.uid === m.uid; });
+      if (!local) { setStatus('[data-role="memory-write-status"]', "本机没有这条记录，请先核对同步状态。"); return; }
+      m = local;
+    } catch (error) {
+      if (session !== token() || revision !== sessionRevision || readRevision !== memoryReadRevision) return;
+      setStatus('[data-role="memory-write-status"]', "本机记录读取失败，未打开旧版本，请重试。");
+      return;
+    } finally { if (readRevision === memoryReadRevision) $('[data-role="memory-save"]').disabled = false; }
     $('[data-role="memory-uid"]').value = m.uid;
     $('[data-role="memory-perspective"]').value = m.perspective === "her" ? "her" : "me";
     const timeText = String(m.time || "");
@@ -392,11 +411,25 @@
     $('[data-role="memory-content"]').value = String(m.content || "");
     setStatus('[data-role="memory-write-status"]', "正在编辑既有日记，保存后覆盖原条目");
   });
-  document.addEventListener("flitfancy:edit-anchor", function (event) {
-    const a = event.detail || {};
+  document.addEventListener("flitfancy:edit-anchor", async function (event) {
+    let a = event.detail || {};
     if (!a || !a.uid || !adminSurface || !token() || $('[data-role="anchor-save"]').disabled) return;
     showEditor();
     showEditorPane("anchor");
+    const session = token(), revision = sessionRevision, readRevision = ++anchorReadRevision;
+    $('[data-role="anchor-save"]').disabled = true;
+    setStatus('[data-role="anchor-write-status"]', "正在读取本机版本…");
+    try {
+      const result = await api("/api/anchors", { method: "GET" });
+      if (session !== token() || revision !== sessionRevision || readRevision !== anchorReadRevision) return;
+      const local = (Array.isArray(result.rows) ? result.rows : []).find(function (row) { return row.uid === a.uid; });
+      if (local) a = Object.assign({}, a, local, { card: a.card === true });
+      else if (!a.card) { setStatus('[data-role="anchor-write-status"]', "本机没有这条记录，请先核对同步状态。"); return; }
+    } catch (error) {
+      if (session !== token() || revision !== sessionRevision || readRevision !== anchorReadRevision) return;
+      setStatus('[data-role="anchor-write-status"]', "本机记录读取失败，未打开旧版本，请重试。");
+      return;
+    } finally { if (readRevision === anchorReadRevision) $('[data-role="anchor-save"]').disabled = false; }
     $('[data-role="anchor-uid"]').value = a.uid;
     $('[data-role="anchor-title"]').value = String(a.title || "");
     $('[data-role="anchor-horizon"]').value = a.horizon === "future" ? "future" : "now";

@@ -171,6 +171,13 @@
   }
 
   if (stream) sortStream(stream);   // 静态条目立即倒叙，不等网络
+  if (window.FlitFancyPublicRefresh) {
+    const job = window.FlitFancyPublicRefresh.register({
+      id:'memories', label:'日记更新', page:'journal', interval:POLL_MS, run:refresh,
+    });
+    document.addEventListener('flitfancy:memory-saved', () => job.refresh({rerun:true}));
+    return;
+  }
   if (!window.FlitFancyRefresh) {
     void refresh();
     document.addEventListener('flitfancy:memory-saved',refresh);

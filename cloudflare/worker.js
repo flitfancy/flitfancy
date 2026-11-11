@@ -8,7 +8,8 @@
 
 import { handleChat } from "./worker-chat.js";
 import { handleGPTChat, handleGPTStatus, handleModelAdmin } from "./worker-gpt.js";
-import { handleConfig, handleFeaturedEssay, handleToggle } from "./worker-config.js";
+import { handleFlitimeTime, handleFlitimeWeather } from "./worker-flitime.js";
+import { handleConfig, handleFeaturedEssay, handleToggle, handleContentConfig } from "./worker-config.js";
 import {
   handleAnchorCreate,
   handleAnchors,
@@ -68,6 +69,9 @@ async function routeRequest(request, env, ctx, url) {
   if (pathname === "/admin/toggle" && request.method === "POST") {
     return handleToggle(request, env);
   }
+  if (pathname === "/admin/content-config" && request.method === "POST") {
+    return handleContentConfig(request, env);
+  }
   if (pathname === "/config" && request.method === "GET") {
     return handleConfig(request, env, ctx);
   }
@@ -94,6 +98,12 @@ async function routeRequest(request, env, ctx, url) {
   }
   if (pathname === "/admin/model/cleanup-old" && request.method === "POST") {
     return handleModelAdmin(request, env, "cleanup-old");
+  }
+  if (pathname === "/flitime/time" && request.method === "GET") {
+    return handleFlitimeTime();
+  }
+  if (pathname === "/flitime/weather" && request.method === "GET") {
+    return handleFlitimeWeather(request, ctx);
   }
   if (pathname === "/track" && (request.method === "GET" || request.method === "POST")) {
     return handleTrack(request, env);

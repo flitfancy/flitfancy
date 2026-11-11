@@ -1,5 +1,6 @@
 """Worker 管理请求客户端与最新传感器快照同步队列。"""
 
+import copy
 import json
 import threading
 import urllib.error
@@ -11,6 +12,65 @@ WORKER_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
 )
+
+
+class PublicContentSyncQueue:
+    """Durable outbox for public reflections and the selected essay snapshot.
+
+    The metadata is saved in the same atomic config-file replacement as the value.
+    No credentials or private chat settings are sent by this queue.
+    """
+    KEYS = ("reflections", "featured_essay")
+    META = "_public_content_sync"
+
+    def __init__(self, read_config, save_config, lock, send):
+        self.read_config = read_config
+        self.save_config = save_config
+        self.lock = lock
+        self.send = send
+
+    @classmethod
+    def record_changes(cls, config, updates, now_microseconds):
+        keys = [key for key in cls.KEYS if key in updates]
+        if not keys:
+            return
+        meta = copy.deepcopy(config.get(cls.META) or {})
+        items = meta.setdefault("items", {})
+        clock = int(meta.get("clock") or 0)
+        for key in keys:
+            clock = max(clock + 1, int(now_microseconds))
+            items[key] = {"revision": clock}
+        meta["clock"] = clock
+        config[cls.META] = meta
+
+    def flush(self, keys=None):
+        selected = tuple(key for key in (keys or self.KEYS) if key in self.KEYS)
+        note = ""
+        for key in selected:
+            with self.lock:
+                cfg = self.read_config()
+                item = (cfg.get(self.META) or {}).get("items", {}).get(key)
+                if not item or key not in cfg:
+                    continue
+                revision = item.get("revision")
+                value = copy.deepcopy(cfg[key])
+            ok, detail = self.send("/admin/content-config", {
+                "key": key, "value": value, "sync_revision": revision,
+            }, 8, "公网内容配置接口")
+            if not ok:
+                note = detail or "公网内容配置尚未确认"
+                continue
+            with self.lock:
+                cfg = self.read_config()
+                meta = copy.deepcopy(cfg.get(self.META) or {})
+                current = meta.get("items", {}).get(key)
+                if current and current.get("revision") == revision and cfg.get(key) == value:
+                    del meta["items"][key]
+                    self.save_config({self.META: meta})
+        with self.lock:
+            pending = (self.read_config().get(self.META) or {}).get("items", {})
+            remains = any(key in pending for key in selected)
+        return not remains, note or ("内容已有新版本，等待同步" if remains else "")
 
 
 class WorkerClient:

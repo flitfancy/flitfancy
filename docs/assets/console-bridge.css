@@ -11,6 +11,8 @@
 .bridge-path { display: grid; gap: 7px; margin: 16px 0; color: var(--muted); font-size: var(--fs-meta); }
 .bridge-path input { width: 100%; min-width: 0; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--border); border-radius: 9px; background: rgba(0, 0, 0, 0.12); color: var(--text); font: inherit; }
 .bridge-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.flitime-actions { align-items: end; }
+.flitime-actions .bridge-path { min-width: 190px; margin: 0; }
 .bridge-console button:disabled { opacity: 0.45; cursor: default; }
 .bridge-job { border-top: 1px solid var(--border); margin-top: 20px; padding-top: 16px; }
 .bridge-job-head { justify-content: space-between; font-size: var(--fs-meta); overflow-wrap: anywhere; }

@@ -34,11 +34,11 @@
   const list = $('[data-role="anchor-list"]');
   if (!list) return;
   const count = $('[data-role="anchor-count"]');
-  const local = location.hostname === "localhost" || location.hostname === "127.0.0.1";
   const publicAPI = "https://api.flitfancy.com/anchors";
   const cards = new Map();
   const columns = { firefly: "tianxin", skywork: "skywork", flitfancy: "flitfancy" };
   let refreshRevision = 0;
+  let displayed = null;
 
   // 原三栏卡片继续作为默认内容；保存记录按稳定 uid 覆盖同一张卡片。
   document.querySelectorAll('[data-anchor-uid]').forEach(function (node) {
@@ -150,33 +150,28 @@
     });
   });
 
-  function refresh() {
+  async function refresh() {
     const revision = ++refreshRevision;
-    const managed = window.FlitFancyAdmin.isAdminHost() && window.FlitFancyAdmin.token();
-    const API = local || managed ? "/api/anchors" : publicAPI;
-    window.FlitFancyAdmin.request(API, { authMode: API === publicAPI ? "none" : "relative" })
-      .then(function (data) {
-        if (revision !== refreshRevision) return;
-        const records = Array.isArray(data.rows) ? data.rows : [];
+    try {
+      const data = await window.FlitFancyAdmin.request(publicAPI, { authMode: "none", cache: "no-store" });
+      if (revision !== refreshRevision) return { skipped: true };
+      const records = Array.isArray(data.rows) ? data.rows : [];
+      const signature = JSON.stringify(records);
+      if (signature !== displayed) {
         records.forEach(updateCard);
         rows = records.filter(function (anchor) { return !cards.has(anchor.uid); }).map(normalize);
         render();
-      })
-      .catch(function () { /* 数据源不可达时保持现状 */ });
+        displayed = signature;
+      }
+      return { ok: true };
+    } catch (error) { return { ok: false, status: error.status }; }
   }
 
-  document.addEventListener("flitfancy:anchor-saved", function (event) {
-    const saved = event.detail;
-    if (saved && saved.uid) {
-      updateCard(saved);
-      if (!cards.has(saved.uid)) {
-        rows = rows.filter(function (anchor) { return anchor.uid !== saved.uid; });
-        rows.unshift(normalize(saved));
-        render();
-      }
-    }
-    refresh();
+  const job = window.FlitFancyPublicRefresh && window.FlitFancyPublicRefresh.register({
+    id: "anchors", label: "锚点", page: "journal", interval: 15000, run: refresh,
   });
-  document.addEventListener("flitfancy:journal-authenticated", refresh);
-  refresh();
+  document.addEventListener("flitfancy:anchor-saved", function () {
+    return job ? job.refresh({ rerun: true }) : refresh();
+  });
+  if (!job) void refresh();
 })();

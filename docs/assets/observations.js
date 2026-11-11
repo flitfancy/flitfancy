@@ -4,9 +4,7 @@
   const WORLD = { width: 2800, height: 1900 };
   const planetBodies = ["mercury", "venus", "earth", "mars", "jupiter", "saturn", "uranus", "neptune", "pluto", "moon"];
   const assetVersion = document.currentScript ? new URL(document.currentScript.src, location.href).search : "";
-  const API = (location.hostname === "localhost" || location.hostname === "127.0.0.1")
-    ? "/api/observations"
-    : "https://api.flitfancy.com/observations";
+  const API = "https://api.flitfancy.com/observations";
   const categoryColors = {
     "事": "#b4a084",
     "理": "#91a6b4",
@@ -33,6 +31,7 @@
   let listMode = false;
   let animationFrame = 0;
   let mapFrame = 0;
+  let displayed = null;
 
   function hash(text) {
     let value = 2166136261;
@@ -66,6 +65,7 @@
   }
 
   function safeSourceUrl(value) {
+    if (!String(value || "").trim()) return "";
     try {
       const url = new URL(String(value || ""), location.href);
       return (url.protocol === "http:" || url.protocol === "https:") ? url.href : "";
@@ -151,8 +151,19 @@
 
   function buildPlanets() {
     const layer = root.querySelector('[data-role="planets"]');
-    layer.textContent = "";
-    observations.forEach(function (star) { layer.appendChild(createPlanet(star)); });
+    const existing = new Map(Array.from(layer.querySelectorAll('[data-star]')).map(function (node) {
+      return [node.dataset.star, node];
+    }));
+    observations.forEach(function (star) {
+      const node = existing.get(star.uid);
+      if (!node) { layer.appendChild(createPlanet(star)); return; }
+      node.setAttribute("aria-label", star.title + "；" + star.category + "；" + star.summary);
+      node.style.setProperty("--planet-color", categoryColors[star.category] || "#b4a084");
+      node.children[1].textContent = star.title;
+      node.children[2].textContent = star.summary;
+      existing.delete(star.uid);
+    });
+    existing.forEach(function (node) { node.remove(); });
     root.querySelector('[data-role="empty"]').hidden = observations.length !== 0;
   }
 
@@ -447,22 +458,28 @@
 
   async function loadData() {
     const status = root.querySelector('[data-role="load-status"]');
-    status.textContent = "正在接住远方的星光…";
+    if (displayed === null) status.textContent = "正在接住远方的星光…";
+    const ctrl = new AbortController();
+    const timeout = setTimeout(function () { ctrl.abort(); }, 8000);
     try {
-      const response = await fetch(API, { headers: { Accept: "application/json" } });
+      const response = await fetch(API, { headers: { Accept: "application/json" }, cache: "no-store", signal: ctrl.signal });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "HTTP " + response.status);
-      observations = (Array.isArray(data.rows) ? data.rows : [])
+      const nextObservations = (Array.isArray(data.rows) ? data.rows : [])
         .map(normalizeStar).filter(function (star) { return star.uid; });
-      const known = new Set(observations.map(function (star) { return star.uid; }));
-      links = (Array.isArray(data.links) ? data.links : [])
+      const known = new Set(nextObservations.map(function (star) { return star.uid; }));
+      const nextLinks = (Array.isArray(data.links) ? data.links : [])
         .map(function (link) { return normalizeLink(link, known); }).filter(Boolean);
+      const signature = JSON.stringify([nextObservations, nextLinks]);
+      if (signature === displayed) { status.textContent = observations.length ? "" : "等待第一颗星球"; return { ok: true }; }
+      const initial = displayed === null;
+      observations = nextObservations;
+      links = nextLinks;
       positions.clear();
       observations.forEach(function (star) { positions.set(star.uid, stablePosition(star.uid)); });
       if (observations[0]) {
         const first = positions.get(observations[0].uid);
-        camera.x = first.x;
-        camera.y = first.y;
+        if (initial) { camera.x = first.x; camera.y = first.y; }
         origin.x = first.x;
         origin.y = first.y;
       }
@@ -470,17 +487,18 @@
       renderAccessibleList();
       renderDetail();
       scheduleMap();
+      displayed = signature;
       status.textContent = observations.length ? "" : "等待第一颗星球";
+      return { ok: true };
     } catch (error) {
-      observations = [];
-      links = [];
-      buildPlanets();
-      renderAccessibleList();
-      scheduleMap();
-      status.textContent = "星图暂时没有连接上：" + ((error && error.message) || "未知错误");
-    }
+      status.textContent = displayed === null ? "星图暂时没有连接上，稍后会自动重试。" : "星图暂时无法更新，当前显示上次内容。";
+      return { ok: false };
+    } finally { clearTimeout(timeout); }
   }
 
   bindControls();
-  loadData();
+  const job = window.FlitFancyPublicRefresh && window.FlitFancyPublicRefresh.register({
+    id: "observations", label: "见闻", page: "observations", interval: 15000, run: loadData,
+  });
+  if (!job) void loadData();
 })();

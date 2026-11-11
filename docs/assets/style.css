@@ -1,6 +1,7 @@
 /* @layer 层序：后声明的层优先级更高（层序 > 特异性 > 书写顺序）。
    utilities 必胜——组件里无论怎么写都压不过工具类，历史级联事故不再可能。 */
 @layer tokens, base, components, utilities;
+@import url("fonts/lxgw-wenkai-screen-1.7.0/font.css");
 
 /* 断点约定（桌面优先 + max-width 单方向）：
    640px（手机）/ 760px（日记时间线单列）/ 900px（编辑表单双列）/ 1200px（三列降单列）。
@@ -10,25 +11,26 @@
 
 @layer tokens {
 :root {
+  --fs-min: 16px;
   /* 字号体系（px 档位按 16px 根字号折算；后续调字号只改这里） */
   --hero-cap: 139px;   /* 首页标题与副标题共用的封顶字号（÷7 比例的唯一出处） */
   --fs-hero: clamp(40px, min(9vw, 13vh), var(--hero-cap));
-  --fs-hero-sub: clamp(14px, min(9vw, 13vh, var(--hero-cap)) / 7, 21px);
+  --fs-hero-sub: max(var(--fs-min), clamp(14px, min(9vw, 13vh, var(--hero-cap)) / 7, 21px));
   --fs-hero-mobile: clamp(30px, 9.5vw, 46px);
   --fs-h1-wide: clamp(2.375rem, 7vw, 4.5rem);
   --fs-h1: clamp(1.875rem, 5vw, 3rem);
   --fs-h1-mobile: clamp(1.5rem, 8vw, 2.125rem);
   --fs-head-1: clamp(1.35rem, 2.5vw, 2rem);
   --fs-head-2: clamp(1.125rem, 1.8vw, 1.75rem);
-  --fs-text: clamp(0.9375rem, 1.4vw, 1.25rem);
-  --fs-text-sm: clamp(0.8125rem, 1.2vw, 1rem);
-  --fs-text-xs: clamp(0.75rem, 1.2vw, 0.9375rem);
-  --fs-text-xxs: clamp(0.6875rem, 1.1vw, 0.875rem);
+  --fs-text: max(var(--fs-min), clamp(0.9375rem, 1.4vw, 1.25rem));
+  --fs-text-sm: max(var(--fs-min), clamp(0.8125rem, 1.2vw, 1rem));
+  --fs-text-xs: max(var(--fs-min), clamp(0.75rem, 1.2vw, 0.9375rem));
+  --fs-text-xxs: max(var(--fs-min), clamp(0.6875rem, 1.1vw, 0.875rem));
   --fs-sub: 1.0625rem;
   --fs-body: clamp(16px, 1.1vw, 19px);
-  --fs-small: 0.9rem;
-  --fs-meta: 0.8125rem;
-  --fs-caption: 0.6875rem;
+  --fs-small: max(var(--fs-min), 0.9rem);
+  --fs-meta: max(var(--fs-min), 0.8125rem);
+  --fs-caption: max(var(--fs-min), 0.6875rem);
   /* 语义字号（按角色命名，不再用像素档位数字；新增字号先找现成角色） */
   --fs-h2: 1.625rem;             /* 小节标题（.section h2） */
   --fs-brand: 1.40625rem;        /* 站名与服务按钮 */
@@ -37,11 +39,12 @@
   --fs-quote: 1.1875rem;         /* 引言（关于页） */
   --fs-panel-title: 1.125rem;    /* 面板标题（console-panel h2） */
   --fs-base: 1rem;               /* 基准正文（表单/表格/代码数字） */
-  --fs-compact: 0.9375rem;       /* 略小于正文的紧凑文字（移动端导航/页脚） */
-  --fs-ui: 0.875rem;             /* 按钮/标签等界面文字 */
-  --fs-fine: 0.75rem;            /* 微小标注/徽章/卡片小字 */
+  --fs-compact: max(var(--fs-min), 0.9375rem); /* 移动端导航/页脚 */
+  --fs-ui: max(var(--fs-min), 0.875rem);       /* 按钮/标签等界面文字 */
+  --fs-fine: max(var(--fs-min), 0.75rem);     /* 微小标注/徽章/卡片小字 */
   /* 字体与光晕令牌（源头约束：全站展示字体/文字光晕只此一处定义） */
-  --font-display: Georgia, "Noto Serif SC", "Songti SC", serif;
+  --font-body: "LXGW WenKai Screen", "Noto Sans SC", "Microsoft YaHei", "PingFang SC", sans-serif;
+  --font-display: var(--font-body);
   --glow-title: 0 0 20px rgba(255, 90, 0, 0.45);
   --glow-flame: 0 0 10px rgba(255, 90, 0, 0.45);
   --glow-flame-soft: 0 0 10px rgba(255, 90, 0, 0.35);
@@ -64,6 +67,9 @@
   --cyan: #3fd0e8;
   --flame-gradient: linear-gradient(105deg, #ff2e00 0%, #ff5a00 14%, #f3b652 28%, #3fd0e8 52%, #a8ecff 74%, #ffffff 100%);
   --small-gradient: linear-gradient(105deg, #ffd166 0%, #3fd0e8 100%);
+}
+@media (max-width: 640px) {
+  :root { --fs-min: 14px; }
 }
 }
 
@@ -126,8 +132,20 @@ body {
     radial-gradient(900px 500px at 10% 10%, rgba(232, 160, 180, 0.05), transparent 55%),
     var(--bg);
   color: var(--text);
-  font-family: "Noto Sans SC", "Microsoft YaHei", "PingFang SC", sans-serif;
+  font-family: var(--font-body);
   line-height: 1.75;
+}
+
+/* 原生控件有浏览器默认字体，必须显式继承，内部文字才会沿用站点字体。 */
+button,
+input,
+select,
+textarea,
+optgroup,
+option,
+input::file-selector-button {
+  font-family: inherit;
+  font-size: var(--fs-base);
 }
 
 @keyframes pageIn {
@@ -869,7 +887,7 @@ body.console-page .section {
 
 .sensor-updated {
   color: var(--muted);
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: var(--font-body);
   font-size: var(--fs-fine);
   letter-spacing: 0;
   text-shadow: none;
@@ -1038,6 +1056,7 @@ body.console-page .section {
 
 .sensor-state {
   color: var(--amber-soft);
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
@@ -1066,7 +1085,7 @@ body.console-page .section {
   color: var(--cyan);
   font-size: var(--fs-caption);
   letter-spacing: 0.06em;
-  min-height: 1.2em;
+  min-height: calc(1lh + 8px);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

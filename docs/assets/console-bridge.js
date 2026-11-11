@@ -91,7 +91,7 @@
       field("file").value=""; field("folder").value=""; field("path").value="";
       for (const name of ["destination","selected","job-name","message","phase","receive-text","store-text"]) field(name).textContent="";
       field("job").hidden=true;
-      field("locked").textContent = opts.isServerOnline() ? "再次点击上方“控制台”登录后，就能把文件传回 NAS。" : "在管理控制台登录后使用全界之桥。";
+      field("locked").textContent = "登录后，传送文件和文件夹到 NAS。";
       controls();
     }
     function errorMessage(error) {

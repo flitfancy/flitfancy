@@ -1,0 +1,60 @@
+/* The public console remains the same surface; private controls appear after login. */
+.console-home .console-intro {
+  margin: -3px 0 22px;
+  color: var(--muted);
+  font-size: var(--fs-text);
+}
+.console-home .console-status {
+  gap: 10px;
+  margin-bottom: 32px;
+}
+.console-home .console-entry {
+  margin-left: auto;
+  padding: 9px 15px;
+  border: 1px solid rgba(245, 184, 75, 0.3);
+  border-radius: 999px;
+  background: rgba(245, 184, 75, 0.06);
+  color: var(--amber-soft);
+  font-size: var(--fs-ui);
+  cursor: pointer;
+}
+.console-home .console-entry:hover, .console-home .console-entry:focus-visible {
+  border-color: rgba(245, 184, 75, 0.7);
+  background: rgba(245, 184, 75, 0.12);
+}
+.console-home .console-entry[hidden] { display: none; }
+.console-utility-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.console-utility-grid:has([data-bridge="body"]:not([hidden])) { grid-template-columns: 1fr; }
+.console-home .console-utility {
+  position: relative;
+  min-width: 0;
+  min-height: 235px;
+  margin: 0;
+  padding: 26px 28px;
+  background: linear-gradient(145deg, rgba(245, 184, 75, 0.045), rgba(255, 255, 255, 0.015) 45%, rgba(63, 208, 232, 0.025));
+  border-color: rgba(224, 214, 190, 0.13);
+}
+.console-home .console-utility-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 15px;
+  color: var(--amber-soft);
+}
+.console-home .console-utility-top span { color: var(--muted); font-size: var(--fs-fine); letter-spacing: 0.14em; }
+.console-home .console-utility-top svg { width: 64px; height: 48px; opacity: 0.75; }
+.console-home .collector-console .console-utility-top svg { color: var(--cyan); }
+.console-home .console-utility h2 { margin: 0 0 10px; }
+.console-home .bridge-head { gap: 8px 14px; margin-bottom: 10px; }
+.console-home .bridge-head h2 { margin: 0; }
+.console-home .console-utility .hint { max-width: 32em; }
+@media (max-width: 760px) {
+  .console-utility-grid { grid-template-columns: 1fr; }
+  .console-home .console-utility { min-height: 0; padding: 22px; }
+  .console-home .console-status { margin-bottom: 24px; }
+}

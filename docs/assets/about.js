@@ -5,10 +5,8 @@
   const brand = document.querySelector('[data-role="footer-brand"]');
   if (!line || !text) return;
 
-  const local = location.hostname === "localhost" || location.hostname === "127.0.0.1";
-  const endpoint = local
-    ? "/api/reflections"
-    : "https://api.flitfancy.com/config";
+  const endpoint = "https://api.flitfancy.com/config";
+  let displayed = null;
   /* 关于页不加载 admin-core，故这里本地声明超时；
      数值与 admin-core.js 的 TIMEOUT_MS 保持一致。 */
   const TIMEOUT_MS = 8000;
@@ -25,7 +23,7 @@
     const timer = setTimeout(function () {
       ctrl.abort();
     }, TIMEOUT_MS);
-    fetch(endpoint, { headers: { "Accept": "application/json" }, signal: ctrl.signal })
+    return fetch(endpoint, { headers: { "Accept": "application/json" }, cache: "no-store", signal: ctrl.signal })
       .then(function (response) {
         clearTimeout(timer);
         if (!response.ok) throw new Error("HTTP " + response.status);
@@ -37,17 +35,27 @@
             return typeof item === "string" && item.trim();
           })
           : [];
+        const signature = JSON.stringify(rows);
+        if (signature === displayed) return { ok: true };
+        displayed = signature;
         if (!rows.length) {
           showBrandOnly();
-          return;
+          return { ok: true };
         }
         text.textContent = rows[Math.floor(Math.random() * rows.length)].trim();
         line.hidden = false;
         if (brand) brand.hidden = true;
+        return { ok: true };
       })
-      .catch(showBrandOnly);
+      .catch(function () { if (displayed === null) showBrandOnly(); return { ok: false }; })
+      .finally(function () { clearTimeout(timer); });
   }
 
-  document.addEventListener("flitfancy:reflection-saved", load);
-  load();
+  const job = typeof window !== "undefined" && window.FlitFancyPublicRefresh && window.FlitFancyPublicRefresh.register({
+    id: "reflections", label: "随笔", page: "journal", interval: 30000, run: load,
+  });
+  document.addEventListener("flitfancy:reflection-saved", function () {
+    return job ? job.refresh({ rerun: true }) : load();
+  });
+  if (!job) void load();
 })();

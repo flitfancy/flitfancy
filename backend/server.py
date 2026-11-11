@@ -53,7 +53,7 @@ from flitfancy_sensors import (
     sensor_row_public,
 )
 from flitfancy_storage import SQLiteStore
-from flitfancy_sync import LatestSensorSyncQueue, WorkerClient
+from flitfancy_sync import LatestSensorSyncQueue, PublicContentSyncQueue, WorkerClient
 
 
 def _env_int(name, default, minimum=0):
@@ -132,6 +132,11 @@ def _history_sync_loop():
         sync_pending_essays()
         sync_pending_observations()
         sync_pending_observation_links()
+        try:
+            sync_pending_public_config()
+        except Exception:
+            # A local config I/O failure must not terminate the other sync jobs.
+            print("[%s] 公开内容配置补传暂不可用，将稍后重试" % now_iso())
         time.sleep(300)
 
 
@@ -294,6 +299,8 @@ def ai_config_save(updates):
     """把更新写回 ai_local.json（保留已有字段）。"""
     with _config_lock:
         cfg = dict(_read_local_cfg())
+        # Save the content and its retry marker together, including across a crash.
+        PublicContentSyncQueue.record_changes(cfg, updates, time.time_ns() // 1000)
         cfg.update(updates)
         tmp_path = AI_CONFIG_PATH + ".tmp"
         try:
@@ -326,8 +333,21 @@ def worker_post(endpoint, payload, timeout=8, error_label="公网接口"):
 
 
 def sync_public_config(updates):
-    """把公开配置同步到 Worker（api.flitfancy.com）。返回 (是否成功, 提示)。"""
-    return worker_post("/admin/toggle", updates, 8, "公网配置接口")
+    """访问开关沿用原接口；公开内容采用可持久重试的版本同步。"""
+    results = []
+    if "chat_enabled" in updates:
+        results.append(worker_post("/admin/toggle", {"chat_enabled": updates["chat_enabled"]}, 8, "公网配置接口"))
+    content_keys = [key for key in PublicContentSyncQueue.KEYS if key in updates]
+    if content_keys:
+        results.append(_public_content_sync.flush(content_keys))
+    return all(ok for ok, _ in results), next((note for ok, note in results if not ok), "")
+
+
+_public_content_sync = PublicContentSyncQueue(_read_local_cfg, ai_config_save, _config_lock, worker_post)
+
+
+def sync_pending_public_config():
+    return _public_content_sync.flush()
 
 def sync_public_memory(memory):
     """把一条本地日记幂等同步到 Worker。返回 (是否成功, 提示)。"""

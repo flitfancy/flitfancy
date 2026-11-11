@@ -4,13 +4,15 @@ import vm from "node:vm";
 
 const source = fs.readFileSync(new URL("../docs/assets/console.js", import.meta.url), "utf8");
 const schedulerSource = fs.readFileSync(new URL('../docs/assets/refresh-scheduler.js', import.meta.url), 'utf8');
-async function run(status, fault = "", page = "presence", publicHost = false, signedIn = true, bfcache = false) {
+async function run(status, fault = "", page = "presence", publicHost = false, signedIn = true, bfcache = false, toggleSensors = false) {
   const notices = [], requests = [], lifecycle = {};
   let audioStarts = 0, sensorRenders = 0, retries = 0, launcherStarts = 0, chatStarts = 0, publicReads = 0;
   let adminOptions, audioOptions, activityOptions, heartbeatOptions, heartbeatCreates = 0, activityStarts = 0, activityClears = 0;
   const chatStates = [];
   const html = fs.readFileSync(new URL("../docs/" + page + ".html", import.meta.url), "utf8");
   const statusElement = { textContent: "" };
+  const sensorToggle = {hidden:true, textContent:'', addEventListener(_name, callback){this.click=callback;}};
+  const sensorSource = {textContent:''};
   const noop = function () {};
   const chat = { start: () => { chatStarts++; }, setEnabled: noop, refreshPublicConfig: noop,
     updateState: value => chatStates.push(value) };
@@ -93,6 +95,8 @@ async function run(status, fault = "", page = "presence", publicHost = false, si
       querySelector: selector => {
         const role = selector.match(/data-role="([^"]+)"/);
         if (role && !html.includes('data-role="' + role[1] + '"')) return null;
+        if (selector.includes('sensor-source-toggle')) return sensorToggle;
+        if (selector.includes('sensor-source"')) return sensorSource;
         return selector.includes("module-error-text") ? failureElement :
           selector.includes('"status"') ? statusElement : { classList: { toggle: noop }, addEventListener: noop };
       },
@@ -100,6 +104,15 @@ async function run(status, fault = "", page = "presence", publicHost = false, si
     fetch: async () => { publicReads++; return { ok: true, json: async () => ({ rows: [] }) }; },
   });
   await new Promise(resolve => setImmediate(resolve));
+  if (toggleSensors) {
+    assert.equal(sensorToggle.hidden,false, 'authenticated administrators can choose local live data');
+    sensorToggle.click();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.ok(requests.includes('/api/sensors/latest'), 'local data is requested only after choosing it');
+    assert.equal(sensorSource.textContent,'本机实时');
+    adminOptions.onSignedOut();
+    assert.equal(sensorToggle.hidden,true, 'logout hides the private data switch');
+  }
   if (bfcache) {
     lifecycle.pagehide?.({persisted:true});
     lifecycle.pageshow?.({persisted:true});
@@ -136,6 +149,9 @@ assert.equal(persistent.audioStarts, 1);
 assert.ok(persistent.sensorRenders >= 2);
 assert.match(persistent.failureElement.textContent, /对话/);
 const presence = await run(200);
+assert.ok(presence.publicReads > 0, 'administrators see the same public sensor snapshot by default');
+assert.ok(!presence.requests.includes('/api/sensors/latest'), 'local sensor data is an explicit private view');
+await run(200, '', 'presence', false, true, false, true);
 assert.equal(presence.heartbeatCreates, 0, 'presence no longer owns a tab heartbeat publisher');
 assert.equal(presence.activityStarts, 1, 'presence initializes private usage module');
 assert.equal(presence.activityOptions.isAdmin(), true);
